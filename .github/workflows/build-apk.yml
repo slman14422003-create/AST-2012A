@@ -1,0 +1,63 @@
+name: Build & Release Android APK (Java/Gradle)
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: تجهيز جافا 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: تجهيز Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: تجهيز Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: بناء APK (نسخة تصحيح - سريعة وموثوقة، بدون تجميع بايثون من المصدر)
+        run: gradle :app:assembleDebug --no-daemon --stacktrace
+
+      - name: تجهيز ملف الإصدار النهائي
+        run: |
+          mkdir -p dist
+          APK_FILE=$(find app/build/outputs/apk -name "*.apk" | head -n 1)
+          if [ -z "$APK_FILE" ]; then
+            echo "::error::لم يتم العثور على ملف APK الناتج."
+            find app/build/outputs -maxdepth 3 || true
+            exit 1
+          fi
+          cp "$APK_FILE" "dist/AST-2012A-ClinicalMaster-v1.0.${{ github.run_number }}.apk"
+          ls -la dist
+
+      - name: إنشاء إصدار (Release) تلقائي على GitHub
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: AST-2012A Clinical Master v1.0.${{ github.run_number }}
+          body: |
+            تطبيق أندرويد أصلي مكتوب بالكامل بلغة Java (Gradle/Android SDK قياسي) -
+            بدون WebView أو TWA أو Kivy/Python أو أي أداة غير مستقرة. نفس أسلوب
+            بناء أي تطبيق أندرويد احترافي عادي.
+
+            نزّل ملف الـ APK تحت وثبّته على جهاز أندرويد (فعّل "السماح بمصادر غير معروفة" عند التثبيت أول مرة).
+
+            ⚠️ ملاحظة: هذا الإصدار موقّع بمفتاح تصحيح تلقائي (debug key) من Android SDK
+            نفسه، وهو كافٍ تمامًا للتثبيت المباشر والتجربة. لنشر التطبيق على متجر
+            Google Play لاحقًا ستحتاج توقيعه بمفتاح إصدار ثابت خاص بيك.
+          files: dist/*.apk
+          make_latest: true
