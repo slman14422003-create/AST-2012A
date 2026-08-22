@@ -55,6 +55,20 @@ public class AddEditCaseActivity extends AppCompatActivity {
         } else {
             toolbar.setTitle("➕ إضافة حالة جديدة");
             submitBtn.setText("💾 حفظ الحالة");
+            applyPrefillFromAi();
+        }
+    }
+
+    /**
+     * لو التطبيق فتح هذه الشاشة من زر "حفظ كحالة جديدة" في المساعد الذكي،
+     * نعبّئ حقل الشرح تلقائيًا بردّ الذكاء الاصطناعي حتى يراجعه المستخدم
+     * ويكمل باقي الحقول بنفسه قبل الحفظ.
+     */
+    private void applyPrefillFromAi() {
+        String prefillExplanation = getIntent().getStringExtra("prefill_explanation");
+        if (prefillExplanation != null && !prefillExplanation.isEmpty()) {
+            fExplanation.setText(prefillExplanation);
+            Toast.makeText(this, "راجع الحقول وأكمل العنوان والكلمات المفتاحية قبل الحفظ.", Toast.LENGTH_LONG).show();
         }
     }
 
@@ -136,5 +150,11 @@ public class AddEditCaseActivity extends AppCompatActivity {
 
     private String textOf(TextInputEditText field) {
         return field.getText() == null ? "" : field.getText().toString().trim();
+    }
+
+    @Override
+    public void finish() {
+        super.finish();
+        overridePendingTransition(R.anim.slide_down_out, R.anim.fade_out);
     }
 }

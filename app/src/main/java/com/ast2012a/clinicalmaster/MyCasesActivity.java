@@ -32,6 +32,8 @@ public class MyCasesActivity extends AppCompatActivity implements CaseRowAdapter
         adapter = new CaseRowAdapter(this);
         list.setLayoutManager(new LinearLayoutManager(this));
         list.setAdapter(adapter);
+        list.setLayoutAnimation(
+                android.view.animation.AnimationUtils.loadLayoutAnimation(this, R.anim.layout_fall_stagger));
     }
 
     @Override
@@ -45,6 +47,7 @@ public class MyCasesActivity extends AppCompatActivity implements CaseRowAdapter
         adapter.setItems(cases);
         emptyHint.setVisibility(cases.isEmpty() ? View.VISIBLE : View.GONE);
         list.setVisibility(cases.isEmpty() ? View.GONE : View.VISIBLE);
+        list.scheduleLayoutAnimation();
     }
 
     @Override
@@ -52,6 +55,7 @@ public class MyCasesActivity extends AppCompatActivity implements CaseRowAdapter
         Intent i = new Intent(this, AddEditCaseActivity.class);
         i.putExtra("edit_case_id", item.id);
         startActivity(i);
+        overridePendingTransition(R.anim.slide_up_in, R.anim.fade_out);
     }
 
     @Override
@@ -65,5 +69,11 @@ public class MyCasesActivity extends AppCompatActivity implements CaseRowAdapter
                 })
                 .setNegativeButton("إلغاء", null)
                 .show();
+    }
+
+    @Override
+    public void finish() {
+        super.finish();
+        overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right);
     }
 }

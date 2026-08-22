@@ -17,6 +17,7 @@ import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 
 import com.google.android.material.appbar.MaterialToolbar;
+import com.google.android.material.textfield.TextInputEditText;
 
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -31,8 +32,10 @@ public class SettingsActivity extends AppCompatActivity {
     private static final String CHANNEL_ID = "clinical_master_channel";
     private static final String PREFS = "settings_prefs";
     private static final String KEY_NOTIF_ENABLED = "notif_enabled";
+    private static final String KEY_AI_API_KEY = "ai_api_key";
 
     private Button notifBtn;
+    private TextInputEditText aiKeyField;
     private ActivityResultLauncher<String> permissionLauncher;
 
     @Override
@@ -46,8 +49,13 @@ public class SettingsActivity extends AppCompatActivity {
         createNotificationChannel();
 
         notifBtn = findViewById(R.id.btn_notif);
+        aiKeyField = findViewById(R.id.ai_key_field);
+        Button saveKeyBtn = findViewById(R.id.btn_save_key);
         Button exportBtn = findViewById(R.id.btn_export);
         Button clearBtn = findViewById(R.id.btn_clear_all);
+
+        aiKeyField.setText(prefs().getString(KEY_AI_API_KEY, ""));
+        saveKeyBtn.setOnClickListener(v -> saveAiKey());
 
         permissionLauncher = registerForActivityResult(
                 new ActivityResultContracts.RequestPermission(),
@@ -66,6 +74,12 @@ public class SettingsActivity extends AppCompatActivity {
         clearBtn.setOnClickListener(v -> confirmClearAll());
 
         refreshNotifLabel();
+    }
+
+    private void saveAiKey() {
+        String key = aiKeyField.getText() == null ? "" : aiKeyField.getText().toString().trim();
+        prefs().edit().putString(KEY_AI_API_KEY, key).apply();
+        Toast.makeText(this, key.isEmpty() ? "تم مسح المفتاح." : "✅ تم حفظ المفتاح.", Toast.LENGTH_SHORT).show();
     }
 
     private void createNotificationChannel() {
@@ -154,5 +168,11 @@ public class SettingsActivity extends AppCompatActivity {
                 })
                 .setNegativeButton("إلغاء", null)
                 .show();
+    }
+
+    @Override
+    public void finish() {
+        super.finish();
+        overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right);
     }
 }

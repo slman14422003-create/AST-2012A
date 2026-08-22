@@ -23,6 +23,8 @@ public class EncyclopediaActivity extends AppCompatActivity {
         toolbar.setNavigationOnClickListener(v -> finish());
 
         LinearLayout container = findViewById(R.id.modes_container);
+        container.setLayoutAnimation(
+                android.view.animation.AnimationUtils.loadLayoutAnimation(this, R.anim.layout_fall_stagger));
 
         for (JSONObject m : DataManager.loadModesEncyclopedia(this)) {
             View card = LayoutInflater.from(this).inflate(R.layout.item_mode_card, container, false);
@@ -38,5 +40,12 @@ public class EncyclopediaActivity extends AppCompatActivity {
             descView.setText(desc);
             container.addView(card);
         }
+        container.scheduleLayoutAnimation();
+    }
+
+    @Override
+    public void finish() {
+        super.finish();
+        overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right);
     }
 }

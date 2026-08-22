@@ -4,10 +4,10 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
-import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
-import android.widget.Button;
+import android.view.animation.AnimationUtils;
+import android.view.animation.LayoutAnimationController;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -18,15 +18,19 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.appbar.MaterialToolbar;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
     private TextInputEditText searchField;
-    private TextView emptyHint;
+    private View emptyHintContainer;
     private TextView resultNote;
+    private TextView askAiFallback;
     private RecyclerView resultsList;
     private CaseAdapter adapter;
+    private LayoutAnimationController listAnimation;
+    private String lastQuery = "";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -37,25 +41,42 @@ public class MainActivity extends AppCompatActivity {
         toolbar.setOnMenuItemClickListener(this::onToolbarItemClick);
 
         searchField = findViewById(R.id.search_field);
-        emptyHint = findViewById(R.id.empty_hint);
+        emptyHintContainer = findViewById(R.id.empty_hint_container);
         resultNote = findViewById(R.id.result_note);
+        askAiFallback = findViewById(R.id.btn_ask_ai_fallback);
         resultsList = findViewById(R.id.results_list);
 
         adapter = new CaseAdapter(this::openDetail);
         resultsList.setLayoutManager(new LinearLayoutManager(this));
         resultsList.setAdapter(adapter);
+        listAnimation = AnimationUtils.loadLayoutAnimation(this, R.anim.layout_fall_stagger);
 
-        Button myCasesBtn = findViewById(R.id.btn_my_cases);
-        myCasesBtn.setOnClickListener(v -> startActivity(new Intent(this, MyCasesActivity.class)));
+        TextView myCasesBtn = findViewById(R.id.btn_my_cases);
+        myCasesBtn.setOnClickListener(v -> navigateTo(MyCasesActivity.class));
 
-        Button encyclopediaBtn = findViewById(R.id.btn_encyclopedia);
-        encyclopediaBtn.setOnClickListener(v -> startActivity(new Intent(this, EncyclopediaActivity.class)));
+        TextView encyclopediaBtn = findViewById(R.id.btn_encyclopedia);
+        encyclopediaBtn.setOnClickListener(v -> navigateTo(EncyclopediaActivity.class));
+
+        TextView aiBtn = findViewById(R.id.btn_ai_assistant);
+        aiBtn.setOnClickListener(v -> navigateTo(AiAssistantActivity.class));
+
+        askAiFallback.setOnClickListener(v -> {
+            Intent i = new Intent(this, AiAssistantActivity.class);
+            i.putExtra("prefill_query", lastQuery);
+            startActivity(i);
+            overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
+        });
 
         FloatingActionButton fab = findViewById(R.id.fab_add);
         fab.setOnClickListener(v -> {
             Intent i = new Intent(this, AddEditCaseActivity.class);
             startActivity(i);
+            overridePendingTransition(R.anim.slide_up_in, R.anim.fade_out);
         });
+        // دخول أنيميشن بسيط للزر العائم عند فتح الشاشة (تكبير تدريجي)
+        fab.setScaleX(0f);
+        fab.setScaleY(0f);
+        fab.animate().scaleX(1f).scaleY(1f).setStartDelay(200).setDuration(280).start();
 
         searchField.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
@@ -73,22 +94,30 @@ public class MainActivity extends AppCompatActivity {
         if (searchField.getText() != null) doSearch(searchField.getText().toString());
     }
 
+    private void navigateTo(Class<?> activityClass) {
+        startActivity(new Intent(this, activityClass));
+        overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
+    }
+
     private boolean onToolbarItemClick(MenuItem item) {
         if (item.getItemId() == R.id.action_settings) {
-            startActivity(new Intent(this, SettingsActivity.class));
+            navigateTo(SettingsActivity.class);
             return true;
         }
         return false;
     }
 
     private void doSearch(String query) {
+        lastQuery = query == null ? "" : query;
+
         if (query == null || query.trim().isEmpty()) {
-            emptyHint.setVisibility(View.VISIBLE);
+            emptyHintContainer.setVisibility(View.VISIBLE);
             resultNote.setVisibility(View.GONE);
-            adapter.setItems(new java.util.ArrayList<>());
+            askAiFallback.setVisibility(View.GONE);
+            setResults(new ArrayList<>());
             return;
         }
-        emptyHint.setVisibility(View.GONE);
+        emptyHintContainer.setVisibility(View.GONE);
 
         List<CaseItem> allCases = DataManager.allCases(this);
         DataManager.SearchResult result = DataManager.search(query, allCases);
@@ -97,10 +126,12 @@ public class MainActivity extends AppCompatActivity {
             resultNote.setVisibility(View.VISIBLE);
             resultNote.setText("لم يتم العثور على نتيجة مطابقة. جرّب صياغة أخرى.");
             resultNote.setTextColor(getColor(R.color.accent_red));
-            adapter.setItems(new java.util.ArrayList<>());
+            askAiFallback.setVisibility(View.VISIBLE);
+            setResults(new ArrayList<>());
             return;
         }
 
+        askAiFallback.setVisibility(View.GONE);
         resultNote.setVisibility(View.VISIBLE);
         if (result.items.size() == 1) {
             resultNote.setText("✅ تم العثور على البروتوكول الصحيح المطابق لبحثك.");
@@ -108,7 +139,13 @@ public class MainActivity extends AppCompatActivity {
             resultNote.setText("⚠️ يوجد أكثر من بروتوكول بنفس درجة التطابق، حدد الحالة بدقة أكبر.");
         }
         resultNote.setTextColor(getColor(R.color.accent_green));
-        adapter.setItems(result.items);
+        setResults(result.items);
+    }
+
+    private void setResults(List<CaseItem> items) {
+        adapter.setItems(items);
+        resultsList.setLayoutAnimation(listAnimation);
+        resultsList.scheduleLayoutAnimation();
     }
 
     private void openDetail(CaseItem item) {
@@ -118,5 +155,6 @@ public class MainActivity extends AppCompatActivity {
         // نمرر عنوان الحالة كمفتاح احتياطي لإيجادها لو كانت من القاعدة المدمجة (بدون id)
         i.putExtra("case_title", item.title);
         startActivity(i);
+        overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
     }
 }

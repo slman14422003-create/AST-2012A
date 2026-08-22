@@ -162,6 +162,7 @@ public class CaseDetailActivity extends AppCompatActivity {
         Intent i = new Intent(this, AddEditCaseActivity.class);
         i.putExtra("edit_case_id", currentCase.id);
         startActivity(i);
+        overridePendingTransition(R.anim.slide_up_in, R.anim.fade_out);
     }
 
     private void confirmDelete() {
@@ -174,5 +175,11 @@ public class CaseDetailActivity extends AppCompatActivity {
                 })
                 .setNegativeButton("إلغاء", null)
                 .show();
+    }
+
+    @Override
+    public void finish() {
+        super.finish();
+        overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right);
     }
 }
