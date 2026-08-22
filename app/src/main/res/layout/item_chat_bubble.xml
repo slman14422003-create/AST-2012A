@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="10dp"
+    android:orientation="vertical">
+
+    <TextView
+        android:id="@+id/bubble_role"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="3dp"
+        android:textColor="@color/text_secondary"
+        android:textDirection="rtl"
+        android:textSize="11sp" />
+
+    <TextView
+        android:id="@+id/bubble_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end"
+        android:maxWidth="300dp"
+        android:padding="12dp"
+        android:textColor="@color/text_primary"
+        android:textDirection="rtl"
+        android:textSize="14sp" />
+
+    <Button
+        android:id="@+id/bubble_save_case"
+        style="@style/Widget.Material3.Button.TextButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end"
+        android:text="➕ حفظ كحالة جديدة"
+        android:textColor="@color/primary_cyan"
+        android:textSize="12sp"
+        android:visibility="gone" />
+
+</LinearLayout>

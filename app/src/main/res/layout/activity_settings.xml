@@ -15,44 +15,97 @@
         android:titleTextColor="@color/text_primary"
         app:navigationIcon="@android:drawable/ic_menu_close_clear_cancel" />
 
-    <LinearLayout
+    <ScrollView
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="16dp">
+        android:layout_height="match_parent">
 
-        <Button
-            android:id="@+id/btn_notif"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="14dp"
-            android:backgroundTint="@color/primary_cyan"
-            android:text="🔕 الإشعارات غير مفعّلة - اضغط للتفعيل" />
+            android:orientation="vertical"
+            android:padding="16dp">
 
-        <Button
-            android:id="@+id/btn_export"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="14dp"
-            android:text="⬇️ تصدير نسخة احتياطية من حالاتي"
-            android:textColor="@color/text_primary" />
+            <Button
+                android:id="@+id/btn_notif"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="20dp"
+                android:backgroundTint="@color/primary_cyan"
+                android:text="🔕 الإشعارات غير مفعّلة - اضغط للتفعيل" />
 
-        <Button
-            android:id="@+id/btn_clear_all"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="14dp"
-            android:text="🗑️ مسح كل الحالات المخصصة"
-            android:textColor="@color/accent_red" />
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/bg_card"
+                android:gravity="end"
+                android:padding="14dp"
+                android:text="🤖 المساعد الذكي"
+                android:textColor="@color/white"
+                android:textDirection="rtl"
+                android:textSize="15sp"
+                android:textStyle="bold" />
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:gravity="center"
-            android:text="AST-2012A Clinical Master\nتطبيق أندرويد أصلي (Java) - بدون WebView أو متصفح.\nكل البيانات محفوظة محليًا على جهازك فقط."
-            android:textColor="@color/text_secondary" />
-    </LinearLayout>
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:gravity="end"
+                android:text="أضف مفتاح API مجاني من openrouter.ai (تسجيل بالإيميل، بدون بطاقة ائتمان) لتفعيل المساعد الذكي."
+                android:textColor="@color/text_secondary"
+                android:textDirection="rtl"
+                android:textSize="12sp" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:hint="مفتاح API (OpenRouter)"
+                app:endIconMode="clear_text">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/ai_key_field"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textPassword"
+                    android:textDirection="ltr" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <Button
+                android:id="@+id/btn_save_key"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="24dp"
+                android:text="💾 حفظ المفتاح"
+                android:textColor="@color/primary_cyan" />
+
+            <Button
+                android:id="@+id/btn_export"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="14dp"
+                android:text="⬇️ تصدير نسخة احتياطية من حالاتي"
+                android:textColor="@color/text_primary" />
+
+            <Button
+                android:id="@+id/btn_clear_all"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="14dp"
+                android:text="🗑️ مسح كل الحالات المخصصة"
+                android:textColor="@color/accent_red" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:gravity="center"
+                android:text="AST-2012A Clinical Master\nتطبيق أندرويد أصلي (Java) - بدون WebView أو متصفح.\nكل البيانات محفوظة محليًا على جهازك فقط."
+                android:textColor="@color/text_secondary" />
+        </LinearLayout>
+    </ScrollView>
 </LinearLayout>
