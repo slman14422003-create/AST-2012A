@@ -32,6 +32,22 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ViewHolder> {
         notifyItemInserted(messages.size() - 1);
     }
 
+    /** تحميل سجل محادثة كامل دفعة واحدة (عند فتح الشاشة من جديد). */
+    public void setMessages(List<ChatMessage> newMessages) {
+        messages.clear();
+        messages.addAll(newMessages);
+        notifyDataSetChanged();
+    }
+
+    public List<ChatMessage> getMessages() {
+        return messages;
+    }
+
+    public void clearAll() {
+        messages.clear();
+        notifyDataSetChanged();
+    }
+
     public int size() {
         return messages.size();
     }

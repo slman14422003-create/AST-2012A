@@ -51,11 +51,15 @@ public class SettingsActivity extends AppCompatActivity {
         notifBtn = findViewById(R.id.btn_notif);
         aiKeyField = findViewById(R.id.ai_key_field);
         Button saveKeyBtn = findViewById(R.id.btn_save_key);
+        Button clearChatHistoryBtn = findViewById(R.id.btn_clear_chat_history);
         Button exportBtn = findViewById(R.id.btn_export);
         Button clearBtn = findViewById(R.id.btn_clear_all);
+        Button aboutBtn = findViewById(R.id.btn_about);
 
         aiKeyField.setText(prefs().getString(KEY_AI_API_KEY, ""));
         saveKeyBtn.setOnClickListener(v -> saveAiKey());
+        clearChatHistoryBtn.setOnClickListener(v -> confirmClearChatHistory());
+        aboutBtn.setOnClickListener(v -> showAboutDialog());
 
         permissionLauncher = registerForActivityResult(
                 new ActivityResultContracts.RequestPermission(),
@@ -74,6 +78,30 @@ public class SettingsActivity extends AppCompatActivity {
         clearBtn.setOnClickListener(v -> confirmClearAll());
 
         refreshNotifLabel();
+    }
+
+    private void confirmClearChatHistory() {
+        new AlertDialog.Builder(this)
+                .setTitle("تأكيد")
+                .setMessage("سيتم حذف سجل محادثة المساعد الذكي بالكامل. متأكد؟")
+                .setPositiveButton("مسح", (dialog, which) -> {
+                    AiChatStore.clear(this);
+                    Toast.makeText(this, "تم مسح سجل المحادثة.", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("إلغاء", null)
+                .show();
+    }
+
+    private void showAboutDialog() {
+        String message = "AST-2012A Clinical Master\nالإصدار 1.0\n\n" +
+                "تطبيق أندرويد أصلي مكتوب بالكامل بلغة Java - بدون WebView أو متصفح.\n" +
+                "120 حالة سريرية موثقة + موسوعة أنماط الجهاز + مساعد ذكي مجاني.\n\n" +
+                "كل بياناتك (الحالات المخصصة، سجل المحادثة، الإعدادات) محفوظة محليًا على جهازك فقط، ولا تُرسل لأي سيرفر خاص بالتطبيق.";
+        new AlertDialog.Builder(this)
+                .setTitle("عن التطبيق")
+                .setMessage(message)
+                .setPositiveButton("حسنًا", null)
+                .show();
     }
 
     private void saveAiKey() {

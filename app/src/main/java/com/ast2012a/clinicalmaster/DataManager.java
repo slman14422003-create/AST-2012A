@@ -360,4 +360,44 @@ public class DataManager {
         if (m.find()) return m.group(1);
         return null;
     }
+
+    // -----------------------------------------------------------------
+    // "التأريض" (Grounding): تزويد المساعد الذكي بالبروتوكولات الموثقة ذات
+    // الصلة من قاعدة بيانات الجهاز الرسمية، ليقارن إجابته معها بدل الاعتماد
+    // على معرفته العامة فقط - يقلل الهلوسة ويحافظ على الاتساق مع الجهاز.
+    // -----------------------------------------------------------------
+
+    public static class GroundingResult {
+        public String contextText;
+        public int caseCount;
+    }
+
+    public static GroundingResult buildGroundingContext(Context ctx, String userQuery, int maxCases) {
+        List<CaseItem> builtin = loadBuiltinDatabase(ctx);
+        SearchResult result = search(userQuery, builtin);
+        if (result.items.isEmpty()) return null;
+
+        GroundingResult g = new GroundingResult();
+        int count = Math.min(maxCases, result.items.size());
+        g.caseCount = count;
+
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < count; i++) {
+            CaseItem c = result.items.get(i);
+            sb.append("• ").append(c.title)
+              .append(" | النمط: ").append(c.mode)
+              .append(" | التردد: ").append(c.freq)
+              .append(" | القناة: ").append(c.channel)
+              .append(" | المدة: ").append(c.duration);
+            if (c.explanation != null && !c.explanation.isEmpty()) {
+                sb.append(" | الشرح السريري: ").append(c.explanation);
+            }
+            if (c.sessionsPlan != null && !c.sessionsPlan.isEmpty()) {
+                sb.append(" | خطة الجلسات الموصى بها: ").append(c.sessionsPlan);
+            }
+            sb.append("\n");
+        }
+        g.contextText = sb.toString();
+        return g;
+    }
 }

@@ -10,22 +10,26 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
 /**
- * عميل بسيط لواجهة OpenRouter (متوافقة مع OpenAI API) للوصول لنماذج ذكاء
- * اصطناعي مجانية. نستخدم معرّف النموذج "openrouter/free" وهو الموجّه
- * التلقائي الخاص بـ OpenRouter نفسها - بيختار أي نموذج مجاني متاح حاليًا
- * تلقائيًا، فالميزة تفضل شغالة حتى لو تغيّر النموذج المجاني المحدد بمرور
- * الوقت (النماذج المجانية عند مزوّدين زي DeepSeek بتتغيّر بين وقت وآخر).
+ * عميل الذكاء الاصطناعي - له مزوّدان:
  *
- * يحتاج المستخدم مفتاح API مجاني خاص بيه من https://openrouter.ai/keys
- * (تسجيل بالإيميل، بدون بطاقة ائتمان) ويُدخله من شاشة الإعدادات.
+ * 1) Pollinations (الافتراضي، بدون أي مفتاح أو إعداد): منصة مفتوحة المصدر
+ *    (pollinations.ai) بتوفر endpoint نصي مجاني تمامًا وبدون تسجيل أو مفتاح
+ *    API إطلاقًا - أقرب حل حقيقي وصادق لـ "ذكاء اصطناعي جاهز بدون ما تعمل
+ *    شي". هذا هو المزوّد المستخدم افتراضيًا لكل المستخدمين تلقائيًا.
+ *
+ * 2) OpenRouter (اختياري/متقدم): لو المستخدم عايز يجرب نموذج بديل، يقدر
+ *    يضيف مفتاح API مجاني خاص بيه من openrouter.ai في شاشة الإعدادات،
+ *    وساعتها التطبيق هيستخدمه بدل Pollinations تلقائيًا.
  */
 public class AiClient {
 
-    private static final String ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
-    private static final String MODEL_ID = "openrouter/free";
+    private static final String POLLINATIONS_ENDPOINT = "https://text.pollinations.ai/";
+    private static final String OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
+    private static final String OPENROUTER_MODEL = "openrouter/free";
 
     public interface Callback {
         void onSuccess(String reply);
@@ -33,12 +37,69 @@ public class AiClient {
     }
 
     /**
-     * يُستدعى من Thread خلفية (مش الـ UI Thread) - راجع استخدامها في AiAssistantActivity.
+     * يُستدعى من Thread خلفية (مش الـ UI Thread). لو apiKey فاضي أو null
+     * بيستخدم Pollinations (بدون مفتاح) تلقائيًا، وإلا بيستخدم OpenRouter
+     * بمفتاح المستخدم.
      */
     public static void sendMessage(String apiKey, String systemContext, String userMessage, Callback callback) {
+        if (apiKey == null || apiKey.trim().isEmpty()) {
+            sendViaPollinations(systemContext, userMessage, callback);
+        } else {
+            sendViaOpenRouter(apiKey.trim(), systemContext, userMessage, callback);
+        }
+    }
+
+    // -----------------------------------------------------------------
+    // Pollinations - بدون مفتاح إطلاقًا
+    // -----------------------------------------------------------------
+
+    private static void sendViaPollinations(String systemContext, String userMessage, Callback callback) {
         HttpURLConnection conn = null;
         try {
-            URL url = new URL(ENDPOINT);
+            String encodedPrompt = URLEncoder.encode(userMessage, "UTF-8").replace("+", "%20");
+            StringBuilder urlStr = new StringBuilder(POLLINATIONS_ENDPOINT).append(encodedPrompt);
+            urlStr.append("?model=openai");
+            if (systemContext != null && !systemContext.isEmpty()) {
+                urlStr.append("&system=").append(URLEncoder.encode(systemContext, "UTF-8").replace("+", "%20"));
+            }
+
+            URL url = new URL(urlStr.toString());
+            conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("GET");
+            conn.setConnectTimeout(20000);
+            conn.setReadTimeout(45000);
+
+            int status = conn.getResponseCode();
+            InputStream is = status >= 200 && status < 300 ? conn.getInputStream() : conn.getErrorStream();
+            String responseBody = readStream(is);
+
+            if (status < 200 || status >= 300) {
+                callback.onError("تعذر الوصول لخدمة الذكاء الاصطناعي المجانية حاليًا (قد تكون مزدحمة). حاول بعد قليل، أو أضف مفتاح OpenRouter الخاص بك من الإعدادات كبديل.");
+                return;
+            }
+            if (responseBody == null || responseBody.trim().isEmpty()) {
+                callback.onError("لم يصل رد من الخدمة. حاول مرة أخرى.");
+                return;
+            }
+            callback.onSuccess(responseBody.trim());
+
+        } catch (IOException e) {
+            callback.onError("تعذر الاتصال بالإنترنت. تأكد من الاتصال وحاول مرة أخرى.");
+        } catch (Exception e) {
+            callback.onError("حدث خطأ غير متوقع: " + e.getMessage());
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+    }
+
+    // -----------------------------------------------------------------
+    // OpenRouter - يحتاج مفتاح المستخدم الخاص (اختياري/متقدم)
+    // -----------------------------------------------------------------
+
+    private static void sendViaOpenRouter(String apiKey, String systemContext, String userMessage, Callback callback) {
+        HttpURLConnection conn = null;
+        try {
+            URL url = new URL(OPENROUTER_ENDPOINT);
             conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Authorization", "Bearer " + apiKey);
@@ -60,7 +121,7 @@ public class AiClient {
             messages.put(user);
 
             JSONObject body = new JSONObject();
-            body.put("model", MODEL_ID);
+            body.put("model", OPENROUTER_MODEL);
             body.put("messages", messages);
 
             OutputStream os = conn.getOutputStream();
@@ -72,7 +133,7 @@ public class AiClient {
             String responseBody = readStream(is);
 
             if (status < 200 || status >= 300) {
-                callback.onError(friendlyErrorMessage(status, responseBody));
+                callback.onError(friendlyErrorMessage(status));
                 return;
             }
 
@@ -92,9 +153,9 @@ public class AiClient {
         }
     }
 
-    private static String friendlyErrorMessage(int status, String body) {
-        if (status == 401) return "مفتاح API غير صحيح. تأكد منه في شاشة الإعدادات.";
-        if (status == 429) return "تم تجاوز الحد المسموح للنماذج المجانية حاليًا. حاول بعد قليل.";
+    private static String friendlyErrorMessage(int status) {
+        if (status == 401) return "مفتاح OpenRouter غير صحيح. تأكد منه في شاشة الإعدادات، أو امسحه لاستخدام الوضع المجاني الافتراضي بدون مفتاح.";
+        if (status == 429) return "تم تجاوز الحد المسموح لهذا المفتاح حاليًا. حاول بعد قليل.";
         return "فشل الطلب (" + status + "). حاول مرة أخرى لاحقًا.";
     }
 
@@ -103,7 +164,7 @@ public class AiClient {
         BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8));
         StringBuilder sb = new StringBuilder();
         String line;
-        while ((line = reader.readLine()) != null) sb.append(line);
+        while ((line = reader.readLine()) != null) sb.append(line).append('\n');
         reader.close();
         return sb.toString();
     }
