@@ -1,5 +1,6 @@
 package com.ast2012a.clinicalmaster;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -59,9 +60,31 @@ public class EncyclopediaActivity extends AppCompatActivity {
                 safetyView.setVisibility(View.VISIBLE);
             }
 
+            // اضغط مطولًا على أي نمط لسؤال المساعد الذكي عنه مباشرة
+            final String modeNameForAi = name;
+            card.setOnLongClickListener(v -> {
+                Intent i = new Intent(this, AiAssistantActivity.class);
+                i.putExtra("prefill_query", "اشرحلي أكثر عن نمط: " + modeNameForAi);
+                startActivity(i);
+                overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
+                return true;
+            });
+
             container.addView(card);
         }
         container.scheduleLayoutAnimation();
+
+        TextView aiHint = new TextView(this);
+        aiHint.setText("💡 اضغط مطولًا على أي نمط لسؤال المساعد الذكي عنه");
+        aiHint.setTextColor(getColor(R.color.text_secondary));
+        aiHint.setTextSize(11);
+        aiHint.setGravity(android.view.Gravity.CENTER);
+        LinearLayout.LayoutParams hintParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        hintParams.topMargin = 8;
+        hintParams.bottomMargin = 20;
+        aiHint.setLayoutParams(hintParams);
+        container.addView(aiHint);
     }
 
     @Override

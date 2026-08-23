@@ -108,12 +108,53 @@ public class CaseDetailActivity extends AppCompatActivity {
 
         String term = currentCase.title.startsWith("بروتوكول")
                 ? DataManager.extractEnglishTerm(currentCase.title) : null;
-        if (term != null) {
-            Button sourcesBtn = new Button(this);
-            sourcesBtn.setText("🔗 مصادر طبية موثوقة (Physiopedia)");
-            sourcesBtn.setOnClickListener(v -> openSources(term));
-            container.addView(sourcesBtn);
+        if (term == null) {
+            // نستخدم عنوان الحالة نفسه (بدون الإيموجي) كبديل، حتى تفضل
+            // أزرار المصادر متاحة لأي حالة، مش بس اللي فيها مصطلح إنجليزي بين قوسين.
+            term = currentCase.title
+                    .replaceAll("[\\p{So}\\p{Cn}\\p{Mn}]", "")
+                    .replaceAll("\\s+", " ")
+                    .trim();
         }
+        if (!term.isEmpty()) {
+            final String searchTerm = term;
+            LinearLayout sourcesRow = new LinearLayout(this);
+            sourcesRow.setOrientation(LinearLayout.HORIZONTAL);
+            LinearLayout.LayoutParams srp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            srp.topMargin = 8;
+            sourcesRow.setLayoutParams(srp);
+            LinearLayout.LayoutParams halfParams = new LinearLayout.LayoutParams(
+                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+
+            Button physioBtn = new Button(this);
+            physioBtn.setText("🔗 Physiopedia");
+            physioBtn.setOnClickListener(v -> openExternalSearch(
+                    "https://www.physio-pedia.com/index.php?search=", searchTerm));
+
+            Button pubmedBtn = new Button(this);
+            pubmedBtn.setText("🔗 PubMed");
+            pubmedBtn.setOnClickListener(v -> openExternalSearch(
+                    "https://pubmed.ncbi.nlm.nih.gov/?term=", searchTerm));
+
+            sourcesRow.addView(physioBtn, halfParams);
+            sourcesRow.addView(pubmedBtn, halfParams);
+            container.addView(sourcesRow);
+        }
+
+        Button askAiBtn = new Button(this);
+        askAiBtn.setText("🤖 اسأل المساعد الذكي عن هذه الحالة");
+        LinearLayout.LayoutParams askAiParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        askAiParams.topMargin = 10;
+        askAiBtn.setLayoutParams(askAiParams);
+        askAiBtn.setOnClickListener(v -> {
+            Intent i = new Intent(this, AiAssistantActivity.class);
+            i.putExtra("prefill_query", "أخبرني المزيد عن: " + currentCase.title);
+            startActivity(i);
+            overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
+        });
+        container.addView(askAiBtn);
 
         if (currentCase.custom) {
             LinearLayout actions = new LinearLayout(this);
@@ -149,9 +190,9 @@ public class CaseDetailActivity extends AppCompatActivity {
         container.addView(block);
     }
 
-    private void openSources(String term) {
+    private void openExternalSearch(String baseUrl, String term) {
         try {
-            Uri uri = Uri.parse("https://www.physio-pedia.com/index.php?search=" + Uri.encode(term));
+            Uri uri = Uri.parse(baseUrl + Uri.encode(term));
             startActivity(new Intent(Intent.ACTION_VIEW, uri));
         } catch (Exception e) {
             e.printStackTrace();

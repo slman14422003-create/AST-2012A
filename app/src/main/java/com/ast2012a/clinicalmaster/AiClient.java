@@ -10,30 +10,30 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
 /**
- * عميل الذكاء الاصطناعي - له مزوّدان، كلاهما بنفس شكل طلب OpenAI القياسي
- * (chat/completions):
+ * عميل الذكاء الاصطناعي. المسار المجاني الافتراضي (بدون مفتاح) بيجرب
+ * مزوّدين مختلفين تلقائيًا بالترتيب - لو الأول فشل أو كان مزدحمًا، بيجرب
+ * الثاني فورًا بدون ما يظهر أي خطأ للمستخدم، فاحتمال "الذكاء الاصطناعي
+ * مش شغال خالص" يقل كثيرًا:
  *
- * 1) LLM7.io (الافتراضي، بدون أي مفتاح أو إعداد): endpoint حقيقي موثّق
- *    ومتوافق مع OpenAI، بيقبل استخدام مجهول تمامًا (api_key = "unused")
- *    بدون تسجيل - راجع https://docs.llm7.io/quickstart. هذا هو المزوّد
- *    الافتراضي لكل المستخدمين تلقائيًا.
+ * 1) LLM7.io - endpoint موثّق متوافق مع OpenAI، استخدام مجهول تمامًا
+ *    (api_key="unused") - https://docs.llm7.io/quickstart
+ * 2) Pollinations.ai - endpoint نصي مجاني بدون مفتاح، موديل "openai-large"
+ *    تحديدًا (وليس "openai" العادي المدفوع) - https://text.pollinations.ai
  *
- *    ملاحظة سابقة مهمة: كنا نستخدم Pollinations.ai بموديل "openai" وده
- *    كان بيتطلب رصيد مدفوع (Pollen) فعليًا رغم إنه بيرجع HTTP 200، فكان
- *    بيعرض رسالة الخطأ/الحد كأنها رد ذكاء اصطناعي حقيقي - وهو سبب المشكلة
- *    اللي واجهتها. LLM7 بيرجع نفس شكل استجابة OpenAI القياسي (choices[0]
- *    .message.content) فمفيش لبس في قراءة الرد.
- *
- * 2) OpenRouter (اختياري/متقدم): لو المستخدم عايز يجرب نموذج بديل، يقدر
- *    يضيف مفتاح API مجاني خاص بيه من openrouter.ai في شاشة الإعدادات.
+ * لو المستخدم عنده مفتاح OpenRouter خاص بيه (من الإعدادات)، بيُستخدم هو
+ * فقط بدل السلسلة المجانية دي بالكامل.
  */
 public class AiClient {
 
     private static final String LLM7_ENDPOINT = "https://api.llm7.io/v1/chat/completions";
     private static final String LLM7_MODEL = "gpt-4o-mini-2024-07-18";
+
+    private static final String POLLINATIONS_ENDPOINT = "https://text.pollinations.ai/";
+    private static final String POLLINATIONS_MODEL = "openai-large";
 
     private static final String OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
     private static final String OPENROUTER_MODEL = "openrouter/free";
@@ -43,29 +43,90 @@ public class AiClient {
         void onError(String message);
     }
 
-    /**
-     * يُستدعى من Thread خلفية (مش الـ UI Thread). لو apiKey فاضي أو null
-     * بيستخدم LLM7 (بدون مفتاح حقيقي) تلقائيًا، وإلا بيستخدم OpenRouter
-     * بمفتاح المستخدم.
-     */
+    /** يُستدعى من Thread خلفية (مش الـ UI Thread). */
     public static void sendMessage(String apiKey, String systemContext, String userMessage, Callback callback) {
         if (apiKey == null || apiKey.trim().isEmpty()) {
-            sendChatCompletion(LLM7_ENDPOINT, "unused", LLM7_MODEL, systemContext, userMessage,
-                    "تعذر الوصول لخدمة الذكاء الاصطناعي المجانية حاليًا (قد تكون مزدحمة). حاول بعد قليل، أو أضف مفتاح OpenRouter الخاص بك من الإعدادات كبديل.",
-                    callback);
+            sendViaLlm7(systemContext, userMessage, new Callback() {
+                @Override
+                public void onSuccess(String reply) {
+                    callback.onSuccess(reply);
+                }
+
+                @Override
+                public void onError(String firstError) {
+                    // فشل المزوّد الأول - نجرب الثاني تلقائيًا بصمت
+                    sendViaPollinations(systemContext, userMessage, new Callback() {
+                        @Override
+                        public void onSuccess(String reply) {
+                            callback.onSuccess(reply);
+                        }
+
+                        @Override
+                        public void onError(String secondError) {
+                            callback.onError("تعذر الوصول لأي من خدمات الذكاء الاصطناعي المجانية حاليًا (قد تكون مزدحمة). حاول بعد قليل، أو أضف مفتاح OpenRouter الخاص بك من الإعدادات كبديل أكثر ثباتًا.");
+                        }
+                    });
+                }
+            });
         } else {
-            sendChatCompletion(OPENROUTER_ENDPOINT, apiKey.trim(), OPENROUTER_MODEL, systemContext, userMessage,
+            sendChatCompletionJson(OPENROUTER_ENDPOINT, apiKey.trim(), OPENROUTER_MODEL, systemContext, userMessage,
                     null, callback);
         }
     }
 
-    /**
-     * منطق موحّد لأي مزوّد متوافق مع شكل OpenAI (chat/completions) -
-     * يُستخدم لكل من LLM7 وOpenRouter بنفس الكود بالضبط.
-     */
-    private static void sendChatCompletion(String endpoint, String apiKey, String model,
-                                            String systemContext, String userMessage,
-                                            String customFreeProviderErrorMsg, Callback callback) {
+    // -----------------------------------------------------------------
+    // المزوّد الأول: LLM7.io
+    // -----------------------------------------------------------------
+
+    private static void sendViaLlm7(String systemContext, String userMessage, Callback callback) {
+        sendChatCompletionJson(LLM7_ENDPOINT, "unused", LLM7_MODEL, systemContext, userMessage, "LLM7_FAILED", callback);
+    }
+
+    // -----------------------------------------------------------------
+    // المزوّد الثاني (احتياطي): Pollinations.ai
+    // -----------------------------------------------------------------
+
+    private static void sendViaPollinations(String systemContext, String userMessage, Callback callback) {
+        HttpURLConnection conn = null;
+        try {
+            String encodedPrompt = URLEncoder.encode(userMessage, "UTF-8").replace("+", "%20");
+            StringBuilder urlStr = new StringBuilder(POLLINATIONS_ENDPOINT).append(encodedPrompt);
+            urlStr.append("?model=").append(POLLINATIONS_MODEL);
+            if (systemContext != null && !systemContext.isEmpty()) {
+                urlStr.append("&system=").append(URLEncoder.encode(systemContext, "UTF-8").replace("+", "%20"));
+            }
+
+            URL url = new URL(urlStr.toString());
+            conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("GET");
+            conn.setConnectTimeout(20000);
+            conn.setReadTimeout(45000);
+
+            int status = conn.getResponseCode();
+            InputStream is = status >= 200 && status < 300 ? conn.getInputStream() : conn.getErrorStream();
+            String responseBody = readStream(is);
+
+            if (status < 200 || status >= 300 || responseBody == null || responseBody.trim().isEmpty()) {
+                callback.onError("POLLINATIONS_FAILED");
+                return;
+            }
+            callback.onSuccess(responseBody.trim());
+
+        } catch (Exception e) {
+            callback.onError("POLLINATIONS_FAILED");
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+    }
+
+    // -----------------------------------------------------------------
+    // منطق موحّد لأي مزوّد متوافق مع شكل OpenAI (chat/completions) - يُستخدم
+    // لكل من LLM7 وOpenRouter.
+    // -----------------------------------------------------------------
+
+    private static void sendChatCompletionJson(String endpoint, String apiKey, String model,
+                                                String systemContext, String userMessage,
+                                                String internalFailureCode, Callback callback) {
         HttpURLConnection conn = null;
         try {
             URL url = new URL(endpoint);
@@ -102,29 +163,25 @@ public class AiClient {
             String responseBody = readStream(is);
 
             if (status < 200 || status >= 300) {
-                callback.onError(customFreeProviderErrorMsg != null
-                        ? customFreeProviderErrorMsg
-                        : friendlyErrorMessage(status));
+                callback.onError(internalFailureCode != null ? internalFailureCode : friendlyErrorMessage(status));
                 return;
             }
 
             JSONObject json = new JSONObject(responseBody);
             JSONArray choices = json.optJSONArray("choices");
             if (choices == null || choices.length() == 0) {
-                callback.onError("لم يصل رد صالح من الخدمة. حاول مرة أخرى.");
+                callback.onError(internalFailureCode != null ? internalFailureCode : "لم يصل رد صالح من الخدمة. حاول مرة أخرى.");
                 return;
             }
             String reply = choices.getJSONObject(0).getJSONObject("message").getString("content");
             if (reply == null || reply.trim().isEmpty()) {
-                callback.onError("وصل رد فارغ من الخدمة. حاول مرة أخرى.");
+                callback.onError(internalFailureCode != null ? internalFailureCode : "وصل رد فارغ من الخدمة. حاول مرة أخرى.");
                 return;
             }
             callback.onSuccess(reply.trim());
 
-        } catch (IOException e) {
-            callback.onError("تعذر الاتصال بالإنترنت. تأكد من الاتصال وحاول مرة أخرى.");
         } catch (Exception e) {
-            callback.onError("حدث خطأ غير متوقع أثناء قراءة رد الخدمة. حاول مرة أخرى.");
+            callback.onError(internalFailureCode != null ? internalFailureCode : "تعذر الاتصال بالخدمة. حاول مرة أخرى.");
         } finally {
             if (conn != null) conn.disconnect();
         }
