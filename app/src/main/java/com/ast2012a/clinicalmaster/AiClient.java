@@ -10,24 +10,31 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
 /**
- * عميل الذكاء الاصطناعي - له مزوّدان:
+ * عميل الذكاء الاصطناعي - له مزوّدان، كلاهما بنفس شكل طلب OpenAI القياسي
+ * (chat/completions):
  *
- * 1) Pollinations (الافتراضي، بدون أي مفتاح أو إعداد): منصة مفتوحة المصدر
- *    (pollinations.ai) بتوفر endpoint نصي مجاني تمامًا وبدون تسجيل أو مفتاح
- *    API إطلاقًا - أقرب حل حقيقي وصادق لـ "ذكاء اصطناعي جاهز بدون ما تعمل
- *    شي". هذا هو المزوّد المستخدم افتراضيًا لكل المستخدمين تلقائيًا.
+ * 1) LLM7.io (الافتراضي، بدون أي مفتاح أو إعداد): endpoint حقيقي موثّق
+ *    ومتوافق مع OpenAI، بيقبل استخدام مجهول تمامًا (api_key = "unused")
+ *    بدون تسجيل - راجع https://docs.llm7.io/quickstart. هذا هو المزوّد
+ *    الافتراضي لكل المستخدمين تلقائيًا.
+ *
+ *    ملاحظة سابقة مهمة: كنا نستخدم Pollinations.ai بموديل "openai" وده
+ *    كان بيتطلب رصيد مدفوع (Pollen) فعليًا رغم إنه بيرجع HTTP 200، فكان
+ *    بيعرض رسالة الخطأ/الحد كأنها رد ذكاء اصطناعي حقيقي - وهو سبب المشكلة
+ *    اللي واجهتها. LLM7 بيرجع نفس شكل استجابة OpenAI القياسي (choices[0]
+ *    .message.content) فمفيش لبس في قراءة الرد.
  *
  * 2) OpenRouter (اختياري/متقدم): لو المستخدم عايز يجرب نموذج بديل، يقدر
- *    يضيف مفتاح API مجاني خاص بيه من openrouter.ai في شاشة الإعدادات،
- *    وساعتها التطبيق هيستخدمه بدل Pollinations تلقائيًا.
+ *    يضيف مفتاح API مجاني خاص بيه من openrouter.ai في شاشة الإعدادات.
  */
 public class AiClient {
 
-    private static final String POLLINATIONS_ENDPOINT = "https://text.pollinations.ai/";
+    private static final String LLM7_ENDPOINT = "https://api.llm7.io/v1/chat/completions";
+    private static final String LLM7_MODEL = "gpt-4o-mini-2024-07-18";
+
     private static final String OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
     private static final String OPENROUTER_MODEL = "openrouter/free";
 
@@ -38,74 +45,36 @@ public class AiClient {
 
     /**
      * يُستدعى من Thread خلفية (مش الـ UI Thread). لو apiKey فاضي أو null
-     * بيستخدم Pollinations (بدون مفتاح) تلقائيًا، وإلا بيستخدم OpenRouter
+     * بيستخدم LLM7 (بدون مفتاح حقيقي) تلقائيًا، وإلا بيستخدم OpenRouter
      * بمفتاح المستخدم.
      */
     public static void sendMessage(String apiKey, String systemContext, String userMessage, Callback callback) {
         if (apiKey == null || apiKey.trim().isEmpty()) {
-            sendViaPollinations(systemContext, userMessage, callback);
+            sendChatCompletion(LLM7_ENDPOINT, "unused", LLM7_MODEL, systemContext, userMessage,
+                    "تعذر الوصول لخدمة الذكاء الاصطناعي المجانية حاليًا (قد تكون مزدحمة). حاول بعد قليل، أو أضف مفتاح OpenRouter الخاص بك من الإعدادات كبديل.",
+                    callback);
         } else {
-            sendViaOpenRouter(apiKey.trim(), systemContext, userMessage, callback);
+            sendChatCompletion(OPENROUTER_ENDPOINT, apiKey.trim(), OPENROUTER_MODEL, systemContext, userMessage,
+                    null, callback);
         }
     }
 
-    // -----------------------------------------------------------------
-    // Pollinations - بدون مفتاح إطلاقًا
-    // -----------------------------------------------------------------
-
-    private static void sendViaPollinations(String systemContext, String userMessage, Callback callback) {
+    /**
+     * منطق موحّد لأي مزوّد متوافق مع شكل OpenAI (chat/completions) -
+     * يُستخدم لكل من LLM7 وOpenRouter بنفس الكود بالضبط.
+     */
+    private static void sendChatCompletion(String endpoint, String apiKey, String model,
+                                            String systemContext, String userMessage,
+                                            String customFreeProviderErrorMsg, Callback callback) {
         HttpURLConnection conn = null;
         try {
-            String encodedPrompt = URLEncoder.encode(userMessage, "UTF-8").replace("+", "%20");
-            StringBuilder urlStr = new StringBuilder(POLLINATIONS_ENDPOINT).append(encodedPrompt);
-            urlStr.append("?model=openai");
-            if (systemContext != null && !systemContext.isEmpty()) {
-                urlStr.append("&system=").append(URLEncoder.encode(systemContext, "UTF-8").replace("+", "%20"));
-            }
-
-            URL url = new URL(urlStr.toString());
-            conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("GET");
-            conn.setConnectTimeout(20000);
-            conn.setReadTimeout(45000);
-
-            int status = conn.getResponseCode();
-            InputStream is = status >= 200 && status < 300 ? conn.getInputStream() : conn.getErrorStream();
-            String responseBody = readStream(is);
-
-            if (status < 200 || status >= 300) {
-                callback.onError("تعذر الوصول لخدمة الذكاء الاصطناعي المجانية حاليًا (قد تكون مزدحمة). حاول بعد قليل، أو أضف مفتاح OpenRouter الخاص بك من الإعدادات كبديل.");
-                return;
-            }
-            if (responseBody == null || responseBody.trim().isEmpty()) {
-                callback.onError("لم يصل رد من الخدمة. حاول مرة أخرى.");
-                return;
-            }
-            callback.onSuccess(responseBody.trim());
-
-        } catch (IOException e) {
-            callback.onError("تعذر الاتصال بالإنترنت. تأكد من الاتصال وحاول مرة أخرى.");
-        } catch (Exception e) {
-            callback.onError("حدث خطأ غير متوقع: " + e.getMessage());
-        } finally {
-            if (conn != null) conn.disconnect();
-        }
-    }
-
-    // -----------------------------------------------------------------
-    // OpenRouter - يحتاج مفتاح المستخدم الخاص (اختياري/متقدم)
-    // -----------------------------------------------------------------
-
-    private static void sendViaOpenRouter(String apiKey, String systemContext, String userMessage, Callback callback) {
-        HttpURLConnection conn = null;
-        try {
-            URL url = new URL(OPENROUTER_ENDPOINT);
+            URL url = new URL(endpoint);
             conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Authorization", "Bearer " + apiKey);
             conn.setRequestProperty("Content-Type", "application/json");
             conn.setConnectTimeout(20000);
-            conn.setReadTimeout(30000);
+            conn.setReadTimeout(45000);
             conn.setDoOutput(true);
 
             JSONArray messages = new JSONArray();
@@ -121,7 +90,7 @@ public class AiClient {
             messages.put(user);
 
             JSONObject body = new JSONObject();
-            body.put("model", OPENROUTER_MODEL);
+            body.put("model", model);
             body.put("messages", messages);
 
             OutputStream os = conn.getOutputStream();
@@ -133,21 +102,29 @@ public class AiClient {
             String responseBody = readStream(is);
 
             if (status < 200 || status >= 300) {
-                callback.onError(friendlyErrorMessage(status));
+                callback.onError(customFreeProviderErrorMsg != null
+                        ? customFreeProviderErrorMsg
+                        : friendlyErrorMessage(status));
                 return;
             }
 
             JSONObject json = new JSONObject(responseBody);
-            String reply = json.getJSONArray("choices")
-                    .getJSONObject(0)
-                    .getJSONObject("message")
-                    .getString("content");
+            JSONArray choices = json.optJSONArray("choices");
+            if (choices == null || choices.length() == 0) {
+                callback.onError("لم يصل رد صالح من الخدمة. حاول مرة أخرى.");
+                return;
+            }
+            String reply = choices.getJSONObject(0).getJSONObject("message").getString("content");
+            if (reply == null || reply.trim().isEmpty()) {
+                callback.onError("وصل رد فارغ من الخدمة. حاول مرة أخرى.");
+                return;
+            }
             callback.onSuccess(reply.trim());
 
         } catch (IOException e) {
             callback.onError("تعذر الاتصال بالإنترنت. تأكد من الاتصال وحاول مرة أخرى.");
         } catch (Exception e) {
-            callback.onError("حدث خطأ غير متوقع: " + e.getMessage());
+            callback.onError("حدث خطأ غير متوقع أثناء قراءة رد الخدمة. حاول مرة أخرى.");
         } finally {
             if (conn != null) conn.disconnect();
         }

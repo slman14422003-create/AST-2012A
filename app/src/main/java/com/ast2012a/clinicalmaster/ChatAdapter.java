@@ -64,19 +64,15 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ViewHolder> {
         ChatMessage m = messages.get(position);
         boolean isUser = m.role == ChatMessage.ROLE_USER;
 
-        holder.role.setText(isUser ? "أنت" : "🤖 المساعد الذكي");
+        holder.role.setText(isUser ? "أنت" : "المساعد الذكي");
+        holder.avatar.setText(isUser ? "🧑" : "🤖");
         holder.text.setText(m.text);
         holder.text.setBackgroundResource(isUser ? R.drawable.bg_bubble_user : R.drawable.bg_bubble_ai);
         holder.text.setTextColor(holder.itemView.getContext().getColor(
                 isUser ? R.color.white : R.color.text_primary));
 
-        LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) holder.text.getLayoutParams();
-        lp.gravity = isUser ? Gravity.START : Gravity.END;
-        holder.text.setLayoutParams(lp);
-
-        LinearLayout.LayoutParams rp = (LinearLayout.LayoutParams) holder.role.getLayoutParams();
-        rp.gravity = isUser ? Gravity.START : Gravity.END;
-        holder.role.setLayoutParams(rp);
+        setChildGravity(holder.header, isUser ? Gravity.START : Gravity.END);
+        setChildGravity(holder.text, isUser ? Gravity.START : Gravity.END);
 
         if (!isUser && saveListener != null) {
             holder.saveBtn.setVisibility(View.VISIBLE);
@@ -86,17 +82,28 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ViewHolder> {
         }
     }
 
+    private void setChildGravity(View view, int gravity) {
+        ViewGroup.LayoutParams params = view.getLayoutParams();
+        if (params instanceof LinearLayout.LayoutParams) {
+            ((LinearLayout.LayoutParams) params).gravity = gravity;
+            view.setLayoutParams(params);
+        }
+    }
+
     @Override
     public int getItemCount() {
         return messages.size();
     }
 
     static class ViewHolder extends RecyclerView.ViewHolder {
-        TextView role, text;
+        View header;
+        TextView role, avatar, text;
         Button saveBtn;
         ViewHolder(View itemView) {
             super(itemView);
+            header = itemView.findViewById(R.id.bubble_header);
             role = itemView.findViewById(R.id.bubble_role);
+            avatar = itemView.findViewById(R.id.bubble_avatar);
             text = itemView.findViewById(R.id.bubble_text);
             saveBtn = itemView.findViewById(R.id.bubble_save_case);
         }

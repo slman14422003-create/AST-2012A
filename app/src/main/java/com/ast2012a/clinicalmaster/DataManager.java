@@ -400,4 +400,49 @@ public class DataManager {
         g.contextText = sb.toString();
         return g;
     }
+
+    // -----------------------------------------------------------------
+    // ربط موسوعة الأنماط بقاعدة الحالات الفعلية: نستخرج أرقام الأنماط من
+    // نص الموسوعة (مثال: "1 إلى 4" أو "10 و 11")، ونعدّ كم حالة سريرية
+    // موثقة فعليًا تستخدم أي من هذه الأنماط - بيانات حقيقية من القاعدة
+    // نفسها، مش أرقام مُختلقة.
+    // -----------------------------------------------------------------
+
+    public static Set<Integer> parseModeNumbers(String rangeText) {
+        Set<Integer> numbers = new HashSet<>();
+        if (rangeText == null) return numbers;
+
+        Matcher rangeMatcher = Pattern.compile("(\\d+)\\s*(?:إلى|-|to)\\s*(\\d+)").matcher(rangeText);
+        if (rangeMatcher.find()) {
+            int start = Integer.parseInt(rangeMatcher.group(1));
+            int end = Integer.parseInt(rangeMatcher.group(2));
+            for (int i = start; i <= end; i++) numbers.add(i);
+            return numbers;
+        }
+
+        Matcher singleMatcher = Pattern.compile("\\d+").matcher(rangeText);
+        while (singleMatcher.find()) {
+            numbers.add(Integer.parseInt(singleMatcher.group()));
+        }
+        return numbers;
+    }
+
+    private static Set<Integer> extractModeNumbersFromCase(String caseMode) {
+        Set<Integer> numbers = new HashSet<>();
+        if (caseMode == null) return numbers;
+        Matcher m = Pattern.compile("النمط\\s*(\\d+)").matcher(caseMode);
+        while (m.find()) numbers.add(Integer.parseInt(m.group(1)));
+        return numbers;
+    }
+
+    public static int countCasesForModeNumbers(Context ctx, Set<Integer> modeNumbers) {
+        if (modeNumbers.isEmpty()) return 0;
+        int count = 0;
+        for (CaseItem c : loadBuiltinDatabase(ctx)) {
+            Set<Integer> caseNumbers = extractModeNumbersFromCase(c.mode);
+            caseNumbers.retainAll(modeNumbers);
+            if (!caseNumbers.isEmpty()) count++;
+        }
+        return count;
+    }
 }
