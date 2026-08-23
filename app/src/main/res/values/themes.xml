@@ -14,4 +14,18 @@
         <item name="android:navigationBarColor">@color/surface_dark</item>
         <item name="android:windowLightStatusBar" tools:targetApi="m">false</item>
     </style>
+
+    <!-- عنوان قسم داخل شاشة الإعدادات (أو أي شاشة تحتاج تقسيم بصري لمجموعات
+         من الخيارات) - لون مميز، خط عريض، محاذاة لليمين للعربي. -->
+    <style name="SectionHeader">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginBottom">8dp</item>
+        <item name="android:gravity">end</item>
+        <item name="android:textColor">@color/primary_cyan</item>
+        <item name="android:textDirection">rtl</item>
+        <item name="android:textSize">12.5sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.02</item>
+    </style>
 </resources>
