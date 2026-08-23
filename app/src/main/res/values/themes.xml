@@ -28,4 +28,19 @@
         <item name="android:textStyle">bold</item>
         <item name="android:letterSpacing">0.02</item>
     </style>
+
+    <!-- شريحة اقتراح بحث سريع (أمثلة حقيقية من قاعدة البيانات) -->
+    <style name="SuggestionChip">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginHorizontal">4dp</item>
+        <item name="android:background">@drawable/bg_chip</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+        <item name="android:foreground">?attr/selectableItemBackground</item>
+        <item name="android:paddingHorizontal">14dp</item>
+        <item name="android:paddingVertical">8dp</item>
+        <item name="android:textColor">@color/text_secondary</item>
+        <item name="android:textSize">12sp</item>
+    </style>
 </resources>
