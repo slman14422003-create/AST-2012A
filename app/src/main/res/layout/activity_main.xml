@@ -181,6 +181,47 @@
                 android:text="المنظومة السريرية الضخمة جاهزة الآن.\nابحث عن أي حالة، نمط، أو مشكلة تقنية للحصول على التوصيف الدقيق."
                 android:textColor="@color/text_secondary"
                 android:textSize="13.5sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:layout_marginBottom="8dp"
+                android:text="جرّب أحد هذه الأمثلة:"
+                android:textColor="@color/text_secondary"
+                android:textSize="11sp" />
+
+            <HorizontalScrollView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:scrollbars="none">
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/chip_suggestion_1"
+                        style="@style/SuggestionChip"
+                        android:text="عرق النسا" />
+
+                    <TextView
+                        android:id="@+id/chip_suggestion_2"
+                        style="@style/SuggestionChip"
+                        android:text="الكتف المتجمد" />
+
+                    <TextView
+                        android:id="@+id/chip_suggestion_3"
+                        style="@style/SuggestionChip"
+                        android:text="النفق الرسغي" />
+
+                    <TextView
+                        android:id="@+id/chip_suggestion_4"
+                        style="@style/SuggestionChip"
+                        android:text="اسفل الظهر" />
+                </LinearLayout>
+            </HorizontalScrollView>
         </LinearLayout>
 
         <TextView
@@ -208,6 +249,93 @@
             android:textColor="@color/white"
             android:textSize="13sp"
             android:visibility="gone" />
+
+        <LinearLayout
+            android:id="@+id/ai_inline_loading"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:padding="14dp"
+            android:visibility="gone">
+
+            <ProgressBar
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:indeterminateTint="@color/primary_cyan" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="المساعد الذكي يفكر..."
+                android:textColor="@color/text_secondary"
+                android:textDirection="rtl"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <ScrollView
+            android:id="@+id/ai_inline_answer_scroll"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_card"
+                android:layout_margin="14dp"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="8dp"
+                    android:gravity="end"
+                    android:text="🤖 رد المساعد الذكي"
+                    android:textColor="@color/primary_cyan"
+                    android:textDirection="rtl"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/ai_inline_answer_text"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:textColor="@color/text_primary"
+                    android:textDirection="rtl"
+                    android:textSize="13.5sp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/ai_inline_save_case"
+                        style="@style/Widget.Material3.Button.TextButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="➕ حفظ كحالة"
+                        android:textColor="@color/primary_cyan"
+                        android:textSize="12sp" />
+
+                    <Button
+                        android:id="@+id/ai_inline_open_chat"
+                        style="@style/Widget.Material3.Button.TextButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="💬 متابعة المحادثة"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp" />
+                </LinearLayout>
+            </LinearLayout>
+        </ScrollView>
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/results_list"
