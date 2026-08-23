@@ -16,16 +16,18 @@
         app:navigationIcon="@android:drawable/ic_menu_close_clear_cancel" />
 
     <TextView
-        android:id="@+id/no_key_hint"
+        android:id="@+id/mode_hint"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_margin="16dp"
+        android:layout_marginBottom="4dp"
         android:background="@drawable/bg_card"
         android:gravity="center"
-        android:padding="16dp"
-        android:text="محتاج تضيف مفتاح API مجاني من openrouter.ai أولًا (من شاشة الإعدادات) عشان تقدر تستخدم المساعد الذكي."
+        android:padding="10dp"
+        android:text="🤖 يعمل حاليًا بالوضع المجاني الجاهز (بدون مفتاح). يمكنك إضافة مفتاح OpenRouter اختياري من الإعدادات لتجربة نموذج بديل."
         android:textColor="@color/text_secondary"
-        android:visibility="gone" />
+        android:textSize="11.5sp"
+        android:visibility="visible" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/chat_list"

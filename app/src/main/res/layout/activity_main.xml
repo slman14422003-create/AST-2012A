@@ -81,7 +81,9 @@
                 app:boxStrokeWidthFocused="1.6dp"
                 app:hintTextColor="@color/text_secondary"
                 app:startIconDrawable="@android:drawable/ic_menu_search"
-                app:startIconTint="@color/primary_cyan">
+                app:startIconTint="@color/primary_cyan"
+                app:endIconMode="clear_text"
+                app:endIconTint="@color/text_secondary">
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/search_field"
