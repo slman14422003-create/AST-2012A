@@ -30,6 +30,35 @@
             android:orientation="vertical"
             android:padding="16dp">
 
+            <!-- ============== قسم: المظهر ============== -->
+            <TextView
+                style="@style/SectionHeader"
+                android:layout_marginTop="4dp"
+                android:text="🌓 المظهر" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="24dp"
+                android:background="@drawable/bg_glass_card"
+                android:orientation="vertical"
+                android:padding="4dp">
+
+                <Button
+                    android:id="@+id/btn_theme_mode"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="4dp"
+                    android:gravity="end|center_vertical"
+                    android:paddingVertical="12dp"
+                    android:text="🌓 حسب إعداد الجهاز - اضغط للتبديل"
+                    android:textAllCaps="false"
+                    android:textColor="@color/text_primary"
+                    android:textDirection="rtl"
+                    android:textSize="13.5sp" />
+            </LinearLayout>
+
             <!-- ============== قسم: الإشعارات ============== -->
             <TextView
                 style="@style/SectionHeader"

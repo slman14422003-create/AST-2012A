@@ -444,20 +444,24 @@
             android:paddingHorizontal="12dp"
             android:paddingBottom="12dp">
 
-            <com.google.android.material.floatingactionbutton.FloatingActionButton
+            <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
                 android:id="@+id/fab_add"
-                android:layout_width="42dp"
-                android:layout_height="42dp"
+                style="@style/Widget.Material3.ExtendedFloatingActionButton.Icon.Primary"
+                android:layout_width="wrap_content"
+                android:layout_height="46dp"
                 android:layout_marginStart="8dp"
                 android:contentDescription="إضافة حالة جديدة"
-                android:src="@drawable/ic_add"
+                android:text="حالة جديدة"
+                android:textAllCaps="false"
+                android:textColor="@color/white"
+                android:textSize="13sp"
+                android:textStyle="bold"
                 app:backgroundTint="@color/primary_cyan"
-                app:borderWidth="0dp"
+                app:cornerRadius="16dp"
                 app:elevation="0dp"
-                app:fabCustomSize="42dp"
-                app:maxImageSize="18dp"
-                app:pressedTranslationZ="2dp"
-                app:tint="@color/white" />
+                app:icon="@drawable/ic_add"
+                app:iconTint="@color/white"
+                app:pressedTranslationZ="2dp" />
 
             <com.google.android.material.textfield.TextInputLayout
                 style="@style/Widget.Material3.TextInputLayout.OutlinedBox"

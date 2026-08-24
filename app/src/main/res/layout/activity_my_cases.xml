@@ -15,16 +15,35 @@
         android:titleTextColor="@color/text_primary"
         app:navigationIcon="@drawable/ic_close" />
 
-    <TextView
-        android:id="@+id/empty_hint"
+    <LinearLayout
+        android:id="@+id/empty_hint_container"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
+        android:layout_marginTop="60dp"
         android:gravity="center"
-        android:paddingHorizontal="24dp"
-        android:text="لا توجد حالات مخصصة بعد. اضغط + من الشاشة الرئيسية لإضافة أول حالة."
-        android:textColor="@color/text_secondary"
-        android:visibility="gone" />
+        android:orientation="vertical"
+        android:paddingHorizontal="28dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="10dp"
+            android:alpha="0.85"
+            android:text="🗂️"
+            android:textSize="36sp" />
+
+        <TextView
+            android:id="@+id/empty_hint"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:lineSpacingExtra="4dp"
+            android:text="لا توجد حالات مخصصة بعد.&#10;اضغط زر «حالة جديدة» من الشاشة الرئيسية لإضافة أول حالة."
+            android:textColor="@color/text_secondary"
+            android:textDirection="rtl"
+            android:textSize="13.5sp" />
+    </LinearLayout>
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/cases_list"
