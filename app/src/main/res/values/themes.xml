@@ -14,6 +14,11 @@
         <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item>
         <item name="fontFamily">sans-serif</item>
         <item name="android:textColorHint">@color/text_tertiary</item>
+        <!-- التطبيق عربي بالكامل بمحتوى RTL؛ نفرض اتجاه التخطيط من اليمين
+             لليسار بغض النظر عن لغة/لوكيل الجهاز، بدل الاعتماد على لوكيل
+             النظام (اللي لو كان إنجليزي بيخلي الشريط السفلي وأيقونة البحث
+             وترتيب العناصر الأفقية كلها بترتيب معكوس/مقطوع). -->
+        <item name="android:layoutDirection">rtl</item>
     </style>
 
     <!-- عنوان قسم داخل شاشة الإعدادات (أو أي شاشة تحتاج تقسيم بصري لمجموعات
