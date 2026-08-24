@@ -87,7 +87,7 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ViewHolder> {
         holder.time.setText(DateFormat.format("hh:mm a", m.timestamp));
         holder.text.setText(m.text);
         holder.text.setBackgroundResource(isUser ? R.drawable.bg_bubble_user : R.drawable.bg_bubble_ai);
-        holder.text.setTextColor(ctx.getColor(isUser ? R.color.white : R.color.text_primary));
+        holder.text.setTextColor(ctx.getColor(R.color.text_primary));
 
         setChildGravity(holder.header, isUser ? Gravity.START : Gravity.END);
         setChildGravity(holder.text, isUser ? Gravity.START : Gravity.END);

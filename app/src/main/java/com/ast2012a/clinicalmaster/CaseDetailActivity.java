@@ -92,7 +92,7 @@ public class CaseDetailActivity extends AppCompatActivity {
 
         TextView titleView = new TextView(this);
         titleView.setText(currentCase.title);
-        titleView.setTextColor(getColor(R.color.white));
+        titleView.setTextColor(getColor(R.color.text_primary));
         titleView.setTextSize(19);
         titleView.setTypeface(null, android.graphics.Typeface.BOLD);
         titleView.setGravity(android.view.Gravity.END);
