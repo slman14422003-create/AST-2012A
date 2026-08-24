@@ -17,6 +17,7 @@ import java.util.List;
 /**
  * حفظ/تحميل سجل محادثة المساعد الذكي محليًا (ملف JSON داخل تخزين التطبيق
  * الخاص) حتى تفضل المحادثة موجودة لو المستخدم قفل التطبيق ورجع تاني.
+ * متوافق مع سجلات محفوظة من نسخة أقدم كانت بتخزن role وtext فقط.
  */
 public class AiChatStore {
 
@@ -37,7 +38,14 @@ public class AiChatStore {
             JSONArray arr = new JSONArray(sb.toString());
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject o = arr.getJSONObject(i);
-                list.add(new ChatMessage(o.optInt("role", ChatMessage.ROLE_USER), o.optString("text", "")));
+                ChatMessage m = new ChatMessage(
+                        o.optInt("role", ChatMessage.ROLE_USER),
+                        o.optString("text", ""),
+                        o.has("sourceLabel") ? o.optString("sourceLabel", null) : null,
+                        o.has("sourceUrl") ? o.optString("sourceUrl", null) : null,
+                        o.has("relatedQuery") ? o.optString("relatedQuery", null) : null);
+                m.timestamp = o.optLong("timestamp", System.currentTimeMillis());
+                list.add(m);
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -52,6 +60,10 @@ public class AiChatStore {
                 JSONObject o = new JSONObject();
                 o.put("role", m.role);
                 o.put("text", m.text);
+                o.put("timestamp", m.timestamp);
+                if (m.sourceLabel != null) o.put("sourceLabel", m.sourceLabel);
+                if (m.sourceUrl != null) o.put("sourceUrl", m.sourceUrl);
+                if (m.relatedQuery != null) o.put("relatedQuery", m.relatedQuery);
                 arr.put(o);
             }
             FileOutputStream fos = ctx.openFileOutput(FILE_NAME, Context.MODE_PRIVATE);

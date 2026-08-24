@@ -293,36 +293,75 @@ public class MainActivity extends AppCompatActivity {
         resultsList.setVisibility(View.GONE);
         aiInlineAnswerScroll.setVisibility(View.GONE);
         aiInlineLoading.setVisibility(View.VISIBLE);
+        setAiInlineLoadingText("🔎 يبحث في ويكيبيديا وقاعدة بيانات الجهاز...");
 
         SharedPreferences prefs = getSharedPreferences("settings_prefs", MODE_PRIVATE);
         String apiKey = prefs.getString("ai_api_key", "");
 
-        DataManager.GroundingResult grounding = DataManager.buildGroundingContext(this, query, 3);
-        final String systemPromptToUse = grounding != null
-                ? SYSTEM_PROMPT + "\n\nبروتوكولات موثقة ذات صلة من قاعدة بيانات الجهاز:\n" + grounding.contextText
-                : SYSTEM_PROMPT;
+        executor.execute(() -> {
+            // المرحلة الأولى: تأريض محلي - بروتوكولات موثقة من قاعدة بيانات الجهاز
+            DataManager.GroundingResult grounding = DataManager.buildGroundingContext(this, query, 3);
 
-        executor.execute(() -> AiClient.sendMessage(apiKey, systemPromptToUse, query, new AiClient.Callback() {
-            @Override
-            public void onSuccess(String reply) {
-                runOnUiThread(() -> {
-                    aiInlineLoading.setVisibility(View.GONE);
-                    lastAiAnswer = reply;
-                    aiInlineAnswerText.setText(reply);
-                    aiInlineAnswerScroll.setVisibility(View.VISIBLE);
-                });
-            }
+            // المرحلة الثانية: تأريض خارجي - بحث في موسوعة ويكيبيديا (مجاني، بدون مفتاح)
+            WikipediaClient.Result wiki = WikipediaClient.search(query);
 
-            @Override
-            public void onError(String message) {
-                runOnUiThread(() -> {
-                    aiInlineLoading.setVisibility(View.GONE);
-                    askAiFallback.setVisibility(View.VISIBLE);
-                    resultsList.setVisibility(View.VISIBLE);
-                    Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show();
-                });
+            StringBuilder extraContext = new StringBuilder();
+            if (grounding != null) {
+                extraContext.append("بروتوكولات موثقة ذات صلة من قاعدة بيانات الجهاز:\n")
+                        .append(grounding.contextText).append("\n\n");
             }
-        }));
+            if (wiki != null) {
+                extraContext.append("خلفية معرفية عامة من ويكيبيديا (مقالة: ").append(wiki.title).append("):\n")
+                        .append(wiki.extract);
+            }
+            final String systemPromptToUse = extraContext.length() > 0
+                    ? SYSTEM_PROMPT + "\n\n" + extraContext
+                    : SYSTEM_PROMPT;
+            final String sourceNote = buildSourceNote(grounding, wiki);
+
+            runOnUiThread(() -> setAiInlineLoadingText("🤖 يفكر في الإجابة..."));
+
+            AiClient.sendMessage(apiKey, systemPromptToUse, query, new AiClient.Callback() {
+                @Override
+                public void onSuccess(String reply) {
+                    runOnUiThread(() -> {
+                        aiInlineLoading.setVisibility(View.GONE);
+                        lastAiAnswer = reply;
+                        aiInlineAnswerText.setText(sourceNote != null ? reply + "\n\n" + sourceNote : reply);
+                        aiInlineAnswerScroll.setVisibility(View.VISIBLE);
+                    });
+                }
+
+                @Override
+                public void onError(String message) {
+                    runOnUiThread(() -> {
+                        aiInlineLoading.setVisibility(View.GONE);
+                        askAiFallback.setVisibility(View.VISIBLE);
+                        resultsList.setVisibility(View.VISIBLE);
+                        Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show();
+                    });
+                }
+            });
+        });
+    }
+
+    private void setAiInlineLoadingText(String text) {
+        TextView label = aiInlineLoading.findViewById(R.id.ai_inline_loading_text);
+        if (label != null) label.setText(text);
+    }
+
+    /** جملة شفافة قصيرة توضح مصدر المعلومة المستخدَمة في الرد (قاعدة بيانات
+     *  الجهاز و/أو ويكيبيديا) - نفس فكرة شارة المصدر في شاشة المحادثة. */
+    private String buildSourceNote(DataManager.GroundingResult grounding, WikipediaClient.Result wiki) {
+        int groundedCount = grounding != null ? grounding.caseCount : 0;
+        if (groundedCount > 0 && wiki != null) {
+            return "📖 المصدر: قاعدة بيانات الجهاز (" + groundedCount + ") + ويكيبيديا: " + wiki.title;
+        } else if (groundedCount > 0) {
+            return "📖 المصدر: قاعدة بيانات الجهاز (" + groundedCount + " بروتوكول موثّق)";
+        } else if (wiki != null) {
+            return "📖 المصدر: ويكيبيديا - " + wiki.title;
+        }
+        return null;
     }
 
     private void setResults(List<CaseItem> items) {
