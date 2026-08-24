@@ -5,6 +5,8 @@ import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.view.MenuItem;
 import android.view.View;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
@@ -33,6 +35,8 @@ public class AiAssistantActivity extends AppCompatActivity {
     private TextInputEditText input;
     private View typingIndicator;
     private View modeHint;
+    private View quickPromptsScroll;
+    private LinearLayout quickPromptsRow;
     private String apiKey;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
@@ -41,7 +45,17 @@ public class AiAssistantActivity extends AppCompatActivity {
             "AST-2012A (أنماط TENS وEMS). أجب بإيجاز ووضوح وبدقة سريرية باللغة العربية، " +
             "واذكر تحذيرات السلامة المهمة عند الحاجة (مثل منظمات ضربات القلب والحمل والجروح المفتوحة). " +
             "إذا زُوّدت ببروتوكولات موثقة من قاعدة بيانات الجهاز، اجعلها مرجعك الأساسي، قارن " +
-            "معرفتك العامة معها بوضوح (اتفاق أو اختلاف)، واقترح خطة علاج مستقرة ومتماسكة بناءً عليها.";
+            "معرفتك العامة معها بوضوح (اتفاق أو اختلاف)، واقترح خطة علاج مستقرة ومتماسكة بناءً عليها. " +
+            "نظّم إجاباتك الطويلة في نقاط قصيرة وواضحة بدل الفقرات المطوّلة. لو السؤال غامض أو " +
+            "ينقصه تفاصيل سريرية مهمة (موضع الألم بالضبط، شدة الأعراض، هل توجد حالة طبية مصاحبة)، " +
+            "اسأل سؤالًا توضيحيًا واحدًا مختصرًا أولًا بدل تخمين إجابة كاملة قد تكون غير دقيقة.";
+
+    private static final String[] QUICK_PROMPTS = {
+            "اشرحلي الفرق بين TENS و EMS",
+            "بروتوكول مقترح لآلام أسفل الظهر",
+            "احتياطات السلامة العامة قبل أي جلسة",
+            "أفضل نمط لتورم ما بعد الإصابة",
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -57,6 +71,8 @@ public class AiAssistantActivity extends AppCompatActivity {
         input = findViewById(R.id.chat_input);
         typingIndicator = findViewById(R.id.typing_indicator);
         modeHint = findViewById(R.id.mode_hint);
+        quickPromptsScroll = findViewById(R.id.quick_prompts_scroll);
+        quickPromptsRow = findViewById(R.id.quick_prompts_row);
         FloatingActionButton sendBtn = findViewById(R.id.btn_send);
 
         adapter = new ChatAdapter(this::openSaveAsCase);
@@ -75,10 +91,40 @@ public class AiAssistantActivity extends AppCompatActivity {
             chatList.scrollToPosition(adapter.getItemCount() - 1);
         }
 
+        setupQuickPrompts();
+        refreshQuickPromptsVisibility();
+
         String prefillQuery = getIntent().getStringExtra("prefill_query");
         if (prefillQuery != null && !prefillQuery.isEmpty()) {
             input.setText(prefillQuery);
         }
+    }
+
+    /** شرائح اقتراحات سريعة تظهر فقط لما المحادثة تكون فاضية، عشان توجّه
+     *  المستخدم لأنواع الأسئلة اللي المساعد الذكي يقدر يساعد فيها. */
+    private void setupQuickPrompts() {
+        quickPromptsRow.removeAllViews();
+        for (String prompt : QUICK_PROMPTS) {
+            TextView chip = new TextView(this);
+            chip.setText(prompt);
+            chip.setTextColor(getColor(R.color.primary_cyan));
+            chip.setTextSize(12);
+            chip.setBackgroundResource(R.drawable.bg_glass_chip);
+            chip.setPadding(34, 22, 34, 22);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            lp.setMarginEnd(8);
+            chip.setLayoutParams(lp);
+            chip.setOnClickListener(v -> {
+                input.setText(prompt);
+                input.setSelection(prompt.length());
+            });
+            quickPromptsRow.addView(chip);
+        }
+    }
+
+    private void refreshQuickPromptsVisibility() {
+        quickPromptsScroll.setVisibility(adapter.getItemCount() == 0 ? View.VISIBLE : View.GONE);
     }
 
     @Override
@@ -112,6 +158,7 @@ public class AiAssistantActivity extends AppCompatActivity {
                 .setPositiveButton("مسح", (dialog, which) -> {
                     adapter.clearAll();
                     AiChatStore.clear(this);
+                    refreshQuickPromptsVisibility();
                     Toast.makeText(this, "تم مسح المحادثة.", Toast.LENGTH_SHORT).show();
                 })
                 .setNegativeButton("إلغاء", null)
@@ -124,6 +171,7 @@ public class AiAssistantActivity extends AppCompatActivity {
 
         adapter.addMessage(new ChatMessage(ChatMessage.ROLE_USER, text));
         AiChatStore.save(this, adapter.getMessages());
+        refreshQuickPromptsVisibility();
         chatList.smoothScrollToPosition(adapter.getItemCount() - 1);
         input.setText("");
         typingIndicator.setVisibility(View.VISIBLE);

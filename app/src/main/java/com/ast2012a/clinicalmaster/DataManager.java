@@ -271,7 +271,7 @@ public class DataManager {
         int matchedTerms;
     }
 
-    private static Scored scoreItem(CaseItem item, String rawKeyword, String[] rawTerms) {
+    private static Scored scoreItem(CaseItem item, String rawKeyword, String[] rawTerms, Set<String> favoriteTitles) {
         String normTitle = normalize(item.title);
         String normMode = normalize(item.mode);
         String normExplanation = normalize(item.explanation);
@@ -307,6 +307,12 @@ public class DataManager {
             if (termMatched) matchedTerms++;
         }
 
+        // تعزيز بسيط للحالات المفضّلة عند المستخدم - تظهر أولًا عند تساوي درجة
+        // التطابق مع حالات أخرى، دون أن تفسد ترتيب التطابق الدقيق نفسه.
+        if (favoriteTitles != null && favoriteTitles.contains(item.title) && score > 0) {
+            score += 4;
+        }
+
         Scored s = new Scored();
         s.item = item;
         s.score = score;
@@ -317,9 +323,15 @@ public class DataManager {
     public static class SearchResult {
         public List<CaseItem> items;
         public boolean isFallback;
+        /** أقرب عنوان في قاعدة البيانات لو مفيش أي نتيجة على الإطلاق - "هل تقصد؟" */
+        public String closestTitleSuggestion;
     }
 
     public static SearchResult search(String rawKeyword, List<CaseItem> cases) {
+        return search(rawKeyword, cases, null);
+    }
+
+    public static SearchResult search(String rawKeyword, List<CaseItem> cases, Set<String> favoriteTitles) {
         SearchResult result = new SearchResult();
         result.items = new ArrayList<>();
         result.isFallback = false;
@@ -334,7 +346,7 @@ public class DataManager {
         String[] terms = termsList.toArray(new String[0]);
 
         List<Scored> scored = new ArrayList<>();
-        for (CaseItem item : cases) scored.add(scoreItem(item, normalizedKeyword, terms));
+        for (CaseItem item : cases) scored.add(scoreItem(item, normalizedKeyword, terms, favoriteTitles));
 
         List<Scored> candidates = new ArrayList<>();
         for (Scored s : scored) if (s.matchedTerms == terms.length && s.score > 0) candidates.add(s);
@@ -346,11 +358,49 @@ public class DataManager {
         }
 
         candidates.sort((a, b) -> b.score - a.score);
-        if (candidates.isEmpty()) return result;
+
+        if (candidates.isEmpty()) {
+            result.closestTitleSuggestion = findClosestTitle(normalizedKeyword, cases);
+            return result;
+        }
 
         int topScore = candidates.get(0).score;
         for (Scored s : candidates) if (s.score == topScore) result.items.add(s.item);
         return result;
+    }
+
+    /**
+     * لو محرك البحث مش لاقي أي تطابق نهائيًا، نبحث عن أقرب عنوان في القاعدة
+     * بمسافة Levenshtein (على مستوى الكلمات) عشان نقترح "هل تقصد؟" بدل ما
+     * نسيب المستخدم بشاشة فاضية بدون أي توجيه.
+     */
+    private static String findClosestTitle(String normalizedKeyword, List<CaseItem> cases) {
+        String bestTitle = null;
+        int bestDist = Integer.MAX_VALUE;
+        for (CaseItem item : cases) {
+            String normTitle = normalize(item.title);
+            for (String word : normTitle.split("\\s+")) {
+                if (word.length() < 3) continue;
+                int dist = levenshtein(word, normalizedKeyword);
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    bestTitle = item.title;
+                }
+            }
+            for (String kw : item.keywords) {
+                String normKw = normalize(kw);
+                int dist = levenshtein(normKw, normalizedKeyword);
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    bestTitle = item.title;
+                }
+            }
+        }
+        // لا نقترح لو الفرق كبير جدًا (يبقى مش قريب فعلًا، اقتراح مضلل)
+        if (bestTitle != null && bestDist <= Math.max(2, normalizedKeyword.length() / 2)) {
+            return bestTitle;
+        }
+        return null;
     }
 
     public static String extractEnglishTerm(String title) {

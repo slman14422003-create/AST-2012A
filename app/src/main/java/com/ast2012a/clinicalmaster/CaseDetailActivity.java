@@ -4,6 +4,7 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.LayoutInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
 import android.widget.LinearLayout;
@@ -20,18 +21,38 @@ public class CaseDetailActivity extends AppCompatActivity {
 
     private CaseItem currentCase;
     private LinearLayout container;
+    private MaterialToolbar toolbar;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_detail);
 
-        MaterialToolbar toolbar = findViewById(R.id.toolbar);
+        toolbar = findViewById(R.id.toolbar);
         toolbar.setNavigationOnClickListener(v -> finish());
+        toolbar.inflateMenu(R.menu.menu_detail);
+        toolbar.setOnMenuItemClickListener(this::onMenuItemClick);
 
         container = findViewById(R.id.detail_container);
 
         loadCaseFromIntent();
+    }
+
+    private boolean onMenuItemClick(MenuItem item) {
+        if (item.getItemId() == R.id.action_favorite) {
+            if (currentCase == null) return true;
+            boolean nowFavorite = FavoritesManager.toggleFavorite(this, currentCase.title);
+            refreshFavoriteIcon(nowFavorite);
+            return true;
+        }
+        return false;
+    }
+
+    private void refreshFavoriteIcon(boolean isFavorite) {
+        MenuItem favItem = toolbar.getMenu().findItem(R.id.action_favorite);
+        if (favItem == null) return;
+        favItem.setIcon(isFavorite ? R.drawable.ic_star_filled : R.drawable.ic_star_outline);
+        favItem.setTitle(isFavorite ? "إزالة من المفضلة" : "إضافة للمفضلة");
     }
 
     @Override
@@ -62,6 +83,7 @@ public class CaseDetailActivity extends AppCompatActivity {
             return;
         }
         currentCase = found;
+        refreshFavoriteIcon(FavoritesManager.isFavorite(this, currentCase.title));
         render();
     }
 

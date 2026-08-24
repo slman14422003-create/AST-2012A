@@ -1,5 +1,8 @@
 package com.ast2012a.clinicalmaster;
 
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -7,6 +10,7 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
@@ -80,6 +84,20 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ViewHolder> {
         } else {
             holder.saveBtn.setVisibility(View.GONE);
         }
+
+        if (!isUser) {
+            holder.copyBtn.setVisibility(View.VISIBLE);
+            holder.copyBtn.setOnClickListener(v -> {
+                Context ctx = holder.itemView.getContext();
+                ClipboardManager clipboard = (ClipboardManager) ctx.getSystemService(Context.CLIPBOARD_SERVICE);
+                if (clipboard != null) {
+                    clipboard.setPrimaryClip(ClipData.newPlainText("ai_answer", m.text));
+                    Toast.makeText(ctx, "تم نسخ الرد.", Toast.LENGTH_SHORT).show();
+                }
+            });
+        } else {
+            holder.copyBtn.setVisibility(View.GONE);
+        }
     }
 
     private void setChildGravity(View view, int gravity) {
@@ -98,7 +116,7 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ViewHolder> {
     static class ViewHolder extends RecyclerView.ViewHolder {
         View header;
         TextView role, avatar, text;
-        Button saveBtn;
+        Button saveBtn, copyBtn;
         ViewHolder(View itemView) {
             super(itemView);
             header = itemView.findViewById(R.id.bubble_header);
@@ -106,6 +124,7 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ViewHolder> {
             avatar = itemView.findViewById(R.id.bubble_avatar);
             text = itemView.findViewById(R.id.bubble_text);
             saveBtn = itemView.findViewById(R.id.bubble_save_case);
+            copyBtn = itemView.findViewById(R.id.bubble_copy);
         }
     }
 }
