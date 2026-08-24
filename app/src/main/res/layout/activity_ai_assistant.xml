@@ -60,22 +60,46 @@
         android:gravity="center_vertical|end"
         android:orientation="horizontal"
         android:paddingHorizontal="16dp"
-        android:paddingBottom="4dp"
+        android:paddingBottom="6dp"
         android:visibility="gone">
 
         <TextView
+            android:id="@+id/typing_text"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
-            android:text="المساعد الذكي يفكر..."
+            android:text="🤖 المساعد الذكي يفكر..."
             android:textColor="@color/text_secondary"
             android:textDirection="rtl"
             android:textSize="12sp" />
 
-        <ProgressBar
-            android:layout_width="16dp"
-            android:layout_height="16dp"
-            android:indeterminateTint="@color/primary_cyan" />
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <View
+                android:id="@+id/typing_dot_1"
+                android:layout_width="7dp"
+                android:layout_height="7dp"
+                android:layout_marginStart="3dp"
+                android:background="@drawable/dot_accent" />
+
+            <View
+                android:id="@+id/typing_dot_2"
+                android:layout_width="7dp"
+                android:layout_height="7dp"
+                android:layout_marginStart="3dp"
+                android:background="@drawable/dot_accent" />
+
+            <View
+                android:id="@+id/typing_dot_3"
+                android:layout_width="7dp"
+                android:layout_height="7dp"
+                android:layout_marginStart="3dp"
+                android:background="@drawable/dot_accent" />
+        </LinearLayout>
     </LinearLayout>
 
     <LinearLayout
