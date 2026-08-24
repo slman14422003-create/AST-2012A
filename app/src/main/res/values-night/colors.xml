@@ -41,4 +41,24 @@
     <color name="white">#FFFFFF</color>
     <color name="black">#000000</color>
     <color name="overlay_scrim">#CC000000</color>
+
+    <!-- أدوار Material 3 الكاملة - نسخة الوضع الليلي -->
+    <color name="m3_primary_container">#6B3A22</color>
+    <color name="m3_on_primary_container">#FBDDCC</color>
+    <color name="m3_secondary_container">#2E4650</color>
+    <color name="m3_on_secondary_container">#C8DEE6</color>
+    <color name="m3_tertiary">#D9AC6C</color>
+    <color name="m3_on_tertiary">#3A2A0C</color>
+    <color name="m3_tertiary_container">#5A431C</color>
+    <color name="m3_on_tertiary_container">#F3E4C8</color>
+    <color name="m3_surface_variant">#211D16</color>
+    <color name="m3_on_surface_variant">#B9B2A2</color>
+    <color name="m3_outline">#8B8474</color>
+    <color name="m3_outline_variant">#332F24</color>
+    <color name="m3_error">#E27A68</color>
+    <color name="m3_on_error">#3A0F08</color>
+    <color name="m3_error_container">#5C1F12</color>
+    <color name="m3_on_error_container">#F6DAD4</color>
+    <color name="m3_surface_container">#211D16</color>
+    <color name="m3_surface_container_high">#2A261D</color>
 </resources>
