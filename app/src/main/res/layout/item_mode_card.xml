@@ -3,7 +3,7 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_marginBottom="12dp"
-    android:background="@drawable/bg_card"
+    android:background="@drawable/bg_glass_card"
     android:orientation="vertical"
     android:padding="16dp">
 
@@ -31,7 +31,7 @@
             android:layout_marginEnd="8dp"
             android:layout_weight="1"
             android:gravity="end"
-            android:textColor="@color/white"
+            android:textColor="@color/text_primary"
             android:textDirection="rtl"
             android:textSize="15sp"
             android:textStyle="bold" />
@@ -62,7 +62,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="10dp"
-        android:background="@color/bg_dark"
+        android:background="@drawable/bg_glass_card_soft"
         android:gravity="end"
         android:padding="10dp"
         android:textColor="@color/accent_red"

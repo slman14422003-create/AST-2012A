@@ -2,17 +2,18 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginBottom="8dp"
-    android:background="@drawable/bg_card"
+    android:layout_marginBottom="10dp"
+    android:background="@drawable/bg_glass_card"
     android:orientation="horizontal"
     android:gravity="center_vertical"
-    android:padding="12dp">
+    android:padding="10dp">
 
     <TextView
         android:id="@+id/row_title"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
+        android:paddingHorizontal="6dp"
         android:gravity="end"
         android:textColor="@color/text_primary"
         android:textDirection="rtl"
@@ -24,6 +25,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="تعديل"
+        android:textAllCaps="false"
         android:textColor="@color/primary_cyan" />
 
     <Button
@@ -32,5 +34,6 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="حذف"
+        android:textAllCaps="false"
         android:textColor="@color/accent_red" />
 </LinearLayout>

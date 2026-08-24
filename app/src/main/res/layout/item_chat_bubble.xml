@@ -32,8 +32,8 @@
 
             <TextView
                 android:id="@+id/bubble_avatar"
-                android:layout_width="22dp"
-                android:layout_height="22dp"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
                 android:background="@drawable/bg_avatar_circle"
                 android:gravity="center"
                 android:textSize="11sp" />
@@ -45,21 +45,39 @@
             android:layout_height="wrap_content"
             android:layout_gravity="end"
             android:maxWidth="290dp"
-            android:padding="12dp"
+            android:padding="13dp"
             android:textColor="@color/text_primary"
             android:textDirection="rtl"
             android:textSize="14sp" />
 
-        <Button
-            android:id="@+id/bubble_save_case"
-            style="@style/Widget.Material3.Button.TextButton"
+        <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="end"
-            android:text="➕ حفظ كحالة جديدة"
-            android:textColor="@color/primary_cyan"
-            android:textSize="12sp"
-            android:visibility="gone" />
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/bubble_copy"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="📋 نسخ"
+                android:textAllCaps="false"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp"
+                android:visibility="gone" />
+
+            <Button
+                android:id="@+id/bubble_save_case"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="➕ حفظ كحالة جديدة"
+                android:textAllCaps="false"
+                android:textColor="@color/primary_cyan"
+                android:textSize="12sp"
+                android:visibility="gone" />
+        </LinearLayout>
     </LinearLayout>
 
 </LinearLayout>

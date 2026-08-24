@@ -3,21 +3,19 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/bg_dark">
+    android:background="@drawable/bg_app_gradient">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical">
 
-        <!-- الرأس المُرتفع (Hero Header): يضم الشريط العلوي المخصص + البحث +
-             الأزرار السريعة، كله بنفس لون شريط الحالة فوقه فيبدوا قطعة واحدة
-             متصلة، مع حواف سفلية دائرية وظل خفيف لإحساس أعمق واحترافية أعلى. -->
+        <!-- الرأس الزجاجي: شريط علوي + شريط بحث زجاجي + شرائح تنقل سريعة،
+             كل شيء عائم فوق التدرج الخلفي بإحساس Glassmorphism موحّد. -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:background="@drawable/bg_header_container"
-            android:elevation="8dp"
             android:orientation="vertical"
             android:paddingBottom="14dp">
 
@@ -36,8 +34,8 @@
                     android:orientation="horizontal">
 
                     <View
-                        android:layout_width="8dp"
-                        android:layout_height="8dp"
+                        android:layout_width="9dp"
+                        android:layout_height="9dp"
                         android:layout_marginEnd="8dp"
                         android:background="@drawable/dot_accent" />
 
@@ -72,7 +70,7 @@
                 android:layout_marginHorizontal="16dp"
                 android:layout_marginTop="6dp"
                 android:hint="ابحث عن حالة، عرض، أو مشكلة..."
-                app:boxBackgroundColor="@color/bg_dark"
+                app:boxBackgroundColor="@color/glass_fill_soft"
                 app:boxCornerRadiusBottomEnd="18dp"
                 app:boxCornerRadiusBottomStart="18dp"
                 app:boxCornerRadiusTopEnd="18dp"
@@ -108,11 +106,26 @@
                     android:paddingHorizontal="12dp">
 
                     <TextView
+                        android:id="@+id/btn_favorites"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginHorizontal="4dp"
+                        android:background="@drawable/bg_glass_chip"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:foreground="?attr/selectableItemBackground"
+                        android:paddingHorizontal="16dp"
+                        android:paddingVertical="10dp"
+                        android:text="⭐ المفضلة"
+                        android:textColor="@color/accent_gold"
+                        android:textSize="13sp" />
+
+                    <TextView
                         android:id="@+id/btn_my_cases"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginHorizontal="4dp"
-                        android:background="@drawable/bg_chip"
+                        android:background="@drawable/bg_glass_chip"
                         android:clickable="true"
                         android:focusable="true"
                         android:foreground="?attr/selectableItemBackground"
@@ -127,7 +140,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginHorizontal="4dp"
-                        android:background="@drawable/bg_chip"
+                        android:background="@drawable/bg_glass_chip"
                         android:clickable="true"
                         android:focusable="true"
                         android:foreground="?attr/selectableItemBackground"
@@ -159,7 +172,7 @@
             android:id="@+id/empty_hint_container"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="28dp"
+            android:layout_marginTop="26dp"
             android:gravity="center"
             android:orientation="vertical"
             android:paddingHorizontal="30dp">
@@ -181,6 +194,35 @@
                 android:text="المنظومة السريرية الضخمة جاهزة الآن.\nابحث عن أي حالة، نمط، أو مشكلة تقنية للحصول على التوصيف الدقيق."
                 android:textColor="@color/text_secondary"
                 android:textSize="13.5sp" />
+
+            <LinearLayout
+                android:id="@+id/recent_searches_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp"
+                    android:layout_marginBottom="8dp"
+                    android:text="🕘 عمليات بحث سابقة:"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="11sp" />
+
+                <HorizontalScrollView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:scrollbars="none">
+
+                    <LinearLayout
+                        android:id="@+id/recent_searches_row"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal" />
+                </HorizontalScrollView>
+            </LinearLayout>
 
             <TextView
                 android:layout_width="wrap_content"
@@ -234,6 +276,23 @@
             android:visibility="gone" />
 
         <TextView
+            android:id="@+id/suggestion_note"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_marginBottom="8dp"
+            android:background="@drawable/bg_glass_chip"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="9dp"
+            android:textColor="@color/accent_gold"
+            android:textDirection="rtl"
+            android:textSize="12.5sp"
+            android:visibility="gone" />
+
+        <TextView
             android:id="@+id/btn_ask_ai_fallback"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -284,7 +343,7 @@
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:background="@drawable/bg_card"
+                android:background="@drawable/bg_glass_card"
                 android:layout_margin="14dp"
                 android:orientation="vertical"
                 android:padding="16dp">

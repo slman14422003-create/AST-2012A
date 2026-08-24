@@ -3,14 +3,14 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/bg_dark"
+    android:background="@drawable/bg_app_gradient"
     android:orientation="vertical">
 
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
-        android:background="@color/surface_dark"
+        android:background="@drawable/bg_header_container"
         android:title="حالاتي المخصصة"
         android:titleTextColor="@color/text_primary"
         app:navigationIcon="@android:drawable/ic_menu_close_clear_cancel" />
