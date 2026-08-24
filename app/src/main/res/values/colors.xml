@@ -1,42 +1,43 @@
 <resources>
-    <!-- خلفية التطبيق v2: تدرج ليلي أعمق وأكثر ثراءً (نيلي داكن -> بنفسجي
-         كحلي -> أخضر مزرق عميق) — نفس الفكرة لكن بتباين أعلى بين النقاط
-         الثلاث عشان يبان التدرج بوضوح بدل ما يحس القارئ إنه لون واحد مسطح. -->
-    <color name="bg_deep_1">#080B14</color>
-    <color name="bg_deep_2">#121A33</color>
-    <color name="bg_deep_3">#0A2230</color>
-    <color name="bg_dark">#080B14</color>
+    <!-- ============================================================
+         نظام الألوان v3 — إعادة تصميم كاملة بروح تطبيق Claude:
+         خلفية كريمية دافئة (Warm cream) بدل الوضع الليلي الزجاجي،
+         بطاقات بيضاء نظيفة بحدود رفيعة، ولون تمييز طوبي/برتقالي دافئ
+         (Terracotta) بدل السيان-بنفسجي النيون. أسماء المتغيرات أُبقيت
+         كما هي حتى لا ينكسر أي كود Java/XML يشير إليها. -->
 
-    <!-- الألوان الأساسية: سيان طبي أكثر إشراقًا + بنفسجي أدفأ قليلًا -->
-    <color name="primary_cyan">#2DE0E6</color>
-    <color name="primary_cyan_dark">#0E9AA0</color>
-    <color name="accent_violet">#9B8CFB</color>
-    <color name="accent_violet_dark">#6A5AE0</color>
+    <!-- خلفية التطبيق: تدرج كريمي خفيف جدًا (شبه مسطح) -->
+    <color name="bg_deep_1">#F8F6F1</color>
+    <color name="bg_deep_2">#F5F2EA</color>
+    <color name="bg_deep_3">#F1EDE3</color>
+    <color name="bg_dark">#F5F2EA</color>
 
-    <!-- سطوح زجاجية (Glassmorphism) v2: تراكب أبيض شبه شفاف أقوى شوية عشان
-         تتحسن قابلية القراءة فوق الخلفية الغامقة، + خط علوي لامع خفيف
-         (glass_top_sheen) يُستخدم في layer-list البطاقات لمحاكاة انعكاس
-         الزجاج الحقيقي. -->
-    <color name="glass_fill">#22FFFFFF</color>
-    <color name="glass_fill_strong">#30FFFFFF</color>
-    <color name="glass_fill_soft">#16FFFFFF</color>
-    <color name="glass_border">#3DFFFFFF</color>
-    <color name="glass_border_soft">#26FFFFFF</color>
-    <color name="glass_highlight">#4DFFFFFF</color>
-    <color name="glass_top_sheen">#33FFFFFF</color>
+    <!-- الألوان الأساسية: طوبي دافئ (بديل السيان) + أزرق-رمادي هادئ (بديل البنفسجي) -->
+    <color name="primary_cyan">#CC7B5C</color>
+    <color name="primary_cyan_dark">#A85D42</color>
+    <color name="accent_violet">#5C7A8A</color>
+    <color name="accent_violet_dark">#43606E</color>
 
-    <!-- متبقيات متوافقة مع الكود القديم (نُبقيها حتى لا نكسر مراجع أخرى) -->
-    <color name="surface_dark">#182140</color>
-    <color name="card_dark">#1A2340</color>
+    <!-- أسطح البطاقات: بيضاء نظيفة بحدود رفيعة بدل الزجاج شبه الشفاف -->
+    <color name="glass_fill">#FFFFFF</color>
+    <color name="glass_fill_strong">#FDFCF9</color>
+    <color name="glass_fill_soft">#F0EDE4</color>
+    <color name="glass_border">#E6E2D6</color>
+    <color name="glass_border_soft">#EEEAE0</color>
+    <color name="glass_highlight">#14000000</color>
+    <color name="glass_top_sheen">#00FFFFFF</color>
 
-    <color name="text_primary">#F7F9FC</color>
-    <color name="text_secondary">#A6B1CC</color>
-    <color name="text_tertiary">#6E7A99</color>
+    <color name="surface_dark">#FFFFFF</color>
+    <color name="card_dark">#FFFFFF</color>
 
-    <color name="accent_red">#FF5C77</color>
-    <color name="accent_red_dark">#C23B4D</color>
-    <color name="accent_green">#39E29B</color>
-    <color name="accent_gold">#FFC85C</color>
+    <color name="text_primary">#21201C</color>
+    <color name="text_secondary">#6E6B63</color>
+    <color name="text_tertiary">#9C988D</color>
+
+    <color name="accent_red">#BE4230</color>
+    <color name="accent_red_dark">#98341F</color>
+    <color name="accent_green">#4C8860</color>
+    <color name="accent_gold">#B07E33</color>
 
     <color name="white">#FFFFFF</color>
     <color name="black">#000000</color>

@@ -1,5 +1,5 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <style name="Theme.ClinicalMaster" parent="Theme.Material3.Dark.NoActionBar">
+    <style name="Theme.ClinicalMaster" parent="Theme.Material3.Light.NoActionBar">
         <item name="colorPrimary">@color/primary_cyan</item>
         <item name="colorPrimaryVariant">@color/primary_cyan_dark</item>
         <item name="colorOnPrimary">@color/white</item>
@@ -7,10 +7,13 @@
         <item name="colorSecondaryVariant">@color/accent_violet_dark</item>
         <item name="android:colorBackground">@color/bg_dark</item>
         <item name="colorSurface">@color/surface_dark</item>
+        <item name="colorOnSurface">@color/text_primary</item>
         <item name="android:statusBarColor">@color/bg_deep_1</item>
         <item name="android:navigationBarColor">@color/bg_deep_1</item>
-        <item name="android:windowLightStatusBar" tools:targetApi="m">false</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="m">true</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item>
         <item name="fontFamily">sans-serif</item>
+        <item name="android:textColorHint">@color/text_tertiary</item>
     </style>
 
     <!-- عنوان قسم داخل شاشة الإعدادات (أو أي شاشة تحتاج تقسيم بصري لمجموعات
@@ -20,14 +23,14 @@
         <item name="android:layout_height">wrap_content</item>
         <item name="android:layout_marginBottom">10dp</item>
         <item name="android:gravity">end</item>
-        <item name="android:textColor">@color/primary_cyan</item>
+        <item name="android:textColor">@color/primary_cyan_dark</item>
         <item name="android:textDirection">rtl</item>
         <item name="android:textSize">12.5sp</item>
         <item name="android:textStyle">bold</item>
         <item name="android:letterSpacing">0.03</item>
     </style>
 
-    <!-- شريحة اقتراح بحث سريع (أمثلة حقيقية من قاعدة البيانات) - نمط زجاجي -->
+    <!-- شريحة اقتراح بحث سريع (أمثلة حقيقية من قاعدة البيانات) -->
     <style name="SuggestionChip">
         <item name="android:layout_width">wrap_content</item>
         <item name="android:layout_height">wrap_content</item>
@@ -42,7 +45,7 @@
         <item name="android:textSize">12sp</item>
     </style>
 
-    <!-- زر زجاجي عام (ثانوي) يُستخدم في شاشات التفاصيل والإعدادات -->
+    <!-- زر ثانوي عام (بطاقة بيضاء بحد رفيع) يُستخدم في شاشات التفاصيل والإعدادات -->
     <style name="GlassButton">
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>
@@ -57,8 +60,9 @@
         <item name="android:textSize">13.5sp</item>
     </style>
 
-    <!-- زر رئيسي (CTA) موحّد لكل التطبيق: تدرج سيان-بنفسجي كبسولي، نص
-         أبيض عريض - يُستخدم لأي إجراء أساسي (حفظ، إرسال، إضافة). -->
+    <!-- زر رئيسي (CTA) موحّد لكل التطبيق: تعبئة طوبية مسطحة، حواف مدوّرة
+         باعتدال (لا كبسولة) بنفس روح أزرار Claude — يُستخدم لأي إجراء
+         أساسي (حفظ، إرسال، إضافة). -->
     <style name="PrimaryButton" parent="Widget.Material3.Button">
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">52dp</item>
@@ -70,6 +74,6 @@
         <item name="android:textStyle">bold</item>
         <item name="android:letterSpacing">0.01</item>
         <item name="elevation">0dp</item>
-        <item name="cornerRadius">26dp</item>
+        <item name="cornerRadius">12dp</item>
     </style>
 </resources>
