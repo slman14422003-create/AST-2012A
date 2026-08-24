@@ -34,6 +34,7 @@ public class DataManager {
 
     private static List<CaseItem> builtinCache;
     private static List<JSONObject> modesCache;
+    private static List<JSONObject> anatomyCache;
 
     private static final String CUSTOM_FILE = "custom_cases.json";
 
@@ -69,6 +70,23 @@ public class DataManager {
             e.printStackTrace();
         }
         return modesCache;
+    }
+
+    /** يحمّل مرجع التشريح (المسارات العصبية/العضلية ومواضع الأقطاب) - دليل
+     *  ذاتي بالكامل داخل التطبيق (assets)، بدون الحاجة لاتصال إنترنت. */
+    public static List<JSONObject> loadAnatomyReference(Context ctx) {
+        if (anatomyCache != null) return anatomyCache;
+        anatomyCache = new ArrayList<>();
+        try {
+            String json = readAsset(ctx, "anatomy_reference.json");
+            JSONArray arr = new JSONArray(json);
+            for (int i = 0; i < arr.length(); i++) {
+                anatomyCache.add(arr.getJSONObject(i));
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return anatomyCache;
     }
 
     private static String readAsset(Context ctx, String name) throws IOException {

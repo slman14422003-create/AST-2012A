@@ -3,7 +3,6 @@ package com.ast2012a.clinicalmaster;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
-import android.widget.TextView;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
@@ -15,7 +14,11 @@ import com.google.android.material.appbar.MaterialToolbar;
 public class MyCasesActivity extends AppCompatActivity implements CaseRowAdapter.Callback {
 
     private RecyclerView list;
-    private TextView emptyHint;
+    // ملحوظة إصلاح كراش: العنصر @id/empty_hint_container في activity_my_cases.xml
+    // هو LinearLayout (حاوية) وليس TextView؛ التصريح القديم كان TextView فكان
+    // findViewById يرمي ClassCastException فور فتح الشاشة (كل مرة، 100%).
+    // هنا نستخدم فقط setVisibility() على هذا العنصر لذلك النوع الصحيح هو View.
+    private View emptyHint;
     private CaseRowAdapter adapter;
 
     @Override

@@ -92,6 +92,9 @@ public class MainActivity extends AppCompatActivity {
         TextView encyclopediaBtn = findViewById(R.id.btn_encyclopedia);
         encyclopediaBtn.setOnClickListener(v -> navigateTo(EncyclopediaActivity.class));
 
+        TextView anatomyBtn = findViewById(R.id.btn_anatomy);
+        anatomyBtn.setOnClickListener(v -> navigateTo(AnatomyActivity.class));
+
         TextView aiBtn = findViewById(R.id.btn_ai_assistant);
         aiBtn.setOnClickListener(v -> navigateTo(AiAssistantActivity.class));
 
@@ -134,7 +137,8 @@ public class MainActivity extends AppCompatActivity {
         });
         fab.setScaleX(0f);
         fab.setScaleY(0f);
-        fab.animate().scaleX(1f).scaleY(1f).setStartDelay(200).setDuration(280).start();
+        fab.animate().scaleX(1f).scaleY(1f).setStartDelay(200).setDuration(320)
+                .setInterpolator(new android.view.animation.OvershootInterpolator(1.6f)).start();
 
         searchField.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
