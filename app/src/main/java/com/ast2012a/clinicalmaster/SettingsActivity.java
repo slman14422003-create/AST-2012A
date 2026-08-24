@@ -48,6 +48,14 @@ public class SettingsActivity extends AppCompatActivity {
 
         createNotificationChannel();
 
+        Button themeBtn = findViewById(R.id.btn_theme_mode);
+        refreshThemeLabel(themeBtn);
+        themeBtn.setOnClickListener(v -> {
+            String newMode = ThemeManager.cycleMode(this);
+            Toast.makeText(this, ThemeManager.labelFor(newMode) + " مفعّل", Toast.LENGTH_SHORT).show();
+            recreate();
+        });
+
         notifBtn = findViewById(R.id.btn_notif);
         aiKeyField = findViewById(R.id.ai_key_field);
         Button saveKeyBtn = findViewById(R.id.btn_save_key);
@@ -154,6 +162,10 @@ public class SettingsActivity extends AppCompatActivity {
 
     private void setNotifEnabled(boolean value) {
         prefs().edit().putBoolean(KEY_NOTIF_ENABLED, value).apply();
+    }
+
+    private void refreshThemeLabel(Button themeBtn) {
+        themeBtn.setText(ThemeManager.labelFor(ThemeManager.getCurrentMode(this)) + " - اضغط للتبديل");
     }
 
     private void refreshNotifLabel() {

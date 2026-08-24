@@ -46,6 +46,7 @@ public class AiAssistantActivity extends AppCompatActivity {
     private TextView typingText;
     private View modeHint;
     private View quickPromptsScroll;
+    private View quickPromptsTitle;
     private LinearLayout quickPromptsRow;
     private String apiKey;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -84,6 +85,7 @@ public class AiAssistantActivity extends AppCompatActivity {
         typingText = findViewById(R.id.typing_text);
         modeHint = findViewById(R.id.mode_hint);
         quickPromptsScroll = findViewById(R.id.quick_prompts_scroll);
+        quickPromptsTitle = findViewById(R.id.quick_prompts_title);
         quickPromptsRow = findViewById(R.id.quick_prompts_row);
         FloatingActionButton sendBtn = findViewById(R.id.btn_send);
 
@@ -150,7 +152,9 @@ public class AiAssistantActivity extends AppCompatActivity {
     }
 
     private void refreshQuickPromptsVisibility() {
-        quickPromptsScroll.setVisibility(adapter.getItemCount() == 0 ? View.VISIBLE : View.GONE);
+        int visibility = adapter.getItemCount() == 0 ? View.VISIBLE : View.GONE;
+        quickPromptsScroll.setVisibility(visibility);
+        quickPromptsTitle.setVisibility(visibility);
     }
 
     @Override

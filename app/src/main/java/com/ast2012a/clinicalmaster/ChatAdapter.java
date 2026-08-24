@@ -84,6 +84,7 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ViewHolder> {
 
         holder.role.setText(isUser ? "أنت" : "المساعد الذكي");
         holder.avatar.setText(isUser ? "🧑" : "🤖");
+        holder.avatar.setBackgroundResource(isUser ? R.drawable.bg_avatar_circle : R.drawable.bg_avatar_circle_ai);
         holder.time.setText(DateFormat.format("hh:mm a", m.timestamp));
         holder.text.setText(m.text);
         holder.text.setBackgroundResource(isUser ? R.drawable.bg_bubble_user : R.drawable.bg_bubble_ai);

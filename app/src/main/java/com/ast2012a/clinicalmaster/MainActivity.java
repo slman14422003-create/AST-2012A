@@ -18,7 +18,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.appbar.MaterialToolbar;
 
@@ -126,7 +126,7 @@ public class MainActivity extends AppCompatActivity {
         setupSuggestionChip(R.id.chip_suggestion_3);
         setupSuggestionChip(R.id.chip_suggestion_4);
 
-        FloatingActionButton fab = findViewById(R.id.fab_add);
+        ExtendedFloatingActionButton fab = findViewById(R.id.fab_add);
         fab.setOnClickListener(v -> {
             Intent i = new Intent(this, AddEditCaseActivity.class);
             startActivity(i);
@@ -177,6 +177,12 @@ public class MainActivity extends AppCompatActivity {
     private boolean onToolbarItemClick(MenuItem item) {
         if (item.getItemId() == R.id.action_settings) {
             navigateTo(SettingsActivity.class);
+            return true;
+        }
+        if (item.getItemId() == R.id.action_theme_toggle) {
+            String newMode = ThemeManager.cycleMode(this);
+            Toast.makeText(this, ThemeManager.labelFor(newMode), Toast.LENGTH_SHORT).show();
+            recreate();
             return true;
         }
         return false;

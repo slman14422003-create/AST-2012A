@@ -27,7 +27,7 @@ public class MyCasesActivity extends AppCompatActivity implements CaseRowAdapter
         toolbar.setNavigationOnClickListener(v -> finish());
 
         list = findViewById(R.id.cases_list);
-        emptyHint = findViewById(R.id.empty_hint);
+        emptyHint = findViewById(R.id.empty_hint_container);
 
         adapter = new CaseRowAdapter(this);
         list.setLayoutManager(new LinearLayoutManager(this));
