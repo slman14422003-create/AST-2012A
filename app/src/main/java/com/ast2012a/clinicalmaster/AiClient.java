@@ -43,7 +43,13 @@ public class AiClient {
         void onError(String message);
     }
 
-    /** يُستدعى من Thread خلفية (مش الـ UI Thread). */
+    /**
+     * يُستدعى من Thread خلفية (مش الـ UI Thread). السلسلة المجانية الافتراضية
+     * (بدون مفتاح) بتجرب حتى 4 محاولات قبل ما تستسلم، عشان تقل حالات
+     * "الذكاء الاصطناعي مش شغال" الناتجة عن ازدحام لحظي في أي مزوّد واحد:
+     * LLM7 → إعادة محاولة LLM7 مرة واحدة (فشل الشبكة غالبًا مؤقت) →
+     * Pollinations → إعادة محاولة Pollinations مرة واحدة.
+     */
     public static void sendMessage(String apiKey, String systemContext, String userMessage, Callback callback) {
         if (apiKey == null || apiKey.trim().isEmpty()) {
             sendViaLlm7(systemContext, userMessage, new Callback() {
@@ -54,16 +60,37 @@ public class AiClient {
 
                 @Override
                 public void onError(String firstError) {
-                    // فشل المزوّد الأول - نجرب الثاني تلقائيًا بصمت
-                    sendViaPollinations(systemContext, userMessage, new Callback() {
+                    // محاولة ثانية سريعة لنفس المزوّد الأول قبل التبديل - أغلب
+                    // أخطاء الشبكة على الموبايل مؤقتة (انقطاع لحظي، تبديل شبكة).
+                    sendViaLlm7(systemContext, userMessage, new Callback() {
                         @Override
                         public void onSuccess(String reply) {
                             callback.onSuccess(reply);
                         }
 
                         @Override
-                        public void onError(String secondError) {
-                            callback.onError("تعذر الوصول لأي من خدمات الذكاء الاصطناعي المجانية حاليًا (قد تكون مزدحمة). حاول بعد قليل، أو أضف مفتاح OpenRouter الخاص بك من الإعدادات كبديل أكثر ثباتًا.");
+                        public void onError(String retryError) {
+                            sendViaPollinations(systemContext, userMessage, new Callback() {
+                                @Override
+                                public void onSuccess(String reply) {
+                                    callback.onSuccess(reply);
+                                }
+
+                                @Override
+                                public void onError(String secondError) {
+                                    sendViaPollinations(systemContext, userMessage, new Callback() {
+                                        @Override
+                                        public void onSuccess(String reply) {
+                                            callback.onSuccess(reply);
+                                        }
+
+                                        @Override
+                                        public void onError(String finalError) {
+                                            callback.onError("تعذر الوصول لأي من خدمات الذكاء الاصطناعي المجانية حاليًا (قد تكون مزدحمة أو الاتصال بالإنترنت غير مستقر). حاول بعد قليل، أو أضف مفتاح OpenRouter الخاص بك من الإعدادات كبديل أكثر ثباتًا.");
+                                        }
+                                    });
+                                }
+                            });
                         }
                     });
                 }
