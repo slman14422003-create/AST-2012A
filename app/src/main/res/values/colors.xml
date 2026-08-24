@@ -1,39 +1,44 @@
 <resources>
-    <!-- خلفية التطبيق: تدرج ليلي عميق (نيلي -> كحلي -> أخضر مزرق) تُبنى
-         عليه كل البطاقات الزجاجية شبه الشفافة -->
-    <color name="bg_deep_1">#0A0E1A</color>
-    <color name="bg_deep_2">#0E1526</color>
-    <color name="bg_deep_3">#0B1F22</color>
-    <color name="bg_dark">#0A0E1A</color>
+    <!-- خلفية التطبيق v2: تدرج ليلي أعمق وأكثر ثراءً (نيلي داكن -> بنفسجي
+         كحلي -> أخضر مزرق عميق) — نفس الفكرة لكن بتباين أعلى بين النقاط
+         الثلاث عشان يبان التدرج بوضوح بدل ما يحس القارئ إنه لون واحد مسطح. -->
+    <color name="bg_deep_1">#080B14</color>
+    <color name="bg_deep_2">#121A33</color>
+    <color name="bg_deep_3">#0A2230</color>
+    <color name="bg_dark">#080B14</color>
 
-    <!-- الألوان الأساسية: سيان طبي + بنفسجي مرافق لإحساس تقني حديث -->
-    <color name="primary_cyan">#22D3D8</color>
-    <color name="primary_cyan_dark">#0FA9AE</color>
-    <color name="accent_violet">#8B7CF6</color>
-    <color name="accent_violet_dark">#6558D9</color>
+    <!-- الألوان الأساسية: سيان طبي أكثر إشراقًا + بنفسجي أدفأ قليلًا -->
+    <color name="primary_cyan">#2DE0E6</color>
+    <color name="primary_cyan_dark">#0E9AA0</color>
+    <color name="accent_violet">#9B8CFB</color>
+    <color name="accent_violet_dark">#6A5AE0</color>
 
-    <!-- سطوح زجاجية (Glassmorphism): تراكب أبيض شبه شفاف + حدود شبه شفافة -->
-    <color name="glass_fill">#1AFFFFFF</color>
-    <color name="glass_fill_strong">#26FFFFFF</color>
-    <color name="glass_fill_soft">#12FFFFFF</color>
-    <color name="glass_border">#33FFFFFF</color>
-    <color name="glass_border_soft">#1FFFFFFF</color>
-    <color name="glass_highlight">#40FFFFFF</color>
+    <!-- سطوح زجاجية (Glassmorphism) v2: تراكب أبيض شبه شفاف أقوى شوية عشان
+         تتحسن قابلية القراءة فوق الخلفية الغامقة، + خط علوي لامع خفيف
+         (glass_top_sheen) يُستخدم في layer-list البطاقات لمحاكاة انعكاس
+         الزجاج الحقيقي. -->
+    <color name="glass_fill">#22FFFFFF</color>
+    <color name="glass_fill_strong">#30FFFFFF</color>
+    <color name="glass_fill_soft">#16FFFFFF</color>
+    <color name="glass_border">#3DFFFFFF</color>
+    <color name="glass_border_soft">#26FFFFFF</color>
+    <color name="glass_highlight">#4DFFFFFF</color>
+    <color name="glass_top_sheen">#33FFFFFF</color>
 
     <!-- متبقيات متوافقة مع الكود القديم (نُبقيها حتى لا نكسر مراجع أخرى) -->
-    <color name="surface_dark">#141A2E</color>
-    <color name="card_dark">#161C30</color>
+    <color name="surface_dark">#182140</color>
+    <color name="card_dark">#1A2340</color>
 
-    <color name="text_primary">#F4F7FA</color>
-    <color name="text_secondary">#98A3B8</color>
-    <color name="text_tertiary">#5E6A82</color>
+    <color name="text_primary">#F7F9FC</color>
+    <color name="text_secondary">#A6B1CC</color>
+    <color name="text_tertiary">#6E7A99</color>
 
-    <color name="accent_red">#F0576B</color>
+    <color name="accent_red">#FF5C77</color>
     <color name="accent_red_dark">#C23B4D</color>
-    <color name="accent_green">#3DD68C</color>
-    <color name="accent_gold">#F5C451</color>
+    <color name="accent_green">#39E29B</color>
+    <color name="accent_gold">#FFC85C</color>
 
     <color name="white">#FFFFFF</color>
     <color name="black">#000000</color>
-    <color name="overlay_scrim">#99000000</color>
+    <color name="overlay_scrim">#A6000000</color>
 </resources>
