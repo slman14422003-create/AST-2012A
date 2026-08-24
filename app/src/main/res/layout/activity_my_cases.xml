@@ -13,7 +13,7 @@
         android:background="@drawable/bg_header_container"
         android:title="حالاتي المخصصة"
         android:titleTextColor="@color/text_primary"
-        app:navigationIcon="@android:drawable/ic_menu_close_clear_cancel" />
+        app:navigationIcon="@drawable/ic_close" />
 
     <TextView
         android:id="@+id/empty_hint"

@@ -13,7 +13,7 @@
         android:background="@drawable/bg_header_container"
         android:title="➕ إضافة حالة جديدة"
         android:titleTextColor="@color/text_primary"
-        app:navigationIcon="@android:drawable/ic_menu_close_clear_cancel" />
+        app:navigationIcon="@drawable/ic_close" />
 
     <ScrollView
         android:layout_width="match_parent"
@@ -191,10 +191,8 @@
 
             <Button
                 android:id="@+id/btn_submit"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                style="@style/PrimaryButton"
                 android:layout_marginBottom="8dp"
-                android:backgroundTint="@color/primary_cyan"
                 android:text="💾 حفظ الحالة" />
 
             <Button

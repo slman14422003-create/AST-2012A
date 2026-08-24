@@ -78,7 +78,7 @@
                 app:boxStrokeColor="@color/primary_cyan"
                 app:boxStrokeWidthFocused="1.6dp"
                 app:hintTextColor="@color/text_secondary"
-                app:startIconDrawable="@android:drawable/ic_menu_search"
+                app:startIconDrawable="@drawable/ic_search"
                 app:startIconTint="@color/primary_cyan"
                 app:endIconMode="clear_text"
                 app:endIconTint="@color/text_secondary">
@@ -416,7 +416,7 @@
         android:layout_gravity="bottom|start"
         android:layout_margin="20dp"
         android:contentDescription="إضافة حالة جديدة"
-        android:src="@android:drawable/ic_input_add"
+        android:src="@drawable/ic_add"
         app:backgroundTint="@color/primary_cyan"
         app:elevation="6dp"
         app:pressedTranslationZ="12dp"

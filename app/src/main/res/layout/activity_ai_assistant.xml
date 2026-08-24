@@ -13,7 +13,7 @@
         android:background="@drawable/bg_header_container"
         android:title="🤖 المساعد الذكي"
         android:titleTextColor="@color/text_primary"
-        app:navigationIcon="@android:drawable/ic_menu_close_clear_cancel" />
+        app:navigationIcon="@drawable/ic_close" />
 
     <TextView
         android:id="@+id/mode_hint"
@@ -113,7 +113,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:contentDescription="إرسال"
-            android:src="@android:drawable/ic_menu_send"
+            android:src="@drawable/ic_send"
             app:backgroundTint="@color/primary_cyan"
             app:fabSize="mini"
             app:tint="@color/white" />

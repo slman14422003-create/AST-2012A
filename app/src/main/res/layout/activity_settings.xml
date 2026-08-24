@@ -14,7 +14,7 @@
         android:elevation="4dp"
         android:title="المزيد والإعدادات"
         android:titleTextColor="@color/text_primary"
-        app:navigationIcon="@android:drawable/ic_menu_close_clear_cancel" />
+        app:navigationIcon="@drawable/ic_close" />
 
     <ScrollView
         android:layout_width="match_parent"
@@ -32,10 +32,8 @@
 
             <Button
                 android:id="@+id/btn_notif"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                style="@style/PrimaryButton"
                 android:layout_marginBottom="22dp"
-                android:backgroundTint="@color/primary_cyan"
                 android:text="🔕 الإشعارات غير مفعّلة - اضغط للتفعيل" />
 
             <TextView
@@ -49,7 +47,7 @@
                 android:background="@drawable/bg_glass_card_soft"
                 android:gravity="end"
                 android:padding="12dp"
-                android:text="✅ المساعد الذكي شغال افتراضيًا بدون أي إعداد - مجاني وجاهز مباشرة.\n\nلو حبيت تجرب نموذج بديل، تقدر (اختياريًا) تضيف مفتاح API مجاني من openrouter.ai (تسجيل بالإيميل، بدون بطاقة ائتمان).\n⚠️ الصق المفتاح فقط (يبدأ بـ sk-or-v1-...) — بدون كتابة export ولا أي أوامر."
+                android:text="✅ المساعد الذكي شغال افتراضيًا بدون أي إعداد ومجاني للأبد. أي سؤال يطابق قاعدة بيانات الجهاز (120 حالة موثقة) يُجاب عليه فورًا من البيانات نفسها بدون إنترنت وبدقة 100%.\n\nللأسئلة العامة الأخرى، يبحث تلقائيًا في ويكيبيديا كخلفية تكميلية (وتُعرض دائمًا كإجابة عامة، مميزة بوضوح عن بيانات الجهاز الموثقة).\n\nلو حبيت تجرب نموذج بديل للأسئلة العامة، تقدر (اختياريًا) تضيف مفتاح API مجاني من openrouter.ai.\n⚠️ الصق المفتاح فقط (يبدأ بـ sk-or-v1-...) — بدون كتابة export ولا أي أوامر."
                 android:textColor="@color/text_secondary"
                 android:textDirection="rtl"
                 android:textSize="12sp" />
@@ -72,12 +70,9 @@
 
             <Button
                 android:id="@+id/btn_save_key"
-                style="@style/Widget.Material3.Button.TextButton"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                style="@style/PrimaryButton"
                 android:layout_marginBottom="10dp"
-                android:text="💾 حفظ المفتاح"
-                android:textColor="@color/primary_cyan" />
+                android:text="💾 حفظ المفتاح" />
 
             <Button
                 android:id="@+id/btn_clear_chat_history"
