@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- المقدمة: قلب نبضة كهربائية (EMS/TENS) داخل دائرة كبسولة طبية، بتدرج
+     سيان -> بنفسجي - يرمز مباشرة لجهاز التحفيز الكهربائي AST-2012A. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- حلقة خارجية زجاجية خفيفة -->
+    <path
+        android:pathData="M54,20a34,34 0,1 1,0 68a34,34 0,1 1,0 -68z"
+        android:strokeColor="#402DE0E6"
+        android:strokeWidth="2"
+        android:fillColor="#182DE0E6" />
+
+    <!-- خط النبضة الكهربائية (Pulse/EMS waveform) -->
+    <path
+        android:pathData="M27,55 L40,55 L45,40 L53,70 L60,48 L65,55 L81,55"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="4.6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000">
+        <aapt:attr xmlns:aapt="http://schemas.android.com/aapt" name="android:strokeColor">
+            <gradient
+                android:type="linear"
+                android:startX="27" android:startY="55"
+                android:endX="81" android:endY="55"
+                android:startColor="#2DE0E6"
+                android:endColor="#9B8CFB" />
+        </aapt:attr>
+    </path>
+
+    <!-- نقطتا قطب (electrode dots) -->
+    <path android:pathData="M27,55m-4,0a4,4 0,1 1,8 0a4,4 0,1 1,-8 0" android:fillColor="#2DE0E6" />
+    <path android:pathData="M81,55m-4,0a4,4 0,1 1,8 0a4,4 0,1 1,-8 0" android:fillColor="#9B8CFB" />
+</vector>
