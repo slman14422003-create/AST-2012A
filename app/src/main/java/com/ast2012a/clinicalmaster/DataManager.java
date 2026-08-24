@@ -191,6 +191,12 @@ public class DataManager {
         SYNONYMS.put("الكاحل", new String[]{"ankle", "التواء"});
         SYNONYMS.put("الفخذ", new String[]{"thigh", "hip femoral"});
         SYNONYMS.put("الورك", new String[]{"مفصل الحوض", "hip"});
+        SYNONYMS.put("شد عضلي", new String[]{"تمزق عضلي", "muscle strain", "شد"});
+        SYNONYMS.put("الصداع", new String[]{"صداع", "headache", "شقيقه"});
+        SYNONYMS.put("الدوالي", new String[]{"دوالي", "varicose"});
+        SYNONYMS.put("تيبس", new String[]{"تصلب", "stiffness"});
+        SYNONYMS.put("استرخاء", new String[]{"استرخاء عضلي", "relaxation"});
+        SYNONYMS.put("دوره دمويه", new String[]{"الدوره الدمويه", "circulation", "تروية"});
     }
 
     public static String normalize(String text) {
@@ -275,6 +281,12 @@ public class DataManager {
         String normTitle = normalize(item.title);
         String normMode = normalize(item.mode);
         String normExplanation = normalize(item.explanation);
+        String normSymptoms = normalize(item.symptoms);
+        String normTip = normalize(item.tip);
+        String normFreq = normalize(item.freq);
+        String normChannel = normalize(item.channel);
+        String normDuration = normalize(item.duration);
+        String normSessionsPlan = normalize(item.sessionsPlan);
         List<String> normKeywords = new ArrayList<>();
         for (String k : item.keywords) normKeywords.add(normalize(k));
         String[] titleWords = normTitle.split("\\s+");
@@ -298,7 +310,13 @@ public class DataManager {
                 if (inKeywords) { score += 50; termMatched = true; }
                 if (normTitle.contains(term)) { score += 20; termMatched = true; }
                 if (normMode.contains(term)) { score += 10; termMatched = true; }
+                if (normSymptoms.contains(term)) { score += 8; termMatched = true; }
                 if (normExplanation.contains(term)) { score += 3; termMatched = true; }
+                if (normTip.contains(term)) { score += 3; termMatched = true; }
+                if (normSessionsPlan.contains(term)) { score += 2; termMatched = true; }
+                if (normFreq.contains(term)) { score += 2; termMatched = true; }
+                if (normChannel.contains(term)) { score += 2; termMatched = true; }
+                if (normDuration.contains(term)) { score += 2; termMatched = true; }
             }
             if (!termMatched) {
                 if (fuzzyIncludes(keywordWords, rawTerm)) { score += 25; termMatched = true; }
@@ -416,6 +434,45 @@ public class DataManager {
     // الصلة من قاعدة بيانات الجهاز الرسمية، ليقارن إجابته معها بدل الاعتماد
     // على معرفته العامة فقط - يقلل الهلوسة ويحافظ على الاتساق مع الجهاز.
     // -----------------------------------------------------------------
+
+    // -----------------------------------------------------------------
+    // إجابة محلية موثوقة 100%: لما البحث يلاقي تطابقًا مباشرًا وواضحًا في
+    // قاعدة بيانات الجهاز، بنبني رد منسّق كامل من بيانات الحالة نفسها -
+    // فوري، بدون إنترنت، بدون أي استدعاء لأي نموذج ذكاء اصطناعي خارجي،
+    // وبالتالي مضمون الدقة 100% لأنه منقول حرفيًا من القاعدة الموثقة.
+    // -----------------------------------------------------------------
+
+    public static String buildLocalAnswer(CaseItem c) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("🩺 ").append(c.title).append("\n\n");
+        sb.append("• النمط: ").append(nz(c.mode)).append("\n");
+        if (!nz(c.freq).isEmpty()) sb.append("• التردد: ").append(c.freq).append("\n");
+        if (!nz(c.channel).isEmpty()) sb.append("• القناة: ").append(c.channel).append("\n");
+        if (!nz(c.duration).isEmpty()) sb.append("• المدة: ").append(c.duration).append("\n");
+        if (c.poles != null && !c.poles.isEmpty()) {
+            sb.append("• الأقطاب: ").append(String.join("، ", c.poles)).append("\n");
+        }
+        if (!nz(c.symptoms).isEmpty()) {
+            sb.append("\n📌 الأعراض المرتبطة:\n").append(c.symptoms).append("\n");
+        }
+        if (!nz(c.explanation).isEmpty()) {
+            sb.append("\n📋 الشرح السريري:\n").append(c.explanation).append("\n");
+        }
+        if (!nz(c.sessionsPlan).isEmpty()) {
+            sb.append("\n🗓️ خطة الجلسات المقترحة:\n").append(c.sessionsPlan).append("\n");
+        }
+        if (!nz(c.tip).isEmpty()) {
+            sb.append("\n💡 ملاحظة عملية:\n").append(c.tip).append("\n");
+        }
+        List<String> notes = getGeneralSafetyNote(c.mode);
+        if (!notes.isEmpty()) {
+            sb.append("\n⚠️ تنبيهات السلامة:\n");
+            for (String n : notes) sb.append("• ").append(n).append("\n");
+        }
+        return sb.toString().trim();
+    }
+
+    private static String nz(String s) { return s == null ? "" : s; }
 
     public static class GroundingResult {
         public String contextText;

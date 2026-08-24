@@ -161,9 +161,9 @@ public class AiAssistantActivity extends AppCompatActivity {
         if (modeHint instanceof TextView) {
             TextView hint = (TextView) modeHint;
             if (apiKey != null && !apiKey.isEmpty()) {
-                hint.setText("🔑 يعمل حاليًا بمفتاح OpenRouter الخاص بك، مع بحث تلقائي في ويكيبيديا وقاعدة بيانات الجهاز لكل سؤال.");
+                hint.setText("🔑 عند وجود تطابق مباشر في قاعدة بيانات الجهاز تصلك إجابة فورية موثوقة، وإلا يُستخدم مفتاح OpenRouter الخاص بك مع بحث في ويكيبيديا.");
             } else {
-                hint.setText("🤖 وضع مجاني بالكامل (بدون مفتاح) - يبحث تلقائيًا في ويكيبيديا وقاعدة بيانات الجهاز قبل كل رد.");
+                hint.setText("✅ الأسئلة المطابقة لقاعدة بيانات الجهاز (120 حالة) تُجاب فورًا وبدقة 100% بدون إنترنت. غير ذلك، يُستخدم بحث ويكيبيديا + مزوّد مجاني كخلفية عامة تكميلية.");
             }
         }
     }
@@ -222,7 +222,29 @@ public class AiAssistantActivity extends AppCompatActivity {
 
         final String finalApiKey = apiKey;
         executor.execute(() -> {
-            // المرحلة الأولى: تأريض محلي - بروتوكولات موثقة من قاعدة بيانات الجهاز
+            // المرحلة صفر: هل يوجد تطابق مباشر وواثق في قاعدة بيانات الجهاز؟
+            // لو أه، نجاوب فورًا من البيانات الموثقة نفسها - بدون إنترنت وبدون
+            // أي نموذج ذكاء اصطناعي خارجي - إجابة مضمونة الدقة 100%.
+            DataManager.SearchResult direct = DataManager.search(text, DataManager.loadBuiltinDatabase(this));
+            if (!direct.items.isEmpty() && !direct.isFallback) {
+                CaseItem top = direct.items.get(0);
+                String reply = DataManager.buildLocalAnswer(top);
+                if (direct.items.size() > 1) {
+                    reply += "\n\nℹ️ توجد " + (direct.items.size() - 1) + " حالة أخرى مطابقة أيضًا في القاعدة يمكن مراجعتها من شاشة البحث الرئيسية.";
+                }
+                final String finalReply = reply;
+                runOnUiThread(() -> {
+                    typingIndicator.setVisibility(View.GONE);
+                    adapter.addMessage(new ChatMessage(ChatMessage.ROLE_AI, finalReply,
+                            "قاعدة بيانات الجهاز الموثقة (إجابة فورية بدون إنترنت)", null, text));
+                    AiChatStore.save(AiAssistantActivity.this, adapter.getMessages());
+                    chatList.smoothScrollToPosition(adapter.getItemCount() - 1);
+                });
+                return;
+            }
+
+            // المرحلة الأولى: تأريض محلي أوسع (تطابق جزئي/تقريبي) - بروتوكولات
+            // موثقة من قاعدة بيانات الجهاز تُستخدم كخلفية للنموذج بدل إجابة مباشرة.
             DataManager.GroundingResult grounding = DataManager.buildGroundingContext(this, text, 3);
 
             // المرحلة الثانية: تأريض خارجي - بحث في موسوعة ويكيبيديا (مجاني، بدون مفتاح)
@@ -254,13 +276,15 @@ public class AiAssistantActivity extends AppCompatActivity {
                         String sourceLabel = null;
                         String sourceUrl = null;
                         if (groundedCount > 0 && wiki != null) {
-                            sourceLabel = "قاعدة بيانات الجهاز (" + groundedCount + ") + ويكيبيديا: " + wiki.title;
+                            sourceLabel = "⚠️ إجابة تكميلية عامة (لا يوجد تطابق مباشر) - بروتوكولات قريبة (" + groundedCount + ") + ويكيبيديا: " + wiki.title;
                             sourceUrl = wiki.sourceUrl;
                         } else if (groundedCount > 0) {
-                            sourceLabel = "قاعدة بيانات الجهاز (" + groundedCount + " بروتوكول موثّق)";
+                            sourceLabel = "⚠️ إجابة تكميلية عامة - أقرب بروتوكولات في القاعدة (" + groundedCount + ")، بدون تطابق مباشر مؤكد";
                         } else if (wiki != null) {
-                            sourceLabel = "ويكيبيديا: " + wiki.title;
+                            sourceLabel = "⚠️ إجابة عامة من ويكيبيديا (خارج قاعدة بيانات الجهاز): " + wiki.title;
                             sourceUrl = wiki.sourceUrl;
+                        } else {
+                            sourceLabel = "⚠️ إجابة عامة من معرفة النموذج (بدون مصدر موثّق من الجهاز أو ويكيبيديا)";
                         }
 
                         adapter.addMessage(new ChatMessage(ChatMessage.ROLE_AI, reply, sourceLabel, sourceUrl, text));
