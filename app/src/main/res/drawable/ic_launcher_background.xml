@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- خلفية أيقونة التطبيق: نفس تدرج العلامة التجارية (سيان -> بنفسجي) على
-     قاعدة كحلية غامقة، بدايرة توهج ناعمة في المنتصف. -->
+<!-- خلفية أيقونة التطبيق: كريمية دافئة بدائرة توهج طوبي ناعمة في المنتصف،
+     متوافقة مع الهوية الجديدة. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
@@ -11,12 +11,12 @@
             <gradient
                 android:type="linear"
                 android:angle="135"
-                android:startColor="#0A0E1A"
-                android:centerColor="#101C3A"
-                android:endColor="#0A2230" />
+                android:startColor="#F8F6F1"
+                android:centerColor="#F3EFE6"
+                android:endColor="#EFE9DC" />
         </aapt:attr>
     </path>
     <path
         android:pathData="M54,54m-46,0a46,46 0,1 1,92 0a46,46 0,1 1,-92 0"
-        android:fillColor="#1E2DE0E6" />
+        android:fillColor="#22CC7B5C" />
 </vector>

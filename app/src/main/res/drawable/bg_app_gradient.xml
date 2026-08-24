@@ -1,27 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- خلفية التطبيق v2: تدرج قطري أعمق ثلاثي النقاط + توهج علوي خفيف
-     (radial) يحاكي إضاءة ناعمة قادمة من أعلى الشاشة، عشان يديلها إحساس
-     عمق حقيقي بدل تدرج مسطح. -->
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item>
-        <shape android:shape="rectangle">
-            <gradient
-                android:type="linear"
-                android:angle="135"
-                android:startColor="@color/bg_deep_1"
-                android:centerColor="@color/bg_deep_2"
-                android:endColor="@color/bg_deep_3" />
-        </shape>
-    </item>
-    <item android:gravity="fill_horizontal|top" android:height="260dp">
-        <shape android:shape="rectangle">
-            <gradient
-                android:type="radial"
-                android:gradientRadius="380dp"
-                android:centerX="0.5"
-                android:centerY="0"
-                android:startColor="#2A22D3D8"
-                android:endColor="#0022D3D8" />
-        </shape>
-    </item>
-</layer-list>
+<!-- خلفية التطبيق: كريمية دافئة شبه مسطحة (بدون توهجات نيون) - نفس روح
+     خلفية Claude.ai. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <gradient
+        android:type="linear"
+        android:angle="90"
+        android:startColor="@color/bg_deep_1"
+        android:endColor="@color/bg_deep_3" />
+</shape>

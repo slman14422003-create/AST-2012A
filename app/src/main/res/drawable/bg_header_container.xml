@@ -1,21 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- رأس الشاشة الزجاجي v2: أغمق قليلًا من البطاقات العادية، بحواف سفلية
-     دائرية كبيرة، حدود زجاجية سفلية، وخط لامع علوي رفيع. -->
+<!-- رأس الشاشة: مسطح تمامًا (بدون زوايا دائرية سفلية) بحدّ سفلي رفيع -
+     مطابق لشريط علوي Claude النظيف. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item>
         <shape android:shape="rectangle">
             <solid android:color="@color/glass_fill_strong" />
-            <corners
-                android:bottomLeftRadius="26dp"
-                android:bottomRightRadius="26dp" />
         </shape>
     </item>
-    <item android:height="1dp" android:gravity="top">
-        <shape android:shape="rectangle">
-            <solid android:color="@color/glass_top_sheen" />
-        </shape>
-    </item>
-    <item android:width="1dp" android:height="1dp" android:gravity="bottom">
+    <item android:height="1dp" android:gravity="bottom">
         <shape android:shape="rectangle">
             <solid android:color="@color/glass_border" />
         </shape>
