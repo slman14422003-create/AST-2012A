@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- زر رئيسي موحّد (CTA): تعبئة طوبية مسطحة، حواف مدوّرة باعتدال -->
+<!-- زر رئيسي موحّد (CTA) بشكل Material 3 القياسي: تعبئة كاملة الاستدارة
+     (Stadium/Pill Shape) بدل الزوايا المعتدلة القديمة. -->
 <ripple xmlns:android="http://schemas.android.com/apk/res/android"
     android:color="#33FFFFFF">
     <item>
         <shape android:shape="rectangle">
-            <solid android:color="@color/primary_cyan" />
-            <corners android:radius="12dp" />
+            <solid android:color="?attr/colorPrimary" />
+            <corners android:radius="26dp" />
         </shape>
     </item>
 </ripple>
