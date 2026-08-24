@@ -1,0 +1,44 @@
+<resources>
+    <!-- ============================================================
+         نظام الألوان - الوضع الليلي. نفس أسماء المتغيرات بالضبط الموجودة
+         في values/colors.xml (النهاري)، بقيم داكنة متناسقة. أندرويد يختار
+         الملف الصحيح تلقائيًا حسب وضع الجهاز/التطبيق - لا حاجة لأي تعديل
+         في أي Layout أو كود Java، لأن كل الشاشات تشير لنفس الأسماء. -->
+
+    <!-- خلفية التطبيق: بني-رمادي داكن دافئ (مو أسود بحت) -->
+    <color name="bg_deep_1">#18160F</color>
+    <color name="bg_deep_2">#1D1A13</color>
+    <color name="bg_deep_3">#221E16</color>
+    <color name="bg_dark">#18160F</color>
+
+    <!-- الألوان الأساسية: طوبي أفتح شوي عشان يبرز على خلفية داكنة -->
+    <color name="primary_cyan">#E2916B</color>
+    <color name="primary_cyan_dark">#C87A55</color>
+    <color name="accent_violet">#8FB0C0</color>
+    <color name="accent_violet_dark">#6D8E9E</color>
+
+    <!-- أسطح البطاقات: داكنة بحدود رفيعة فاتحة قليلًا -->
+    <color name="glass_fill">#24211A</color>
+    <color name="glass_fill_strong">#2A261D</color>
+    <color name="glass_fill_soft">#211D16</color>
+    <color name="glass_border">#3A3527</color>
+    <color name="glass_border_soft">#332F24</color>
+    <color name="glass_highlight">#1FFFFFFF</color>
+    <color name="glass_top_sheen">#00FFFFFF</color>
+
+    <color name="surface_dark">#24211A</color>
+    <color name="card_dark">#24211A</color>
+
+    <color name="text_primary">#F3EFE6</color>
+    <color name="text_secondary">#B9B2A2</color>
+    <color name="text_tertiary">#8B8474</color>
+
+    <color name="accent_red">#E27A68</color>
+    <color name="accent_red_dark">#C85E4B</color>
+    <color name="accent_green">#79C592</color>
+    <color name="accent_gold">#D9AC6C</color>
+
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+    <color name="overlay_scrim">#CC000000</color>
+</resources>
