@@ -349,10 +349,16 @@
     </FrameLayout>
 
     <!-- ============== الرصيف السفلي الثابت: اختصارات + شريط البحث ============== -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/glass_border_soft" />
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="@drawable/bg_header_container"
+        android:elevation="8dp"
         android:orientation="vertical"
         android:paddingTop="10dp">
 
@@ -429,6 +435,22 @@
                     android:paddingHorizontal="16dp"
                     android:paddingVertical="9dp"
                     android:text="📖 موسوعة الأنماط"
+                    android:textColor="@color/text_secondary"
+                    android:textDirection="rtl"
+                    android:textSize="12.5sp" />
+
+                <TextView
+                    android:id="@+id/btn_anatomy"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="4dp"
+                    android:background="@drawable/bg_glass_chip"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:foreground="?attr/selectableItemBackground"
+                    android:paddingHorizontal="16dp"
+                    android:paddingVertical="9dp"
+                    android:text="🦴 دليل التشريح"
                     android:textColor="@color/text_secondary"
                     android:textDirection="rtl"
                     android:textSize="12.5sp" />
