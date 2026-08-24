@@ -96,8 +96,45 @@ public class AiClient {
                 }
             });
         } else {
+            // تحسين موثوقية: لو مفتاح OpenRouter الخاص بالمستخدم فشل (مفتاح
+            // منتهي/غير صالح، أو تجاوز الحد المسموح على الخطة المجانية من
+            // OpenRouter نفسها - 20 طلب/دقيقة أو 50 طلب/يوم بدون رصيد
+            // مشحون)، لا نوقف المحادثة بخطأ نهائي؛ بدل كده نكمل تلقائيًا
+            // على نفس سلسلة المزوّدين المجانيين الافتراضية بدون مفتاح، عشان
+            // يفضل المساعد الذكي شغال دايمًا قدر الإمكان.
             sendChatCompletionJson(OPENROUTER_ENDPOINT, apiKey.trim(), OPENROUTER_MODEL, systemContext, userMessage,
-                    null, callback);
+                    null, new Callback() {
+                        @Override
+                        public void onSuccess(String reply) {
+                            callback.onSuccess(reply);
+                        }
+
+                        @Override
+                        public void onError(String openRouterError) {
+                            sendViaLlm7(systemContext, userMessage, new Callback() {
+                                @Override
+                                public void onSuccess(String reply) {
+                                    callback.onSuccess(reply);
+                                }
+
+                                @Override
+                                public void onError(String llm7Error) {
+                                    sendViaPollinations(systemContext, userMessage, new Callback() {
+                                        @Override
+                                        public void onSuccess(String reply) {
+                                            callback.onSuccess(reply);
+                                        }
+
+                                        @Override
+                                        public void onError(String finalError) {
+                                            callback.onError(openRouterError
+                                                    + "\n\nℹ️ جرّبنا أيضًا المزوّدين المجانيين الاحتياطيين ولم ينجح أي منهم حاليًا. تحقّق من صلاحية مفتاحك في إعدادات OpenRouter، أو احذفه من شاشة الإعدادات لاستخدام الوضع المجاني الافتراضي.");
+                                        }
+                                    });
+                                }
+                            });
+                        }
+                    });
         }
     }
 

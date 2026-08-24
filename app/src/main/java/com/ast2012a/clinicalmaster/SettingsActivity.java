@@ -10,7 +10,7 @@ import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
-import androidx.appcompat.app.AlertDialog;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.app.NotificationCompat;
@@ -89,7 +89,7 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     private void confirmClearChatHistory() {
-        new AlertDialog.Builder(this)
+        new MaterialAlertDialogBuilder(this)
                 .setTitle("تأكيد")
                 .setMessage("سيتم حذف سجل محادثة المساعد الذكي بالكامل. متأكد؟")
                 .setPositiveButton("مسح", (dialog, which) -> {
@@ -103,9 +103,9 @@ public class SettingsActivity extends AppCompatActivity {
     private void showAboutDialog() {
         String message = "AST-2012A Clinical Master\nالإصدار 1.0\n\n" +
                 "تطبيق أندرويد أصلي مكتوب بالكامل بلغة Java - بدون WebView أو متصفح.\n" +
-                "120 حالة سريرية موثقة + موسوعة أنماط الجهاز + مساعد ذكي مجاني.\n\n" +
+                "130 حالة سريرية موثقة + موسوعة أنماط الجهاز + مساعد ذكي مجاني.\n\n" +
                 "كل بياناتك (الحالات المخصصة، سجل المحادثة، الإعدادات) محفوظة محليًا على جهازك فقط، ولا تُرسل لأي سيرفر خاص بالتطبيق.";
-        new AlertDialog.Builder(this)
+        new MaterialAlertDialogBuilder(this)
                 .setTitle("عن التطبيق")
                 .setMessage(message)
                 .setPositiveButton("حسنًا", null)
@@ -223,7 +223,7 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     private void confirmClearAll() {
-        new AlertDialog.Builder(this)
+        new MaterialAlertDialogBuilder(this)
                 .setTitle("تأكيد")
                 .setMessage("سيتم حذف كل الحالات المخصصة نهائيًا. متأكد؟")
                 .setPositiveButton("مسح الكل", (dialog, which) -> {

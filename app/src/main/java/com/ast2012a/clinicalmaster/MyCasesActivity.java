@@ -4,7 +4,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
 
-import androidx.appcompat.app.AlertDialog;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -63,7 +63,7 @@ public class MyCasesActivity extends AppCompatActivity implements CaseRowAdapter
 
     @Override
     public void onDelete(CaseItem item) {
-        new AlertDialog.Builder(this)
+        new MaterialAlertDialogBuilder(this)
                 .setTitle("تأكيد")
                 .setMessage("هل تريد حذف \"" + item.title + "\" نهائيًا؟")
                 .setPositiveButton("حذف", (dialog, which) -> {

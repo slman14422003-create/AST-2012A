@@ -12,7 +12,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.appcompat.app.AlertDialog;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -167,7 +167,7 @@ public class AiAssistantActivity extends AppCompatActivity {
             if (apiKey != null && !apiKey.isEmpty()) {
                 hint.setText("🔑 عند وجود تطابق مباشر في قاعدة بيانات الجهاز تصلك إجابة فورية موثوقة، وإلا يُستخدم مفتاح OpenRouter الخاص بك مع بحث في ويكيبيديا.");
             } else {
-                hint.setText("✅ الأسئلة المطابقة لقاعدة بيانات الجهاز (120 حالة) تُجاب فورًا وبدقة 100% بدون إنترنت. غير ذلك، يُستخدم بحث ويكيبيديا + مزوّد مجاني كخلفية عامة تكميلية.");
+                hint.setText("✅ الأسئلة المطابقة لقاعدة بيانات الجهاز (130 حالة) تُجاب فورًا وبدقة 100% بدون إنترنت. غير ذلك، يُستخدم بحث ويكيبيديا + مزوّد مجاني كخلفية عامة تكميلية.");
             }
         }
     }
@@ -182,7 +182,7 @@ public class AiAssistantActivity extends AppCompatActivity {
 
     private void confirmClearChat() {
         if (adapter.getItemCount() == 0) return;
-        new AlertDialog.Builder(this)
+        new MaterialAlertDialogBuilder(this)
                 .setTitle("مسح المحادثة")
                 .setMessage("هل تريد مسح كل سجل المحادثة مع المساعد الذكي نهائيًا؟")
                 .setPositiveButton("مسح", (dialog, which) -> {
