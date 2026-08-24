@@ -1,12 +1,39 @@
 <resources>
-    <color name="bg_dark">#0F1216</color>
-    <color name="surface_dark">#1C2128</color>
-    <color name="card_dark">#1B222C</color>
-    <color name="primary_cyan">#0EB3BF</color>
-    <color name="primary_cyan_dark">#0A8A94</color>
-    <color name="text_primary">#EAEDF0</color>
-    <color name="text_secondary">#8C97A6</color>
-    <color name="accent_red">#E05757</color>
-    <color name="accent_green">#4CAF7D</color>
+    <!-- خلفية التطبيق: تدرج ليلي عميق (نيلي -> كحلي -> أخضر مزرق) تُبنى
+         عليه كل البطاقات الزجاجية شبه الشفافة -->
+    <color name="bg_deep_1">#0A0E1A</color>
+    <color name="bg_deep_2">#0E1526</color>
+    <color name="bg_deep_3">#0B1F22</color>
+    <color name="bg_dark">#0A0E1A</color>
+
+    <!-- الألوان الأساسية: سيان طبي + بنفسجي مرافق لإحساس تقني حديث -->
+    <color name="primary_cyan">#22D3D8</color>
+    <color name="primary_cyan_dark">#0FA9AE</color>
+    <color name="accent_violet">#8B7CF6</color>
+    <color name="accent_violet_dark">#6558D9</color>
+
+    <!-- سطوح زجاجية (Glassmorphism): تراكب أبيض شبه شفاف + حدود شبه شفافة -->
+    <color name="glass_fill">#1AFFFFFF</color>
+    <color name="glass_fill_strong">#26FFFFFF</color>
+    <color name="glass_fill_soft">#12FFFFFF</color>
+    <color name="glass_border">#33FFFFFF</color>
+    <color name="glass_border_soft">#1FFFFFFF</color>
+    <color name="glass_highlight">#40FFFFFF</color>
+
+    <!-- متبقيات متوافقة مع الكود القديم (نُبقيها حتى لا نكسر مراجع أخرى) -->
+    <color name="surface_dark">#141A2E</color>
+    <color name="card_dark">#161C30</color>
+
+    <color name="text_primary">#F4F7FA</color>
+    <color name="text_secondary">#98A3B8</color>
+    <color name="text_tertiary">#5E6A82</color>
+
+    <color name="accent_red">#F0576B</color>
+    <color name="accent_red_dark">#C23B4D</color>
+    <color name="accent_green">#3DD68C</color>
+    <color name="accent_gold">#F5C451</color>
+
     <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+    <color name="overlay_scrim">#99000000</color>
 </resources>

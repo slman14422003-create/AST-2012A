@@ -3,16 +3,14 @@
         <item name="colorPrimary">@color/primary_cyan</item>
         <item name="colorPrimaryVariant">@color/primary_cyan_dark</item>
         <item name="colorOnPrimary">@color/white</item>
-        <item name="colorSecondary">@color/primary_cyan</item>
+        <item name="colorSecondary">@color/accent_violet</item>
+        <item name="colorSecondaryVariant">@color/accent_violet_dark</item>
         <item name="android:colorBackground">@color/bg_dark</item>
         <item name="colorSurface">@color/surface_dark</item>
-        <!-- كان هنا الخلل: شريط الحالة كان بلون bg_dark بينما كل الأشرطة العلوية
-             (Toolbar) بلون surface_dark - لونين مختلفين فعليًا، وده اللي كان
-             بيبين كخط فاصل غير منسق أعلى الشاشة. دلوقتي بنفس لون الشريط العلوي
-             تمامًا فيبقوا قطعة واحدة متصلة بصريًا. -->
-        <item name="android:statusBarColor">@color/surface_dark</item>
-        <item name="android:navigationBarColor">@color/surface_dark</item>
+        <item name="android:statusBarColor">@color/bg_deep_1</item>
+        <item name="android:navigationBarColor">@color/bg_deep_1</item>
         <item name="android:windowLightStatusBar" tools:targetApi="m">false</item>
+        <item name="fontFamily">sans-serif</item>
     </style>
 
     <!-- عنوان قسم داخل شاشة الإعدادات (أو أي شاشة تحتاج تقسيم بصري لمجموعات
@@ -20,27 +18,42 @@
     <style name="SectionHeader">
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>
-        <item name="android:layout_marginBottom">8dp</item>
+        <item name="android:layout_marginBottom">10dp</item>
         <item name="android:gravity">end</item>
         <item name="android:textColor">@color/primary_cyan</item>
         <item name="android:textDirection">rtl</item>
         <item name="android:textSize">12.5sp</item>
         <item name="android:textStyle">bold</item>
-        <item name="android:letterSpacing">0.02</item>
+        <item name="android:letterSpacing">0.03</item>
     </style>
 
-    <!-- شريحة اقتراح بحث سريع (أمثلة حقيقية من قاعدة البيانات) -->
+    <!-- شريحة اقتراح بحث سريع (أمثلة حقيقية من قاعدة البيانات) - نمط زجاجي -->
     <style name="SuggestionChip">
         <item name="android:layout_width">wrap_content</item>
         <item name="android:layout_height">wrap_content</item>
         <item name="android:layout_marginHorizontal">4dp</item>
-        <item name="android:background">@drawable/bg_chip</item>
+        <item name="android:background">@drawable/bg_glass_chip</item>
         <item name="android:clickable">true</item>
         <item name="android:focusable">true</item>
         <item name="android:foreground">?attr/selectableItemBackground</item>
         <item name="android:paddingHorizontal">14dp</item>
-        <item name="android:paddingVertical">8dp</item>
+        <item name="android:paddingVertical">9dp</item>
         <item name="android:textColor">@color/text_secondary</item>
         <item name="android:textSize">12sp</item>
+    </style>
+
+    <!-- زر زجاجي عام (ثانوي) يُستخدم في شاشات التفاصيل والإعدادات -->
+    <style name="GlassButton">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:background">@drawable/bg_glass_card</item>
+        <item name="android:paddingVertical">13dp</item>
+        <item name="android:gravity">center</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+        <item name="android:foreground">?attr/selectableItemBackground</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textSize">13.5sp</item>
     </style>
 </resources>
