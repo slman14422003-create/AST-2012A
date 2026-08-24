@@ -3,11 +3,30 @@
         <item name="colorPrimary">@color/primary_cyan</item>
         <item name="colorPrimaryVariant">@color/primary_cyan_dark</item>
         <item name="colorOnPrimary">@color/white</item>
+        <item name="colorPrimaryContainer">@color/m3_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/m3_on_primary_container</item>
         <item name="colorSecondary">@color/accent_violet</item>
         <item name="colorSecondaryVariant">@color/accent_violet_dark</item>
+        <item name="colorOnSecondary">@color/white</item>
+        <item name="colorSecondaryContainer">@color/m3_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/m3_on_secondary_container</item>
+        <item name="colorTertiary">@color/m3_tertiary</item>
+        <item name="colorOnTertiary">@color/m3_on_tertiary</item>
+        <item name="colorTertiaryContainer">@color/m3_tertiary_container</item>
+        <item name="colorOnTertiaryContainer">@color/m3_on_tertiary_container</item>
         <item name="android:colorBackground">@color/bg_dark</item>
         <item name="colorSurface">@color/surface_dark</item>
         <item name="colorOnSurface">@color/text_primary</item>
+        <item name="colorSurfaceVariant">@color/m3_surface_variant</item>
+        <item name="colorOnSurfaceVariant">@color/m3_on_surface_variant</item>
+        <item name="colorSurfaceContainer">@color/m3_surface_container</item>
+        <item name="colorSurfaceContainerHigh">@color/m3_surface_container_high</item>
+        <item name="colorOutline">@color/m3_outline</item>
+        <item name="colorOutlineVariant">@color/m3_outline_variant</item>
+        <item name="colorError">@color/m3_error</item>
+        <item name="colorOnError">@color/m3_on_error</item>
+        <item name="colorErrorContainer">@color/m3_error_container</item>
+        <item name="colorOnErrorContainer">@color/m3_on_error_container</item>
         <item name="android:statusBarColor">@color/bg_deep_1</item>
         <item name="android:navigationBarColor">@color/bg_deep_1</item>
         <item name="android:windowLightStatusBar" tools:targetApi="m">true</item>
@@ -19,6 +38,42 @@
              النظام (اللي لو كان إنجليزي بيخلي الشريط السفلي وأيقونة البحث
              وترتيب العناصر الأفقية كلها بترتيب معكوس/مقطوع). -->
         <item name="android:layoutDirection">rtl</item>
+        <!-- شكل زوايا Material 3 موحّد (Shape System): بطاقات متوسطة
+             الاستدارة، وأزرار/رقائق كاملة الاستدارة (Stadium/Pill) - نفس
+             نظام M3 القياسي بدل نصف قطر ثابت واحد للجميع. -->
+        <item name="shapeAppearanceCornerExtraSmall">@style/ShapeAppearance.M3.Corner.ExtraSmall</item>
+        <item name="shapeAppearanceCornerSmall">@style/ShapeAppearance.M3.Corner.Small</item>
+        <item name="shapeAppearanceCornerMedium">@style/ShapeAppearance.M3.Corner.Medium</item>
+        <item name="shapeAppearanceCornerLarge">@style/ShapeAppearance.M3.Corner.Large</item>
+        <item name="materialAlertDialogTheme">@style/ThemeOverlay.ClinicalMaster.Dialog</item>
+    </style>
+
+    <!-- نظام الأشكال (Shape System) الخاص بـ M3 -->
+    <style name="ShapeAppearance.M3.Corner.ExtraSmall" parent="ShapeAppearance.Material3.Corner.ExtraSmall">
+        <item name="cornerSize">8dp</item>
+    </style>
+    <style name="ShapeAppearance.M3.Corner.Small" parent="ShapeAppearance.Material3.Corner.Small">
+        <item name="cornerSize">12dp</item>
+    </style>
+    <style name="ShapeAppearance.M3.Corner.Medium" parent="ShapeAppearance.Material3.Corner.Medium">
+        <item name="cornerSize">16dp</item>
+    </style>
+    <style name="ShapeAppearance.M3.Corner.Large" parent="ShapeAppearance.Material3.Corner.Large">
+        <item name="cornerSize">24dp</item>
+    </style>
+
+    <!-- تخصيص مربعات حوار Material 3 (MaterialAlertDialogBuilder) بنفس
+         هوية التطبيق (خلفية بطاقة + زوايا كبيرة + ألوان الأزرار الطوبية) -->
+    <style name="ThemeOverlay.ClinicalMaster.Dialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
+        <item name="colorSurface">@color/glass_fill_strong</item>
+        <item name="colorOnSurface">@color/text_primary</item>
+        <item name="materialAlertDialogTitleTextStyle">@style/MaterialAlertDialog.ClinicalMaster.Title</item>
+        <item name="shapeAppearanceOverlay">@style/ShapeAppearance.M3.Corner.Large</item>
+    </style>
+
+    <style name="MaterialAlertDialog.ClinicalMaster.Title" parent="MaterialAlertDialog.Material3.Title.Text">
+        <item name="android:textDirection">rtl</item>
+        <item name="android:gravity">end</item>
     </style>
 
     <!-- عنوان قسم داخل شاشة الإعدادات (أو أي شاشة تحتاج تقسيم بصري لمجموعات
@@ -79,6 +134,6 @@
         <item name="android:textStyle">bold</item>
         <item name="android:letterSpacing">0.01</item>
         <item name="elevation">0dp</item>
-        <item name="cornerRadius">12dp</item>
+        <item name="cornerRadius">26dp</item>
     </style>
 </resources>
