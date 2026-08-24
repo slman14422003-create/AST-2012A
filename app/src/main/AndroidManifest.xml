@@ -26,6 +26,7 @@
         <activity android:name=".AddEditCaseActivity" android:exported="false" />
         <activity android:name=".MyCasesActivity" android:exported="false" />
         <activity android:name=".EncyclopediaActivity" android:exported="false" />
+        <activity android:name=".AnatomyActivity" android:exported="false" />
         <activity android:name=".SettingsActivity" android:exported="false" />
         <activity android:name=".AiAssistantActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
 
