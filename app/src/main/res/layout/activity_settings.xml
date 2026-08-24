@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- ============================================================================
+     شاشة الإعدادات — إعادة بناء كاملة: مجموعات بطاقات بيضاء نظيفة بعناوين
+     أقسام واضحة، بدل الأزرار المتفرقة المتراصة القديمة، بأسلوب أقرب لصفحة
+     إعدادات Claude/iOS.
+     ============================================================================ -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
@@ -11,7 +16,6 @@
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
         android:background="@drawable/bg_header_container"
-        android:elevation="4dp"
         android:title="المزيد والإعدادات"
         android:titleTextColor="@color/text_primary"
         app:navigationIcon="@drawable/ic_close" />
@@ -26,19 +30,68 @@
             android:orientation="vertical"
             android:padding="16dp">
 
+            <!-- ============== قسم: الإشعارات ============== -->
             <TextView
                 style="@style/SectionHeader"
+                android:layout_marginTop="4dp"
                 android:text="🔔 الإشعارات" />
 
-            <Button
-                android:id="@+id/btn_notif"
-                style="@style/PrimaryButton"
-                android:layout_marginBottom="22dp"
-                android:text="🔕 الإشعارات غير مفعّلة - اضغط للتفعيل" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="24dp"
+                android:background="@drawable/bg_glass_card"
+                android:orientation="vertical"
+                android:padding="4dp">
 
+                <Button
+                    android:id="@+id/btn_notif"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="4dp"
+                    android:gravity="end|center_vertical"
+                    android:paddingVertical="12dp"
+                    android:text="🔕 الإشعارات غير مفعّلة - اضغط للتفعيل"
+                    android:textAllCaps="false"
+                    android:textColor="@color/text_primary"
+                    android:textDirection="rtl"
+                    android:textSize="13.5sp" />
+            </LinearLayout>
+
+            <!-- ============== قسم: المساعد الذكي ============== -->
             <TextView
                 style="@style/SectionHeader"
                 android:text="🤖 المساعد الذكي" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:background="@drawable/bg_glass_card_soft"
+                android:orientation="vertical"
+                android:padding="14dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:text="كيف يعمل المساعد الذكي؟"
+                    android:textColor="@color/text_primary"
+                    android:textDirection="rtl"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:gravity="end"
+                    android:text="1️⃣ أي سؤال يطابق قاعدة بيانات الجهاز (120 حالة موثقة) يُجاب فورًا من البيانات نفسها بدون إنترنت وبدقة 100%.&#10;&#10;2️⃣ غير ذلك، يُستخدم بحث ويكيبيديا (عربي ثم إنجليزي) كخلفية معرفية عامة تكميلية، وتُعرض دائمًا بشارة مصدر واضحة مميّزة عن بيانات الجهاز.&#10;&#10;3️⃣ الصياغة النهائية تمرّ على مزوّد ذكاء اصطناعي مجاني بالكامل بدون مفتاح (بالتناوب التلقائي بين أكثر من مزوّد لضمان الاستمرارية) — لا يلزمك أي اشتراك أو تسجيل."
+                    android:textColor="@color/text_secondary"
+                    android:textDirection="rtl"
+                    android:textSize="12sp" />
+            </LinearLayout>
 
             <TextView
                 android:layout_width="match_parent"
@@ -47,7 +100,7 @@
                 android:background="@drawable/bg_glass_card_soft"
                 android:gravity="end"
                 android:padding="12dp"
-                android:text="✅ المساعد الذكي شغال افتراضيًا بدون أي إعداد ومجاني للأبد. أي سؤال يطابق قاعدة بيانات الجهاز (120 حالة موثقة) يُجاب عليه فورًا من البيانات نفسها بدون إنترنت وبدقة 100%.\n\nللأسئلة العامة الأخرى، يبحث تلقائيًا في ويكيبيديا كخلفية تكميلية (وتُعرض دائمًا كإجابة عامة، مميزة بوضوح عن بيانات الجهاز الموثقة).\n\nلو حبيت تجرب نموذج بديل للأسئلة العامة، تقدر (اختياريًا) تضيف مفتاح API مجاني من openrouter.ai.\n⚠️ الصق المفتاح فقط (يبدأ بـ sk-or-v1-...) — بدون كتابة export ولا أي أوامر."
+                android:text="⚙️ تقدر (اختياريًا) تضيف مفتاح API مجاني من openrouter.ai لتجربة نموذج بديل بدل السلسلة المجانية الافتراضية.&#10;⚠️ الصق المفتاح فقط (يبدأ بـ sk-or-v1-...) — بدون كتابة export ولا أي أوامر."
                 android:textColor="@color/text_secondary"
                 android:textDirection="rtl"
                 android:textSize="12sp" />
@@ -58,6 +111,12 @@
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="10dp"
                 android:hint="مفتاح API اختياري (OpenRouter)"
+                app:boxBackgroundColor="@color/glass_fill_soft"
+                app:boxCornerRadiusBottomEnd="14dp"
+                app:boxCornerRadiusBottomStart="14dp"
+                app:boxCornerRadiusTopEnd="14dp"
+                app:boxCornerRadiusTopStart="14dp"
+                app:boxStrokeColor="@color/primary_cyan"
                 app:endIconMode="clear_text">
 
                 <com.google.android.material.textfield.TextInputEditText
@@ -74,49 +133,104 @@
                 android:layout_marginBottom="10dp"
                 android:text="💾 حفظ المفتاح" />
 
-            <Button
-                android:id="@+id/btn_clear_chat_history"
-                style="@style/Widget.Material3.Button.TextButton"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="26dp"
-                android:text="🗑️ مسح سجل محادثة المساعد الذكي"
-                android:textColor="@color/text_primary" />
+                android:background="@drawable/bg_glass_card"
+                android:orientation="vertical"
+                android:padding="4dp">
 
+                <Button
+                    android:id="@+id/btn_clear_chat_history"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="4dp"
+                    android:gravity="end|center_vertical"
+                    android:paddingVertical="12dp"
+                    android:text="🗑️ مسح سجل محادثة المساعد الذكي"
+                    android:textAllCaps="false"
+                    android:textColor="@color/text_primary"
+                    android:textDirection="rtl"
+                    android:textSize="13.5sp" />
+            </LinearLayout>
+
+            <!-- ============== قسم: الحالات المخصصة ============== -->
             <TextView
                 style="@style/SectionHeader"
                 android:text="🗂️ الحالات المخصصة" />
 
-            <Button
-                android:id="@+id/btn_export"
-                style="@style/Widget.Material3.Button.TextButton"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="14dp"
-                android:text="⬇️ تصدير نسخة احتياطية من حالاتي"
-                android:textColor="@color/text_primary" />
-
-            <Button
-                android:id="@+id/btn_clear_all"
-                style="@style/Widget.Material3.Button.TextButton"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="26dp"
-                android:text="🗑️ مسح كل الحالات المخصصة"
-                android:textColor="@color/accent_red" />
+                android:background="@drawable/bg_glass_card"
+                android:orientation="vertical"
+                android:padding="4dp">
 
+                <Button
+                    android:id="@+id/btn_export"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="4dp"
+                    android:gravity="end|center_vertical"
+                    android:paddingVertical="12dp"
+                    android:text="⬇️ تصدير نسخة احتياطية من حالاتي"
+                    android:textAllCaps="false"
+                    android:textColor="@color/text_primary"
+                    android:textDirection="rtl"
+                    android:textSize="13.5sp" />
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginHorizontal="10dp"
+                    android:background="@color/glass_border_soft" />
+
+                <Button
+                    android:id="@+id/btn_clear_all"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="4dp"
+                    android:gravity="end|center_vertical"
+                    android:paddingVertical="12dp"
+                    android:text="🗑️ مسح كل الحالات المخصصة"
+                    android:textAllCaps="false"
+                    android:textColor="@color/accent_red"
+                    android:textDirection="rtl"
+                    android:textSize="13.5sp" />
+            </LinearLayout>
+
+            <!-- ============== قسم: عن التطبيق ============== -->
             <TextView
                 style="@style/SectionHeader"
                 android:text="ℹ️ عن التطبيق" />
 
-            <Button
-                android:id="@+id/btn_about"
-                style="@style/Widget.Material3.Button.TextButton"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="8dp"
-                android:text="نبذة عن التطبيق والإصدار"
-                android:textColor="@color/text_primary" />
+                android:layout_marginBottom="20dp"
+                android:background="@drawable/bg_glass_card"
+                android:orientation="vertical"
+                android:padding="4dp">
+
+                <Button
+                    android:id="@+id/btn_about"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="4dp"
+                    android:gravity="end|center_vertical"
+                    android:paddingVertical="12dp"
+                    android:text="نبذة عن التطبيق والإصدار"
+                    android:textAllCaps="false"
+                    android:textColor="@color/text_primary"
+                    android:textDirection="rtl"
+                    android:textSize="13.5sp" />
+            </LinearLayout>
 
         </LinearLayout>
     </ScrollView>

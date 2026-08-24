@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- ============================================================================
+     شاشة المساعد الذكي — إعادة بناء كاملة: رأس رفيع مسطح، تلميح مصدر بسيط
+     غير ملفت، وقاعدة إدخال سفلية موحّدة بنفس أسلوب "الرصيف" في الشاشة
+     الرئيسية (دائرة إرسال + حقل كبسولي)، بدل شريط الإدخال القديم البسيط.
+     ============================================================================ -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
@@ -19,13 +24,14 @@
         android:id="@+id/mode_hint"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_margin="16dp"
-        android:layout_marginBottom="4dp"
+        android:layout_margin="12dp"
+        android:layout_marginBottom="2dp"
         android:background="@drawable/bg_glass_card_soft"
         android:gravity="center"
         android:padding="10dp"
         android:text="🤖 يعمل حاليًا بالوضع المجاني الجاهز (بدون مفتاح). يمكنك إضافة مفتاح OpenRouter اختياري من الإعدادات لتجربة نموذج بديل."
         android:textColor="@color/text_secondary"
+        android:textDirection="rtl"
         android:textSize="11.5sp"
         android:visibility="visible" />
 
@@ -33,7 +39,7 @@
         android:id="@+id/quick_prompts_scroll"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
+        android:layout_marginTop="6dp"
         android:paddingHorizontal="12dp"
         android:scrollbars="none"
         android:visibility="gone">
@@ -51,7 +57,8 @@
         android:layout_height="0dp"
         android:layout_weight="1"
         android:clipToPadding="false"
-        android:padding="12dp" />
+        android:paddingHorizontal="14dp"
+        android:paddingTop="10dp" />
 
     <LinearLayout
         android:id="@+id/typing_indicator"
@@ -59,8 +66,8 @@
         android:layout_height="wrap_content"
         android:gravity="center_vertical|end"
         android:orientation="horizontal"
-        android:paddingHorizontal="16dp"
-        android:paddingBottom="6dp"
+        android:paddingHorizontal="18dp"
+        android:paddingBottom="8dp"
         android:visibility="gone">
 
         <TextView
@@ -81,57 +88,66 @@
 
             <View
                 android:id="@+id/typing_dot_1"
-                android:layout_width="7dp"
-                android:layout_height="7dp"
+                android:layout_width="6dp"
+                android:layout_height="6dp"
                 android:layout_marginStart="3dp"
                 android:background="@drawable/dot_accent" />
 
             <View
                 android:id="@+id/typing_dot_2"
-                android:layout_width="7dp"
-                android:layout_height="7dp"
+                android:layout_width="6dp"
+                android:layout_height="6dp"
                 android:layout_marginStart="3dp"
                 android:background="@drawable/dot_accent" />
 
             <View
                 android:id="@+id/typing_dot_3"
-                android:layout_width="7dp"
-                android:layout_height="7dp"
+                android:layout_width="6dp"
+                android:layout_height="6dp"
                 android:layout_marginStart="3dp"
                 android:background="@drawable/dot_accent" />
         </LinearLayout>
     </LinearLayout>
 
+    <!-- ============== قاعدة الإدخال السفلية الموحّدة ============== -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:background="@drawable/bg_header_container"
+        android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:padding="10dp">
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="10dp">
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/btn_send"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_width="42dp"
+            android:layout_height="42dp"
+            android:layout_marginStart="8dp"
             android:contentDescription="إرسال"
             android:src="@drawable/ic_send"
             app:backgroundTint="@color/primary_cyan"
-            app:fabSize="mini"
+            app:borderWidth="0dp"
+            app:elevation="0dp"
+            app:fabCustomSize="42dp"
+            app:maxImageSize="18dp"
+            app:pressedTranslationZ="2dp"
             app:tint="@color/white" />
 
         <com.google.android.material.textfield.TextInputLayout
             style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="8dp"
             android:layout_weight="1"
             android:hint="اسأل عن حالة، عرض، أو أي استفسار طبي..."
             app:boxBackgroundColor="@color/glass_fill_soft"
-            app:boxCornerRadiusBottomEnd="18dp"
-            app:boxCornerRadiusBottomStart="18dp"
-            app:boxCornerRadiusTopEnd="18dp"
-            app:boxCornerRadiusTopStart="18dp"
+            app:boxCornerRadiusBottomEnd="22dp"
+            app:boxCornerRadiusBottomStart="22dp"
+            app:boxCornerRadiusTopEnd="22dp"
+            app:boxCornerRadiusTopStart="22dp"
             app:boxStrokeColor="@color/primary_cyan"
-            app:hintTextColor="@color/text_secondary">
+            app:boxStrokeWidth="1dp"
+            app:hintTextColor="@color/text_tertiary">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/chat_input"
@@ -141,7 +157,8 @@
                 android:inputType="textMultiLine"
                 android:maxLines="4"
                 android:textColor="@color/text_primary"
-                android:textDirection="rtl" />
+                android:textDirection="rtl"
+                android:textSize="14sp" />
         </com.google.android.material.textfield.TextInputLayout>
     </LinearLayout>
 </LinearLayout>

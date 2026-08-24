@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- فقاعة رسالة الدردشة — إعادة بناء: رسالة المستخدم في فقاعة بيج فاتحة،
+     ورد المساعد كنص مباشر بدون فقاعة (بنفس أسلوب Claude)، مع شارة مصدر
+     واضحة أسفل كل رد يستند لمصدر خارجي. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginBottom="16dp"
+    android:layout_marginBottom="20dp"
     android:orientation="horizontal">
 
     <LinearLayout
@@ -17,7 +20,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="end"
-            android:layout_marginBottom="4dp"
+            android:layout_marginBottom="5dp"
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
@@ -37,7 +40,8 @@
                 android:layout_marginEnd="6dp"
                 android:textColor="@color/text_secondary"
                 android:textDirection="rtl"
-                android:textSize="11sp" />
+                android:textSize="11sp"
+                android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/bubble_avatar"
@@ -53,7 +57,8 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="end"
-            android:maxWidth="290dp"
+            android:lineSpacingExtra="3dp"
+            android:maxWidth="300dp"
             android:padding="13dp"
             android:textColor="@color/text_primary"
             android:textDirection="rtl"
@@ -69,10 +74,10 @@
             android:clickable="true"
             android:focusable="true"
             android:foreground="?attr/selectableItemBackground"
-            android:maxWidth="290dp"
+            android:maxWidth="300dp"
             android:paddingHorizontal="10dp"
             android:paddingVertical="6dp"
-            android:textColor="@color/primary_cyan"
+            android:textColor="@color/primary_cyan_dark"
             android:textDirection="rtl"
             android:textSize="10.5sp"
             android:visibility="gone" />
@@ -81,6 +86,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="end"
+            android:layout_marginTop="2dp"
             android:orientation="horizontal">
 
             <Button
@@ -91,7 +97,7 @@
                 android:text="🔄 إعادة المحاولة"
                 android:textAllCaps="false"
                 android:textColor="@color/text_secondary"
-                android:textSize="12sp"
+                android:textSize="11.5sp"
                 android:visibility="gone" />
 
             <Button
@@ -102,7 +108,7 @@
                 android:text="📋 نسخ"
                 android:textAllCaps="false"
                 android:textColor="@color/text_secondary"
-                android:textSize="12sp"
+                android:textSize="11.5sp"
                 android:visibility="gone" />
 
             <Button
@@ -112,8 +118,8 @@
                 android:layout_height="wrap_content"
                 android:text="➕ حفظ كحالة جديدة"
                 android:textAllCaps="false"
-                android:textColor="@color/primary_cyan"
-                android:textSize="12sp"
+                android:textColor="@color/primary_cyan_dark"
+                android:textSize="11.5sp"
                 android:visibility="gone" />
         </LinearLayout>
     </LinearLayout>

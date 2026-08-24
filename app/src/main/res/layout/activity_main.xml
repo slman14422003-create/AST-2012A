@@ -1,87 +1,483 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- ============================================================================
+     الشاشة الرئيسية — إعادة بناء كاملة من الصفر بأسلوب Claude:
+     شريط علوي رفيع شبه شفاف + منطقة محتوى مرنة (حالة ترحيب فارغة أو نتائج)
+     + "رصيف" سفلي ثابت يحوي اختصارات التنقل ثم شريط البحث نفسه، بدل الرأس
+     الزجاجي الضخم القديم اللي كان شريط البحث فيه أعلى الشاشة.
+     ============================================================================ -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/bg_app_gradient">
+    android:background="@drawable/bg_app_gradient"
+    android:orientation="vertical">
 
-    <LinearLayout
+    <!-- ============== شريط علوي رفيع ============== -->
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:orientation="vertical">
+        android:layout_height="56dp"
+        android:paddingHorizontal="6dp"
+        app:contentInsetStart="10dp"
+        app:menu="@menu/menu_main">
 
-        <!-- الرأس الزجاجي: شريط علوي + شريط بحث زجاجي + شرائح تنقل سريعة،
-             كل شيء عائم فوق التدرج الخلفي بإحساس Glassmorphism موحّد. -->
         <LinearLayout
-            android:layout_width="match_parent"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:background="@drawable/bg_header_container"
-            android:orientation="vertical"
-            android:paddingBottom="14dp">
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
-            <com.google.android.material.appbar.MaterialToolbar
-                android:id="@+id/toolbar"
+            <View
+                android:layout_width="8dp"
+                android:layout_height="8dp"
+                android:layout_marginEnd="8dp"
+                android:background="@drawable/dot_accent" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:letterSpacing="0.01"
+                android:text="AST-2012A"
+                android:textColor="@color/text_primary"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:text="· Clinical Master"
+                android:textColor="@color/text_tertiary"
+                android:textSize="12sp" />
+        </LinearLayout>
+    </com.google.android.material.appbar.MaterialToolbar>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/glass_border_soft" />
+
+    <!-- ============== منطقة المحتوى (مرنة) ============== -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <!-- حالة فارغة: ترحيب بأسلوب Claude Home + أمثلة + عمليات بحث سابقة -->
+        <ScrollView
+            android:id="@+id/empty_hint_container"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:fillViewport="true"
+            android:scrollbars="none">
+
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="?attr/actionBarSize"
-                android:paddingHorizontal="4dp"
-                app:contentInsetStart="12dp"
-                app:menu="@menu/menu_main">
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:minHeight="360dp"
+                android:orientation="vertical"
+                android:paddingHorizontal="28dp"
+                android:paddingVertical="32dp">
 
-                <LinearLayout
+                <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
+                    android:layout_marginBottom="14dp"
+                    android:alpha="0.9"
+                    android:text="🩺"
+                    android:textSize="40sp" />
 
-                    <View
-                        android:layout_width="9dp"
-                        android:layout_height="9dp"
-                        android:layout_marginEnd="8dp"
-                        android:background="@drawable/dot_accent" />
+                <TextView
+                    android:id="@+id/empty_hint"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:lineSpacingExtra="5dp"
+                    android:text="بماذا تفكر؟&#10;ابحث عن أي حالة، نمط، أو مشكلة تقنية للحصول على التوصيف الدقيق."
+                    android:textColor="@color/text_secondary"
+                    android:textDirection="rtl"
+                    android:textSize="14sp" />
+
+                <LinearLayout
+                    android:id="@+id/recent_searches_container"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="26dp"
+                        android:layout_marginBottom="8dp"
+                        android:text="🕘 عمليات بحث سابقة"
+                        android:textColor="@color/text_tertiary"
+                        android:textDirection="rtl"
+                        android:textSize="11sp" />
+
+                    <HorizontalScrollView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:scrollbars="none">
+
+                        <LinearLayout
+                            android:id="@+id/recent_searches_row"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal" />
+                    </HorizontalScrollView>
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="26dp"
+                    android:layout_marginBottom="8dp"
+                    android:text="جرّب أحد هذه الأمثلة"
+                    android:textColor="@color/text_tertiary"
+                    android:textDirection="rtl"
+                    android:textSize="11sp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:orientation="horizontal">
 
                     <LinearLayout
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:orientation="vertical">
 
-                        <TextView
+                        <LinearLayout
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:letterSpacing="0.02"
-                            android:text="AST-2012A"
-                            android:textColor="@color/text_primary"
-                            android:textSize="17sp"
-                            android:textStyle="bold" />
+                            android:layout_marginBottom="8dp"
+                            android:orientation="horizontal">
 
-                        <TextView
+                            <TextView
+                                android:id="@+id/chip_suggestion_1"
+                                style="@style/SuggestionChip"
+                                android:text="عرق النسا" />
+
+                            <TextView
+                                android:id="@+id/chip_suggestion_2"
+                                style="@style/SuggestionChip"
+                                android:text="الكتف المتجمد" />
+                        </LinearLayout>
+
+                        <LinearLayout
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Clinical Master"
-                            android:textColor="@color/text_secondary"
-                            android:textSize="10.5sp" />
+                            android:gravity="center"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:id="@+id/chip_suggestion_3"
+                                style="@style/SuggestionChip"
+                                android:text="النفق الرسغي" />
+
+                            <TextView
+                                android:id="@+id/chip_suggestion_4"
+                                style="@style/SuggestionChip"
+                                android:text="اسفل الظهر" />
+                        </LinearLayout>
                     </LinearLayout>
                 </LinearLayout>
-            </com.google.android.material.appbar.MaterialToolbar>
+            </LinearLayout>
+        </ScrollView>
+
+        <!-- حالة النتائج / الرد المباشر من المساعد -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/result_note"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:padding="10dp"
+                android:textColor="@color/accent_green"
+                android:textDirection="rtl"
+                android:textSize="12.5sp"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/suggestion_note"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/bg_glass_chip"
+                android:clickable="true"
+                android:focusable="true"
+                android:foreground="?attr/selectableItemBackground"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="9dp"
+                android:textColor="@color/accent_gold"
+                android:textDirection="rtl"
+                android:textSize="12.5sp"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/btn_ask_ai_fallback"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/bg_chip_accent"
+                android:clickable="true"
+                android:focusable="true"
+                android:foreground="?attr/selectableItemBackground"
+                android:paddingHorizontal="18dp"
+                android:paddingVertical="10dp"
+                android:text="🤖 اسأل المساعد الذكي بدل ذلك"
+                android:textColor="@color/white"
+                android:textDirection="rtl"
+                android:textSize="13sp"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:id="@+id/ai_inline_loading"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:orientation="horizontal"
+                android:padding="16dp"
+                android:visibility="gone">
+
+                <ProgressBar
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:indeterminateTint="@color/primary_cyan" />
+
+                <TextView
+                    android:id="@+id/ai_inline_loading_text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="المساعد الذكي يفكر..."
+                    android:textColor="@color/text_secondary"
+                    android:textDirection="rtl"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <ScrollView
+                android:id="@+id/ai_inline_answer_scroll"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="14dp"
+                    android:orientation="vertical"
+                    android:paddingTop="4dp">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="10dp"
+                        android:gravity="end"
+                        android:text="🤖 رد المساعد الذكي"
+                        android:textColor="@color/primary_cyan_dark"
+                        android:textDirection="rtl"
+                        android:textSize="12.5sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/ai_inline_answer_text"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="end"
+                        android:lineSpacingExtra="3dp"
+                        android:textColor="@color/text_primary"
+                        android:textDirection="rtl"
+                        android:textSize="14sp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginTop="16dp"
+                        android:background="@color/glass_border_soft" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:orientation="horizontal">
+
+                        <Button
+                            android:id="@+id/ai_inline_save_case"
+                            style="@style/Widget.Material3.Button.TextButton"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="➕ حفظ كحالة"
+                            android:textColor="@color/primary_cyan_dark"
+                            android:textSize="12sp" />
+
+                        <Button
+                            android:id="@+id/ai_inline_open_chat"
+                            style="@style/Widget.Material3.Button.TextButton"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="💬 متابعة المحادثة"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+                </LinearLayout>
+            </ScrollView>
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/results_list"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:clipToPadding="false"
+                android:paddingHorizontal="12dp"
+                android:paddingTop="6dp"
+                android:paddingBottom="12dp" />
+
+        </LinearLayout>
+    </FrameLayout>
+
+    <!-- ============== الرصيف السفلي الثابت: اختصارات + شريط البحث ============== -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_header_container"
+        android:orientation="vertical"
+        android:paddingTop="10dp">
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="10dp"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingHorizontal="14dp">
+
+                <TextView
+                    android:id="@+id/btn_ai_assistant"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="4dp"
+                    android:background="@drawable/bg_chip_accent"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:foreground="?attr/selectableItemBackground"
+                    android:paddingHorizontal="16dp"
+                    android:paddingVertical="9dp"
+                    android:text="🤖 المساعد الذكي"
+                    android:textColor="@color/white"
+                    android:textDirection="rtl"
+                    android:textSize="12.5sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/btn_favorites"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="4dp"
+                    android:background="@drawable/bg_glass_chip"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:foreground="?attr/selectableItemBackground"
+                    android:paddingHorizontal="16dp"
+                    android:paddingVertical="9dp"
+                    android:text="⭐ المفضلة"
+                    android:textColor="@color/accent_gold"
+                    android:textDirection="rtl"
+                    android:textSize="12.5sp" />
+
+                <TextView
+                    android:id="@+id/btn_my_cases"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="4dp"
+                    android:background="@drawable/bg_glass_chip"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:foreground="?attr/selectableItemBackground"
+                    android:paddingHorizontal="16dp"
+                    android:paddingVertical="9dp"
+                    android:text="🗂️ حالاتي"
+                    android:textColor="@color/text_secondary"
+                    android:textDirection="rtl"
+                    android:textSize="12.5sp" />
+
+                <TextView
+                    android:id="@+id/btn_encyclopedia"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="4dp"
+                    android:background="@drawable/bg_glass_chip"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:foreground="?attr/selectableItemBackground"
+                    android:paddingHorizontal="16dp"
+                    android:paddingVertical="9dp"
+                    android:text="📖 موسوعة الأنماط"
+                    android:textColor="@color/text_secondary"
+                    android:textDirection="rtl"
+                    android:textSize="12.5sp" />
+            </LinearLayout>
+        </HorizontalScrollView>
+
+        <!-- شريط البحث نفسه: صف واحد ثابت أسفل الشاشة، زر الإضافة + الحقل -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="12dp"
+            android:paddingBottom="12dp">
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/fab_add"
+                android:layout_width="42dp"
+                android:layout_height="42dp"
+                android:layout_marginStart="8dp"
+                android:contentDescription="إضافة حالة جديدة"
+                android:src="@drawable/ic_add"
+                app:backgroundTint="@color/primary_cyan"
+                app:borderWidth="0dp"
+                app:elevation="0dp"
+                app:fabCustomSize="42dp"
+                app:maxImageSize="18dp"
+                app:pressedTranslationZ="2dp"
+                app:tint="@color/white" />
 
             <com.google.android.material.textfield.TextInputLayout
                 style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-                android:layout_width="match_parent"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginHorizontal="16dp"
-                android:layout_marginTop="6dp"
+                android:layout_weight="1"
                 android:hint="ابحث عن حالة، عرض، أو مشكلة..."
                 app:boxBackgroundColor="@color/glass_fill_soft"
-                app:boxCornerRadiusBottomEnd="18dp"
-                app:boxCornerRadiusBottomStart="18dp"
-                app:boxCornerRadiusTopEnd="18dp"
-                app:boxCornerRadiusTopStart="18dp"
+                app:boxCornerRadiusBottomEnd="22dp"
+                app:boxCornerRadiusBottomStart="22dp"
+                app:boxCornerRadiusTopEnd="22dp"
+                app:boxCornerRadiusTopStart="22dp"
                 app:boxStrokeColor="@color/primary_cyan"
+                app:boxStrokeWidth="1dp"
                 app:boxStrokeWidthFocused="1.6dp"
-                app:hintTextColor="@color/text_secondary"
+                app:hintTextColor="@color/text_tertiary"
                 app:startIconDrawable="@drawable/ic_search"
-                app:startIconTint="@color/primary_cyan"
+                app:startIconTint="@color/text_tertiary"
                 app:endIconMode="clear_text"
-                app:endIconTint="@color/text_secondary">
+                app:endIconTint="@color/text_tertiary">
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/search_field"
@@ -90,336 +486,10 @@
                     android:gravity="end"
                     android:inputType="text"
                     android:textColor="@color/text_primary"
-                    android:textDirection="rtl" />
+                    android:textDirection="rtl"
+                    android:textSize="14sp" />
             </com.google.android.material.textfield.TextInputLayout>
-
-            <HorizontalScrollView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:scrollbars="none">
-
-                <LinearLayout
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:paddingHorizontal="12dp">
-
-                    <TextView
-                        android:id="@+id/btn_favorites"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginHorizontal="4dp"
-                        android:background="@drawable/bg_glass_chip"
-                        android:clickable="true"
-                        android:focusable="true"
-                        android:foreground="?attr/selectableItemBackground"
-                        android:paddingHorizontal="16dp"
-                        android:paddingVertical="10dp"
-                        android:text="⭐ المفضلة"
-                        android:textColor="@color/accent_gold"
-                        android:textSize="13sp" />
-
-                    <TextView
-                        android:id="@+id/btn_my_cases"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginHorizontal="4dp"
-                        android:background="@drawable/bg_glass_chip"
-                        android:clickable="true"
-                        android:focusable="true"
-                        android:foreground="?attr/selectableItemBackground"
-                        android:paddingHorizontal="16dp"
-                        android:paddingVertical="10dp"
-                        android:text="🗂️ حالاتي"
-                        android:textColor="@color/primary_cyan"
-                        android:textSize="13sp" />
-
-                    <TextView
-                        android:id="@+id/btn_encyclopedia"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginHorizontal="4dp"
-                        android:background="@drawable/bg_glass_chip"
-                        android:clickable="true"
-                        android:focusable="true"
-                        android:foreground="?attr/selectableItemBackground"
-                        android:paddingHorizontal="16dp"
-                        android:paddingVertical="10dp"
-                        android:text="📖 موسوعة الأنماط"
-                        android:textColor="@color/primary_cyan"
-                        android:textSize="13sp" />
-
-                    <TextView
-                        android:id="@+id/btn_ai_assistant"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginHorizontal="4dp"
-                        android:background="@drawable/bg_chip_accent"
-                        android:clickable="true"
-                        android:focusable="true"
-                        android:foreground="?attr/selectableItemBackground"
-                        android:paddingHorizontal="16dp"
-                        android:paddingVertical="10dp"
-                        android:text="🤖 المساعد الذكي"
-                        android:textColor="@color/white"
-                        android:textSize="13sp" />
-                </LinearLayout>
-            </HorizontalScrollView>
         </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/empty_hint_container"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="26dp"
-            android:gravity="center"
-            android:orientation="vertical"
-            android:paddingHorizontal="30dp">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                android:alpha="0.9"
-                android:text="🩺"
-                android:textSize="44sp" />
-
-            <TextView
-                android:id="@+id/empty_hint"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="center"
-                android:lineSpacingExtra="4dp"
-                android:text="المنظومة السريرية الضخمة جاهزة الآن.\nابحث عن أي حالة، نمط، أو مشكلة تقنية للحصول على التوصيف الدقيق."
-                android:textColor="@color/text_secondary"
-                android:textSize="13.5sp" />
-
-            <LinearLayout
-                android:id="@+id/recent_searches_container"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:visibility="gone">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="20dp"
-                    android:layout_marginBottom="8dp"
-                    android:text="🕘 عمليات بحث سابقة:"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="11sp" />
-
-                <HorizontalScrollView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:scrollbars="none">
-
-                    <LinearLayout
-                        android:id="@+id/recent_searches_row"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal" />
-                </HorizontalScrollView>
-            </LinearLayout>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
-                android:layout_marginBottom="8dp"
-                android:text="جرّب أحد هذه الأمثلة:"
-                android:textColor="@color/text_secondary"
-                android:textSize="11sp" />
-
-            <HorizontalScrollView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:scrollbars="none">
-
-                <LinearLayout
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal">
-
-                    <TextView
-                        android:id="@+id/chip_suggestion_1"
-                        style="@style/SuggestionChip"
-                        android:text="عرق النسا" />
-
-                    <TextView
-                        android:id="@+id/chip_suggestion_2"
-                        style="@style/SuggestionChip"
-                        android:text="الكتف المتجمد" />
-
-                    <TextView
-                        android:id="@+id/chip_suggestion_3"
-                        style="@style/SuggestionChip"
-                        android:text="النفق الرسغي" />
-
-                    <TextView
-                        android:id="@+id/chip_suggestion_4"
-                        style="@style/SuggestionChip"
-                        android:text="اسفل الظهر" />
-                </LinearLayout>
-            </HorizontalScrollView>
-        </LinearLayout>
-
-        <TextView
-            android:id="@+id/result_note"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:padding="8dp"
-            android:textColor="@color/accent_green"
-            android:visibility="gone" />
-
-        <TextView
-            android:id="@+id/suggestion_note"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:layout_marginBottom="8dp"
-            android:background="@drawable/bg_glass_chip"
-            android:clickable="true"
-            android:focusable="true"
-            android:foreground="?attr/selectableItemBackground"
-            android:paddingHorizontal="16dp"
-            android:paddingVertical="9dp"
-            android:textColor="@color/accent_gold"
-            android:textDirection="rtl"
-            android:textSize="12.5sp"
-            android:visibility="gone" />
-
-        <TextView
-            android:id="@+id/btn_ask_ai_fallback"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:layout_marginBottom="8dp"
-            android:background="@drawable/bg_chip_accent"
-            android:clickable="true"
-            android:focusable="true"
-            android:foreground="?attr/selectableItemBackground"
-            android:paddingHorizontal="18dp"
-            android:paddingVertical="10dp"
-            android:text="🤖 اسأل المساعد الذكي بدل ذلك"
-            android:textColor="@color/white"
-            android:textSize="13sp"
-            android:visibility="gone" />
-
-        <LinearLayout
-            android:id="@+id/ai_inline_loading"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:orientation="horizontal"
-            android:padding="14dp"
-            android:visibility="gone">
-
-            <ProgressBar
-                android:layout_width="16dp"
-                android:layout_height="16dp"
-                android:indeterminateTint="@color/primary_cyan" />
-
-            <TextView
-                android:id="@+id/ai_inline_loading_text"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:text="المساعد الذكي يفكر..."
-                android:textColor="@color/text_secondary"
-                android:textDirection="rtl"
-                android:textSize="12sp" />
-        </LinearLayout>
-
-        <ScrollView
-            android:id="@+id/ai_inline_answer_scroll"
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1"
-            android:visibility="gone">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:background="@drawable/bg_glass_card"
-                android:layout_margin="14dp"
-                android:orientation="vertical"
-                android:padding="16dp">
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="8dp"
-                    android:gravity="end"
-                    android:text="🤖 رد المساعد الذكي"
-                    android:textColor="@color/primary_cyan"
-                    android:textDirection="rtl"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:id="@+id/ai_inline_answer_text"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="end"
-                    android:textColor="@color/text_primary"
-                    android:textDirection="rtl"
-                    android:textSize="13.5sp" />
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    android:orientation="horizontal">
-
-                    <Button
-                        android:id="@+id/ai_inline_save_case"
-                        style="@style/Widget.Material3.Button.TextButton"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="➕ حفظ كحالة"
-                        android:textColor="@color/primary_cyan"
-                        android:textSize="12sp" />
-
-                    <Button
-                        android:id="@+id/ai_inline_open_chat"
-                        style="@style/Widget.Material3.Button.TextButton"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="💬 متابعة المحادثة"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="12sp" />
-                </LinearLayout>
-            </LinearLayout>
-        </ScrollView>
-
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/results_list"
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1"
-            android:clipToPadding="false"
-            android:paddingHorizontal="12dp"
-            android:paddingTop="8dp"
-            android:paddingBottom="90dp" />
-
     </LinearLayout>
 
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/fab_add"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|start"
-        android:layout_margin="20dp"
-        android:contentDescription="إضافة حالة جديدة"
-        android:src="@drawable/ic_add"
-        app:backgroundTint="@color/primary_cyan"
-        app:elevation="6dp"
-        app:pressedTranslationZ="12dp"
-        app:tint="@color/white" />
-
-</androidx.coordinatorlayout.widget.CoordinatorLayout>
+</LinearLayout>
