@@ -17,7 +17,6 @@
     <!-- خط النبضة الكهربائية (Pulse/EMS waveform) -->
     <path
         android:pathData="M27,55 L40,55 L45,40 L53,70 L60,48 L65,55 L81,55"
-        android:strokeColor="#FFFFFF"
         android:strokeWidth="4.6"
         android:strokeLineCap="round"
         android:strokeLineJoin="round"
