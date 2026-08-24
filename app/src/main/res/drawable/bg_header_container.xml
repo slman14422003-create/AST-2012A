@@ -1,7 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<shape xmlns:android="http://schemas.android.com/apk/res/android">
-    <solid android:color="@color/surface_dark" />
-    <corners
-        android:bottomLeftRadius="24dp"
-        android:bottomRightRadius="24dp" />
-</shape>
+<!-- رأس الشاشة الزجاجي: أغمق قليلًا من البطاقات العادية عشان يميّز منطقة
+     التنقل العلوية، بحواف سفلية دائرية كبيرة وحدود زجاجية سفلية خفيفة. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/glass_fill_strong" />
+            <corners
+                android:bottomLeftRadius="28dp"
+                android:bottomRightRadius="28dp" />
+        </shape>
+    </item>
+    <item android:width="1dp" android:height="1dp" android:gravity="bottom">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/glass_border" />
+        </shape>
+    </item>
+</layer-list>
