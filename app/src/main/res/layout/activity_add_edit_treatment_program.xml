@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_app_gradient"
+    android:orientation="vertical">
+
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="@drawable/bg_header_container"
+        android:title="➕ برنامج علاج فيزيائي جديد"
+        android:titleTextColor="@color/text_primary"
+        app:navigationIcon="@drawable/ic_close" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="14dp"
+                android:gravity="end"
+                android:text="خطة علاج طبيعي متكاملة (مش مرتبطة بجهاز معيّن) — تقدر تستخدمها كمرجع أو تطبعها/تشاركها مع المريض."
+                android:textColor="@color/text_secondary"
+                android:textDirection="rtl"
+                android:textSize="12sp" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:hint="عنوان البرنامج *">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/tp_title"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textDirection="rtl" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:hint="التشخيص (اختياري)">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/tp_diagnosis"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textDirection="rtl" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:hint="الأهداف العلاجية (اختياري)">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/tp_goals"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="top"
+                    android:minLines="2"
+                    android:textDirection="rtl" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:hint="مراحل البرنامج / خطة الجلسات (اختياري)">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/tp_phases"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="top"
+                    android:minLines="3"
+                    android:textDirection="rtl" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:hint="التمارين الموصى بها (اختياري)">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/tp_exercises"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="top"
+                    android:minLines="3"
+                    android:textDirection="rtl" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:hint="احتياطات وتحذيرات (اختياري)">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/tp_precautions"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="top"
+                    android:minLines="2"
+                    android:textDirection="rtl" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:hint="ملاحظات إضافية (اختياري)">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/tp_notes"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="top"
+                    android:minLines="2"
+                    android:textDirection="rtl" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <Button
+                android:id="@+id/btn_submit_program"
+                style="@style/PrimaryButton"
+                android:layout_marginBottom="8dp"
+                android:text="💾 حفظ البرنامج" />
+
+            <Button
+                android:id="@+id/btn_cancel_program"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="24dp"
+                android:text="إلغاء"
+                android:textColor="@color/text_secondary" />
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

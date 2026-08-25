@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_app_gradient"
+    android:orientation="vertical">
+
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="@drawable/bg_header_container"
+        android:title="➕ إضافة مريض"
+        android:titleTextColor="@color/text_primary"
+        app:navigationIcon="@drawable/ic_close" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:hint="اسم المريض *">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/pf_name"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textDirection="rtl" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:hint="رقم التواصل (اختياري)">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/pf_phone"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="phone"
+                    android:textDirection="ltr" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:hint="ملاحظات عامة (اختياري)">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/pf_notes"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="top"
+                    android:minLines="3"
+                    android:textDirection="rtl" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:background="@drawable/bg_glass_card_soft"
+                android:gravity="end"
+                android:padding="12dp"
+                android:text="🚧 قريبًا: تسجيل الجلسات، التاريخ العلاجي، ومتابعة الحساب المالي (الديون) لكل مريض من صفحة ملفه."
+                android:textColor="@color/text_secondary"
+                android:textDirection="rtl"
+                android:textSize="11.5sp" />
+
+            <Button
+                android:id="@+id/btn_submit_patient"
+                style="@style/PrimaryButton"
+                android:layout_marginBottom="8dp"
+                android:text="💾 حفظ بيانات المريض" />
+
+            <Button
+                android:id="@+id/btn_cancel_patient"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="24dp"
+                android:text="إلغاء"
+                android:textColor="@color/text_secondary" />
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

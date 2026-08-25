@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_app_gradient"
+    android:orientation="vertical">
+
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="@drawable/bg_header_container"
+        android:title="ملف المريض"
+        android:titleTextColor="@color/text_primary"
+        app:navigationIcon="@drawable/ic_close" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <!-- بطاقة رأس المريض -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="20dp"
+                android:background="@drawable/bg_glass_card"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:padding="20dp">
+
+                <View
+                    android:layout_width="64dp"
+                    android:layout_height="64dp"
+                    android:layout_marginBottom="12dp"
+                    android:background="@drawable/bg_avatar_circle" />
+
+                <TextView
+                    android:id="@+id/detail_patient_name"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:textColor="@color/text_primary"
+                    android:textDirection="rtl"
+                    android:textSize="17sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/detail_patient_phone"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:gravity="center"
+                    android:textColor="@color/text_tertiary"
+                    android:textDirection="ltr"
+                    android:textSize="12.5sp" />
+
+                <TextView
+                    android:id="@+id/detail_patient_notes"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:gravity="end"
+                    android:textColor="@color/text_secondary"
+                    android:textDirection="rtl"
+                    android:textSize="13sp"
+                    android:visibility="gone" />
+            </LinearLayout>
+
+            <!-- أقسام قريبًا -->
+            <include layout="@layout/item_coming_soon_section"
+                android:id="@+id/section_sessions" />
+            <include layout="@layout/item_coming_soon_section"
+                android:id="@+id/section_history" />
+            <include layout="@layout/item_coming_soon_section"
+                android:id="@+id/section_billing" />
+
+            <Button
+                android:id="@+id/btn_edit_patient"
+                style="@style/GlassButton"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="10dp"
+                android:text="✏️ تعديل بيانات المريض" />
+
+            <Button
+                android:id="@+id/btn_delete_patient"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="24dp"
+                android:text="🗑️ حذف المريض"
+                android:textColor="@color/accent_red" />
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

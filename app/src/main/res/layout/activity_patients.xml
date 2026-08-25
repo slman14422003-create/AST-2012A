@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_app_gradient"
+    android:orientation="vertical">
+
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="@drawable/bg_header_container"
+        android:title="🧑‍⚕️ المرضى"
+        android:titleTextColor="@color/text_primary"
+        app:navigationIcon="@drawable/ic_close" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_glass_card_soft"
+        android:layout_margin="12dp"
+        android:layout_marginBottom="4dp"
+        android:gravity="end"
+        android:padding="10dp"
+        android:text="🚧 ملف المريض قيد التطوير: الجلسات والتاريخ العلاجي والحساب المالي قادمة قريبًا. حاليًا يمكنك حفظ بيانات المريض الأساسية فقط."
+        android:textColor="@color/text_secondary"
+        android:textDirection="rtl"
+        android:textSize="11.5sp" />
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <TextView
+            android:id="@+id/patients_empty_hint"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:gravity="center"
+            android:padding="32dp"
+            android:text="🧑‍⚕️&#10;&#10;لا يوجد مرضى محفوظين بعد.&#10;اضغط + لإضافة أول مريض."
+            android:textColor="@color/text_tertiary"
+            android:textDirection="rtl"
+            android:textSize="13.5sp"
+            android:visibility="gone" />
+
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+
+            <LinearLayout
+                android:id="@+id/patients_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp" />
+        </ScrollView>
+    </FrameLayout>
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_add_patient"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end|bottom"
+        android:layout_margin="20dp"
+        android:contentDescription="إضافة مريض"
+        android:src="@drawable/ic_add"
+        app:tint="@color/white" />
+</LinearLayout>

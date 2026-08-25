@@ -162,6 +162,52 @@
                 android:layout_marginBottom="10dp"
                 android:text="💾 حفظ المفتاح" />
 
+            <!-- تعليمات مخصّصة للمساعد الذكي: المستخدم يقدر "يدرّبه" حسب
+                 طلبه (أسلوب الإجابة، تركيز معيّن، تفضيلات...) وتُضاف تلقائيًا
+                 لتعليمات النظام في كل محادثة (المحادثة الكاملة والرد السريع). -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="6dp"
+                android:gravity="end"
+                android:text="🎓 تعليمات مخصّصة للمساعد الذكي (اختياري)"
+                android:textColor="@color/text_primary"
+                android:textDirection="rtl"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:gravity="end"
+                android:text="مثال: ركّز دايمًا على التمارين المنزلية، أو اجعل الإجابات مختصرة جدًا بنقاط، أو اسأل عن عمر المريض قبل أي اقتراح."
+                android:textColor="@color/text_tertiary"
+                android:textDirection="rtl"
+                android:textSize="11sp" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:hint="تعليماتك للمساعد الذكي">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/ai_custom_instructions_field"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="top"
+                    android:minLines="3"
+                    android:textDirection="rtl" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <Button
+                android:id="@+id/btn_save_instructions"
+                style="@style/GlassButton"
+                android:layout_marginBottom="26dp"
+                android:text="✅ حفظ التعليمات" />
+
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

@@ -12,12 +12,14 @@
     android:background="@drawable/bg_app_gradient"
     android:orientation="vertical">
 
-    <!-- ============== شريط علوي رفيع ============== -->
+    <!-- ============== شريط علوي (Material 3 Top App Bar) ============== -->
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
-        android:layout_height="56dp"
+        android:layout_height="64dp"
+        android:background="@drawable/bg_header_container"
         android:paddingHorizontal="6dp"
+        android:elevation="2dp"
         app:contentInsetStart="10dp"
         app:menu="@menu/menu_main">
 
@@ -28,8 +30,8 @@
             android:orientation="horizontal">
 
             <View
-                android:layout_width="8dp"
-                android:layout_height="8dp"
+                android:layout_width="9dp"
+                android:layout_height="9dp"
                 android:layout_marginEnd="8dp"
                 android:background="@drawable/dot_accent" />
 
@@ -39,7 +41,7 @@
                 android:letterSpacing="0.01"
                 android:text="AST-2012A"
                 android:textColor="@color/text_primary"
-                android:textSize="16sp"
+                android:textSize="16.5sp"
                 android:textStyle="bold" />
 
             <TextView
@@ -190,9 +192,11 @@
 
         <!-- حالة النتائج / الرد المباشر من المساعد -->
         <LinearLayout
+            android:id="@+id/results_container"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:orientation="vertical">
+            android:orientation="vertical"
+            android:visibility="gone">
 
             <TextView
                 android:id="@+id/result_note"
@@ -451,6 +455,38 @@
                     android:paddingHorizontal="16dp"
                     android:paddingVertical="9dp"
                     android:text="🦴 دليل التشريح"
+                    android:textColor="@color/text_secondary"
+                    android:textDirection="rtl"
+                    android:textSize="12.5sp" />
+
+                <TextView
+                    android:id="@+id/btn_patients"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="4dp"
+                    android:background="@drawable/bg_glass_chip"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:foreground="?attr/selectableItemBackground"
+                    android:paddingHorizontal="16dp"
+                    android:paddingVertical="9dp"
+                    android:text="🧑‍⚕️ المرضى"
+                    android:textColor="@color/text_secondary"
+                    android:textDirection="rtl"
+                    android:textSize="12.5sp" />
+
+                <TextView
+                    android:id="@+id/btn_treatment_programs"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="4dp"
+                    android:background="@drawable/bg_glass_chip"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:foreground="?attr/selectableItemBackground"
+                    android:paddingHorizontal="16dp"
+                    android:paddingVertical="9dp"
+                    android:text="📋 برامج العلاج"
                     android:textColor="@color/text_secondary"
                     android:textDirection="rtl"
                     android:textSize="12.5sp" />
