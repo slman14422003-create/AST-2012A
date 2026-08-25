@@ -69,6 +69,15 @@ public class SettingsActivity extends AppCompatActivity {
         clearChatHistoryBtn.setOnClickListener(v -> confirmClearChatHistory());
         aboutBtn.setOnClickListener(v -> showAboutDialog());
 
+        TextInputEditText instructionsField = findViewById(R.id.ai_custom_instructions_field);
+        instructionsField.setText(AiPrompts.getCustomInstructions(this));
+        Button saveInstructionsBtn = findViewById(R.id.btn_save_instructions);
+        saveInstructionsBtn.setOnClickListener(v -> {
+            String text = instructionsField.getText() == null ? "" : instructionsField.getText().toString();
+            AiPrompts.setCustomInstructions(this, text);
+            Toast.makeText(this, "✅ تم حفظ تعليمات المساعد الذكي.", Toast.LENGTH_SHORT).show();
+        });
+
         permissionLauncher = registerForActivityResult(
                 new ActivityResultContracts.RequestPermission(),
                 granted -> {

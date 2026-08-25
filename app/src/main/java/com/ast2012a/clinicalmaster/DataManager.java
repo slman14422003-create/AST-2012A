@@ -215,6 +215,19 @@ public class DataManager {
         SYNONYMS.put("تيبس", new String[]{"تصلب", "stiffness"});
         SYNONYMS.put("استرخاء", new String[]{"استرخاء عضلي", "relaxation"});
         SYNONYMS.put("دوره دمويه", new String[]{"الدوره الدمويه", "circulation", "تروية"});
+        SYNONYMS.put("اصبع الزناد", new String[]{"إصبع الزناد", "trigger finger", "تيبس اصبع"});
+        SYNONYMS.put("دي كيرفان", new String[]{"de quervain", "التهاب غمد الوتر", "الم قاعدة الابهام"});
+        SYNONYMS.put("كوع لاعب الغولف", new String[]{"golfer's elbow", "التهاب اللقيمة الانسية", "الم داخل المرفق"});
+        SYNONYMS.put("اخيل", new String[]{"وتر اخيل", "achilles", "العرقوب", "خلف الكاحل"});
+        SYNONYMS.put("مثلث التوائم", new String[]{"trigeminal neuralgia", "الم الوجه الحاد"});
+        SYNONYMS.put("الغضروف الضلعي", new String[]{"costochondritis", "الم الصدر العضلي", "القفص الصدري"});
+        SYNONYMS.put("العجزي الحرقفي", new String[]{"sacroiliac", "si joint", "اسفل الظهر الجانبي"});
+        SYNONYMS.put("صداع الرقبه", new String[]{"cervicogenic headache", "صداع خلف الراس"});
+        SYNONYMS.put("الفخذ الجانبي", new String[]{"meralgia paresthetica", "تنميل الفخذ الخارجي"});
+        SYNONYMS.put("تململ الساقين", new String[]{"restless legs", "حركة الساق اللاإرادية"});
+        SYNONYMS.put("الرسغ", new String[]{"المعصم", "wrist", "النفق الرسغي", "carpal tunnel"});
+        SYNONYMS.put("قاع الحوض", new String[]{"pelvic floor", "عضلات الحوض"});
+        SYNONYMS.put("رباعية الرؤوس", new String[]{"quadriceps", "الفخذ الامامي"});
     }
 
     public static String normalize(String text) {
@@ -341,6 +354,17 @@ public class DataManager {
                 else if (fuzzyIncludes(titleWords, rawTerm)) { score += 12; termMatched = true; }
             }
             if (termMatched) matchedTerms++;
+        }
+
+        // تحسين ذكاء البحث: تعزيز إضافي لو العبارة الكاملة اللي كتبها
+        // المستخدم (مش كلمة بمفردها) موجودة حرفيًا في العنوان أو ضمن إحدى
+        // الكلمات المفتاحية - ده بيرفع الحالة الأدق دلاليًا لأعلى النتائج
+        // حتى لو حالات تانية جمعت نفس عدد الكلمات المطابقة بالمصادفة.
+        if (rawKeyword.length() > 2) {
+            if (normTitle.contains(rawKeyword)) score += 40;
+            for (String k : normKeywords) {
+                if (k.contains(rawKeyword)) { score += 30; break; }
+            }
         }
 
         // تعزيز بسيط للحالات المفضّلة عند المستخدم - تظهر أولًا عند تساوي درجة

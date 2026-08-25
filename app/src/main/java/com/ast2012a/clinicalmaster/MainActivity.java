@@ -31,6 +31,7 @@ public class MainActivity extends AppCompatActivity {
 
     private TextInputEditText searchField;
     private View emptyHintContainer;
+    private View resultsContainer;
     private LinearLayout recentSearchesContainer;
     private LinearLayout recentSearchesRow;
     private TextView resultNote;
@@ -47,14 +48,6 @@ public class MainActivity extends AppCompatActivity {
     private boolean showingFavorites = false;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
-    private static final String SYSTEM_PROMPT =
-            "أنت مساعد ذكي يساعد أخصائيي العلاج الطبيعي في استخدام جهاز التحفيز الكهربائي " +
-            "AST-2012A (أنماط TENS وEMS). أجب بإيجاز ووضوح وبدقة سريرية باللغة العربية، " +
-            "واذكر تحذيرات السلامة المهمة عند الحاجة. إذا زُوّدت ببروتوكولات موثقة من قاعدة " +
-            "بيانات الجهاز، اجعلها مرجعك الأساسي واقترح خطة علاج مستقرة بناءً عليها. لو السؤال " +
-            "غامض أو ينقصه تفاصيل مهمة (مكان الألم، حدة الأعراض، مدة المشكلة)، اسأل سؤال " +
-            "توضيحي واحد ومختصر قبل اقتراح بروتوكول كامل.";
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -62,9 +55,18 @@ public class MainActivity extends AppCompatActivity {
 
         MaterialToolbar toolbar = findViewById(R.id.toolbar);
         toolbar.setOnMenuItemClickListener(this::onToolbarItemClick);
+        syncThemeIcon(toolbar);
 
         searchField = findViewById(R.id.search_field);
         emptyHintContainer = findViewById(R.id.empty_hint_container);
+        // ملحوظة إصلاح كراش/عطل تفاعلي مهم: هذا الـ LinearLayout (يحتوي
+        // نتائج البحث ورد المساعد) كان بلا id وبدون visibility مبدئي، فكان
+        // دايمًا VISIBLE ويملأ كل الشاشة فوق شاشة الترحيب الفارغة (لأنه
+        // معلن بعدها في FrameLayout فيرسم فوقها) - فيعترض كل لمسة حتى لو
+        // مافيهوش نتائج ظاهرة، وهو السبب الحقيقي وراء عدم عمل شرائح
+        // الاقتراحات ("بماذا تفكر؟") عند الضغط عليها. الحل: نعطيه id ونتحكم
+        // في ظهوره صراحة في doSearch() بدل ما يفضل ظاهر افتراضيًا دايمًا.
+        resultsContainer = findViewById(R.id.results_container);
         recentSearchesContainer = findViewById(R.id.recent_searches_container);
         recentSearchesRow = findViewById(R.id.recent_searches_row);
         resultNote = findViewById(R.id.result_note);
@@ -94,6 +96,12 @@ public class MainActivity extends AppCompatActivity {
 
         TextView anatomyBtn = findViewById(R.id.btn_anatomy);
         anatomyBtn.setOnClickListener(v -> navigateTo(AnatomyActivity.class));
+
+        TextView patientsBtn = findViewById(R.id.btn_patients);
+        patientsBtn.setOnClickListener(v -> navigateTo(PatientsActivity.class));
+
+        TextView treatmentProgramsBtn = findViewById(R.id.btn_treatment_programs);
+        treatmentProgramsBtn.setOnClickListener(v -> navigateTo(TreatmentProgramsActivity.class));
 
         TextView aiBtn = findViewById(R.id.btn_ai_assistant);
         aiBtn.setOnClickListener(v -> navigateTo(AiAssistantActivity.class));
@@ -130,11 +138,7 @@ public class MainActivity extends AppCompatActivity {
         setupSuggestionChip(R.id.chip_suggestion_4);
 
         ExtendedFloatingActionButton fab = findViewById(R.id.fab_add);
-        fab.setOnClickListener(v -> {
-            Intent i = new Intent(this, AddEditCaseActivity.class);
-            startActivity(i);
-            overridePendingTransition(R.anim.slide_up_in, R.anim.fade_out);
-        });
+        fab.setOnClickListener(v -> showAddChooser());
         fab.setScaleX(0f);
         fab.setScaleY(0f);
         fab.animate().scaleX(1f).scaleY(1f).setStartDelay(200).setDuration(320)
@@ -178,6 +182,44 @@ public class MainActivity extends AppCompatActivity {
         overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
     }
 
+    /** يحدّث أيقونة زر الوضع الليلي/النهاري في الشريط العلوي لتعكس الحالة
+     *  الحالية فعليًا (شمس/قمر/تباين) بدل أيقونة قمر ثابتة دايمًا بغض
+     *  النظر عن الوضع الفعلي المفعّل. */
+    private void syncThemeIcon(MaterialToolbar toolbar) {
+        MenuItem item = toolbar.getMenu().findItem(R.id.action_theme_toggle);
+        if (item == null) return;
+        switch (ThemeManager.getCurrentMode(this)) {
+            case ThemeManager.MODE_LIGHT:
+                item.setIcon(R.drawable.ic_theme_light);
+                break;
+            case ThemeManager.MODE_DARK:
+                item.setIcon(R.drawable.ic_theme_dark);
+                break;
+            default:
+                item.setIcon(R.drawable.ic_theme_auto);
+        }
+    }
+
+    /**
+     * زر "+" بقى يفتح خيارين بدل ما يروح مباشرة لإضافة حالة جهاز فقط:
+     * 1) حالة جديدة (بروتوكول مرتبط بجهاز AST-2012A - زي قبل).
+     * 2) برنامج علاج فيزيائي كامل (خطة علاج طبيعي عامة، مش مرتبطة بجهاز
+     *    معيّن - تشخيص، أهداف، مراحل، تمارين، احتياطات).
+     */
+    private void showAddChooser() {
+        String[] options = {"🩺 حالة جديدة (بروتوكول جهاز)", "📋 برنامج علاج فيزيائي كامل"};
+        new com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                .setTitle("ماذا تريد أن تضيف؟")
+                .setItems(options, (dialog, which) -> {
+                    Intent i = which == 0
+                            ? new Intent(this, AddEditCaseActivity.class)
+                            : new Intent(this, AddEditTreatmentProgramActivity.class);
+                    startActivity(i);
+                    overridePendingTransition(R.anim.slide_up_in, R.anim.fade_out);
+                })
+                .show();
+    }
+
     private boolean onToolbarItemClick(MenuItem item) {
         if (item.getItemId() == R.id.action_settings) {
             navigateTo(SettingsActivity.class);
@@ -198,6 +240,7 @@ public class MainActivity extends AppCompatActivity {
         searchField.setText("");
         resetAiInlineState();
         emptyHintContainer.setVisibility(View.GONE);
+        resultsContainer.setVisibility(View.VISIBLE);
         askAiFallback.setVisibility(View.GONE);
         suggestionNote.setVisibility(View.GONE);
         resultsList.setVisibility(View.VISIBLE);
@@ -222,6 +265,7 @@ public class MainActivity extends AppCompatActivity {
 
         if (query == null || query.trim().isEmpty()) {
             emptyHintContainer.setVisibility(View.VISIBLE);
+            resultsContainer.setVisibility(View.GONE);
             resultNote.setVisibility(View.GONE);
             askAiFallback.setVisibility(View.GONE);
             resultsList.setVisibility(View.VISIBLE);
@@ -230,6 +274,7 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         emptyHintContainer.setVisibility(View.GONE);
+        resultsContainer.setVisibility(View.VISIBLE);
 
         List<CaseItem> allCases = DataManager.allCases(this);
         DataManager.SearchResult result = DataManager.search(query, allCases, FavoritesManager.getFavoriteTitles(this));
@@ -324,9 +369,8 @@ public class MainActivity extends AppCompatActivity {
                 extraContext.append("خلفية معرفية عامة من ويكيبيديا (مقالة: ").append(wiki.title).append("):\n")
                         .append(wiki.extract);
             }
-            final String systemPromptToUse = extraContext.length() > 0
-                    ? SYSTEM_PROMPT + "\n\n" + extraContext
-                    : SYSTEM_PROMPT;
+            final String systemPromptToUse = AiPrompts.buildSystemPrompt(this,
+                    extraContext.length() > 0 ? extraContext.toString() : null);
             final String sourceNote = buildSourceNote(grounding, wiki);
 
             runOnUiThread(() -> setAiInlineLoadingText("🤖 يفكر في الإجابة..."));

@@ -51,17 +51,6 @@ public class AiAssistantActivity extends AppCompatActivity {
     private String apiKey;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
-    private static final String SYSTEM_PROMPT =
-            "أنت مساعد ذكي يساعد أخصائيي العلاج الطبيعي في استخدام جهاز التحفيز الكهربائي " +
-            "AST-2012A (أنماط TENS وEMS). أجب بإيجاز ووضوح وبدقة سريرية باللغة العربية، " +
-            "واذكر تحذيرات السلامة المهمة عند الحاجة (مثل منظمات ضربات القلب والحمل والجروح المفتوحة). " +
-            "إذا زُوّدت ببروتوكولات موثقة من قاعدة بيانات الجهاز و/أو خلفية معرفية من ويكيبيديا، " +
-            "اجعلها مرجعك الأساسي، ووازن بينها وبين معرفتك العامة بوضوح (اتفاق أو اختلاف)، ونبّه لو " +
-            "المصدر الخارجي عام ومش متخصص طبيًا بدقة. اقترح خطة علاج مستقرة ومتماسكة بناءً على أفضل " +
-            "مصدر متاح. نظّم إجاباتك الطويلة في نقاط قصيرة وواضحة بدل الفقرات المطوّلة. لو السؤال " +
-            "غامض أو ينقصه تفاصيل سريرية مهمة (موضع الألم بالضبط، شدة الأعراض، هل توجد حالة طبية " +
-            "مصاحبة)، اسأل سؤالًا توضيحيًا واحدًا مختصرًا أولًا بدل تخمين إجابة كاملة قد تكون غير دقيقة.";
-
     private static final String[] QUICK_PROMPTS = {
             "اشرحلي الفرق بين TENS و EMS",
             "بروتوكول مقترح لآلام أسفل الظهر",
@@ -264,9 +253,8 @@ public class AiAssistantActivity extends AppCompatActivity {
                         .append(wiki.extract);
             }
 
-            final String systemPromptToUse = extraContext.length() > 0
-                    ? SYSTEM_PROMPT + "\n\n" + extraContext
-                    : SYSTEM_PROMPT;
+            final String systemPromptToUse = AiPrompts.buildSystemPrompt(this,
+                    extraContext.length() > 0 ? extraContext.toString() : null);
             final int groundedCount = grounding != null ? grounding.caseCount : 0;
 
             runOnUiThread(() -> setTypingStage(2));
