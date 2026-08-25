@@ -28,6 +28,11 @@
         <activity android:name=".MyCasesActivity" android:exported="false" />
         <activity android:name=".EncyclopediaActivity" android:exported="false" />
         <activity android:name=".AnatomyActivity" android:exported="false" />
+        <activity android:name=".PatientsActivity" android:exported="false" />
+        <activity android:name=".AddEditPatientActivity" android:exported="false" />
+        <activity android:name=".PatientDetailActivity" android:exported="false" />
+        <activity android:name=".TreatmentProgramsActivity" android:exported="false" />
+        <activity android:name=".AddEditTreatmentProgramActivity" android:exported="false" />
         <activity android:name=".SettingsActivity" android:exported="false" />
         <activity android:name=".AiAssistantActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
 
