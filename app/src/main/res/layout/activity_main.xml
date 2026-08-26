@@ -12,16 +12,25 @@
     android:background="@drawable/bg_app_gradient"
     android:orientation="vertical">
 
-    <!-- ============== شريط علوي (Material 3 Top App Bar) ============== -->
+    <!-- ============== شريط تنقل رفيع (أيقونات فقط) بأسلوب iOS ============== -->
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
-        android:layout_height="64dp"
+        android:layout_height="46dp"
         android:background="@drawable/bg_header_container"
         android:paddingHorizontal="6dp"
-        android:elevation="2dp"
         app:contentInsetStart="10dp"
-        app:menu="@menu/menu_main">
+        app:menu="@menu/menu_main" />
+
+    <!-- ============== عنوان كبير بأسلوب iOS Large Title ============== -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_header_container"
+        android:gravity="end"
+        android:orientation="vertical"
+        android:paddingHorizontal="18dp"
+        android:paddingBottom="14dp">
 
         <LinearLayout
             android:layout_width="wrap_content"
@@ -29,30 +38,31 @@
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
-            <View
-                android:layout_width="9dp"
-                android:layout_height="9dp"
-                android:layout_marginEnd="8dp"
-                android:background="@drawable/dot_accent" />
-
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:letterSpacing="0.01"
+                android:letterSpacing="0.005"
                 android:text="AST-2012A"
                 android:textColor="@color/text_primary"
-                android:textSize="16.5sp"
+                android:textSize="27sp"
                 android:textStyle="bold" />
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="6dp"
-                android:text="· Clinical Master"
-                android:textColor="@color/text_tertiary"
-                android:textSize="12sp" />
+            <View
+                android:layout_width="8dp"
+                android:layout_height="8dp"
+                android:layout_marginStart="8dp"
+                android:layout_marginTop="4dp"
+                android:background="@drawable/dot_accent" />
         </LinearLayout>
-    </com.google.android.material.appbar.MaterialToolbar>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="1dp"
+            android:text="Clinical Master · مساعد العلاج الطبيعي الشامل"
+            android:textColor="@color/text_tertiary"
+            android:textSize="12.5sp" />
+    </LinearLayout>
 
     <View
         android:layout_width="match_parent"

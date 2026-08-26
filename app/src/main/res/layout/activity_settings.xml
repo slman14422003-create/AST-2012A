@@ -116,7 +116,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
                     android:gravity="end"
-                    android:text="1️⃣ أي سؤال يطابق قاعدة بيانات الجهاز (130 حالة موثقة) يُجاب فورًا من البيانات نفسها بدون إنترنت وبدقة 100%.&#10;&#10;2️⃣ غير ذلك، يُستخدم بحث ويكيبيديا (عربي ثم إنجليزي) كخلفية معرفية عامة تكميلية، وتُعرض دائمًا بشارة مصدر واضحة مميّزة عن بيانات الجهاز.&#10;&#10;3️⃣ الصياغة النهائية تمرّ على مزوّد ذكاء اصطناعي مجاني بالكامل بدون مفتاح (بالتناوب التلقائي بين أكثر من مزوّد لضمان الاستمرارية) — لا يلزمك أي اشتراك أو تسجيل."
+                    android:text="1️⃣ أي سؤال يطابق قاعدة بيانات الجهاز (130 حالة موثقة) يُجاب فورًا من البيانات نفسها بدون إنترنت وبدقة 100%.&#10;&#10;2️⃣ غير ذلك، يُستخدم بحث Physiopedia أولًا (مرجع متخصص في العلاج الطبيعي مراجَع من أخصائيين)، ثم ويكيبيديا (عربي ثم إنجليزي) كخلفية معرفية عامة تكميلية لو مفيش نتيجة، وتُعرض دائمًا بشارة مصدر واضحة مميّزة عن بيانات الجهاز.&#10;&#10;3️⃣ الصياغة النهائية تمرّ على مزوّد ذكاء اصطناعي مجاني بالكامل بدون مفتاح (بالتناوب التلقائي بين أكثر من مزوّد لضمان الاستمرارية) — لا يلزمك أي اشتراك أو تسجيل."
                     android:textColor="@color/text_secondary"
                     android:textDirection="rtl"
                     android:textSize="12sp" />
@@ -301,6 +301,26 @@
                     android:gravity="end|center_vertical"
                     android:paddingVertical="12dp"
                     android:text="نبذة عن التطبيق والإصدار"
+                    android:textAllCaps="false"
+                    android:textColor="@color/text_primary"
+                    android:textDirection="rtl"
+                    android:textSize="13.5sp" />
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginHorizontal="10dp"
+                    android:background="@color/glass_border_soft" />
+
+                <Button
+                    android:id="@+id/btn_privacy_policy"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="4dp"
+                    android:gravity="end|center_vertical"
+                    android:paddingVertical="12dp"
+                    android:text="🔒 سياسة الخصوصية"
                     android:textAllCaps="false"
                     android:textColor="@color/text_primary"
                     android:textDirection="rtl"

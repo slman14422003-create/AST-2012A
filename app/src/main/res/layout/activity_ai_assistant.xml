@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- ============================================================================
-     شاشة المساعد الذكي — إعادة بناء كاملة: رأس رفيع مسطح، تلميح مصدر بسيط
-     غير ملفت، وقاعدة إدخال سفلية موحّدة بنفس أسلوب "الرصيف" في الشاشة
-     الرئيسية (دائرة إرسال + حقل كبسولي)، بدل شريط الإدخال القديم البسيط.
+     شاشة المساعد الذكي — إعادة تصميم شاملة: رأس بهوية شخصية (شارة + حالة
+     اتصال)، بانر حالة بشارة أيقونة، فقاعة كتابة حقيقية، وقاعدة إدخال
+     بأسلوب "كبسولة واحدة" (حقل + زر إرسال داخل نفس الحاوية) بدل عنصرين
+     منفصلين متراكبين، بنفس روح تطبيقات المحادثة الحديثة.
      ============================================================================ -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -14,26 +15,96 @@
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
-        android:layout_height="?attr/actionBarSize"
+        android:layout_height="66dp"
         android:background="@drawable/bg_header_container"
-        android:title="🤖 المساعد الذكي"
-        android:titleTextColor="@color/text_primary"
-        app:navigationIcon="@drawable/ic_close" />
+        app:contentInsetStart="8dp"
+        app:navigationIcon="@drawable/ic_close">
 
-    <TextView
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <FrameLayout
+                android:layout_width="38dp"
+                android:layout_height="38dp"
+                android:layout_marginEnd="10dp">
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="@drawable/bg_avatar_circle_ai" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:gravity="center"
+                    android:text="🤖"
+                    android:textSize="17sp" />
+            </FrameLayout>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="المساعد الذكي"
+                    android:textColor="@color/text_primary"
+                    android:textDirection="rtl"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/connection_status"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="● متصل · Physiopedia + قاعدة الجهاز"
+                    android:textColor="@color/accent_green"
+                    android:textDirection="rtl"
+                    android:textSize="10.5sp" />
+            </LinearLayout>
+        </LinearLayout>
+    </com.google.android.material.appbar.MaterialToolbar>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/glass_border_soft" />
+
+    <LinearLayout
         android:id="@+id/mode_hint"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_margin="12dp"
         android:layout_marginBottom="2dp"
         android:background="@drawable/bg_glass_card_soft"
-        android:gravity="center"
-        android:padding="10dp"
-        android:text="🤖 يعمل حاليًا بالوضع المجاني الجاهز (بدون مفتاح). يمكنك إضافة مفتاح OpenRouter اختياري من الإعدادات لتجربة نموذج بديل."
-        android:textColor="@color/text_secondary"
-        android:textDirection="rtl"
-        android:textSize="11.5sp"
-        android:visibility="visible" />
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="12dp"
+        android:visibility="visible">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:text="ℹ️"
+            android:textSize="16sp" />
+
+        <TextView
+            android:id="@+id/mode_hint_text"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="end"
+            android:text="🤖 يعمل حاليًا بالوضع المجاني الجاهز (بدون مفتاح). يمكنك إضافة مفتاح OpenRouter اختياري من الإعدادات لتجربة نموذج بديل."
+            android:textColor="@color/text_secondary"
+            android:textDirection="rtl"
+            android:textSize="11.5sp" />
+    </LinearLayout>
 
     <TextView
         android:id="@+id/quick_prompts_title"
@@ -72,14 +143,19 @@
         android:paddingHorizontal="14dp"
         android:paddingTop="10dp" />
 
+    <!-- ============== فقاعة الكتابة (Typing Bubble) ============== -->
     <LinearLayout
         android:id="@+id/typing_indicator"
-        android:layout_width="match_parent"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:gravity="center_vertical|end"
+        android:layout_gravity="end"
+        android:layout_marginEnd="14dp"
+        android:layout_marginBottom="10dp"
+        android:background="@drawable/bg_glass_card_pressed"
+        android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingHorizontal="18dp"
-        android:paddingBottom="8dp"
+        android:paddingHorizontal="14dp"
+        android:paddingVertical="10dp"
         android:visibility="gone">
 
         <TextView
@@ -121,56 +197,55 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- ============== قاعدة الإدخال السفلية الموحّدة ============== -->
+    <!-- ============== قاعدة الإدخال: كبسولة واحدة بأسلوب تطبيقات المحادثة
+         الحديثة (الحقل وزر الإرسال داخل نفس الحاوية، بدل عنصرين متراكبين) ============== -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="@drawable/bg_header_container"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
+        android:orientation="vertical"
         android:paddingHorizontal="12dp"
         android:paddingVertical="10dp">
 
-        <com.google.android.material.floatingactionbutton.FloatingActionButton
-            android:id="@+id/btn_send"
-            android:layout_width="42dp"
-            android:layout_height="42dp"
-            android:layout_marginStart="8dp"
-            android:contentDescription="إرسال"
-            android:src="@drawable/ic_send"
-            app:backgroundTint="@color/primary_cyan"
-            app:borderWidth="0dp"
-            app:elevation="0dp"
-            app:fabCustomSize="42dp"
-            app:maxImageSize="18dp"
-            app:pressedTranslationZ="2dp"
-            app:tint="@color/white" />
-
-        <com.google.android.material.textfield.TextInputLayout
-            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-            android:layout_width="0dp"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:hint="اسأل عن حالة، عرض، أو أي استفسار طبي..."
-            app:boxBackgroundColor="@color/glass_fill_soft"
-            app:boxCornerRadiusBottomEnd="22dp"
-            app:boxCornerRadiusBottomStart="22dp"
-            app:boxCornerRadiusTopEnd="22dp"
-            app:boxCornerRadiusTopStart="22dp"
-            app:boxStrokeColor="@color/primary_cyan"
-            app:boxStrokeWidth="1dp"
-            app:hintTextColor="@color/text_tertiary">
+            android:background="@drawable/bg_glass_chip"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="6dp"
+            android:paddingEnd="14dp"
+            android:paddingVertical="4dp">
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/btn_send"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:contentDescription="إرسال"
+                android:src="@drawable/ic_send"
+                app:backgroundTint="?attr/colorPrimary"
+                app:borderWidth="0dp"
+                app:elevation="0dp"
+                app:fabCustomSize="40dp"
+                app:maxImageSize="17dp"
+                app:pressedTranslationZ="1dp"
+                app:tint="@color/white" />
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/chat_input"
-                android:layout_width="match_parent"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginHorizontal="10dp"
+                android:background="@android:color/transparent"
                 android:gravity="end"
+                android:hint="اسأل عن حالة، عرض، أو أي استفسار طبي..."
                 android:inputType="textMultiLine"
                 android:maxLines="4"
                 android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_tertiary"
                 android:textDirection="rtl"
                 android:textSize="14sp" />
-        </com.google.android.material.textfield.TextInputLayout>
+        </LinearLayout>
     </LinearLayout>
 </LinearLayout>
