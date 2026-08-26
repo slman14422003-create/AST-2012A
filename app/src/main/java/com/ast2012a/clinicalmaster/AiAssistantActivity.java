@@ -44,7 +44,7 @@ public class AiAssistantActivity extends AppCompatActivity {
     private TextInputEditText input;
     private View typingIndicator;
     private TextView typingText;
-    private View modeHint;
+    private TextView modeHintText;
     private View quickPromptsScroll;
     private View quickPromptsTitle;
     private LinearLayout quickPromptsRow;
@@ -72,7 +72,7 @@ public class AiAssistantActivity extends AppCompatActivity {
         input = findViewById(R.id.chat_input);
         typingIndicator = findViewById(R.id.typing_indicator);
         typingText = findViewById(R.id.typing_text);
-        modeHint = findViewById(R.id.mode_hint);
+        modeHintText = findViewById(R.id.mode_hint_text);
         quickPromptsScroll = findViewById(R.id.quick_prompts_scroll);
         quickPromptsTitle = findViewById(R.id.quick_prompts_title);
         quickPromptsRow = findViewById(R.id.quick_prompts_row);
@@ -151,12 +151,11 @@ public class AiAssistantActivity extends AppCompatActivity {
         super.onResume();
         SharedPreferences prefs = getSharedPreferences("settings_prefs", MODE_PRIVATE);
         apiKey = prefs.getString("ai_api_key", "");
-        if (modeHint instanceof TextView) {
-            TextView hint = (TextView) modeHint;
+        if (modeHintText != null) {
             if (apiKey != null && !apiKey.isEmpty()) {
-                hint.setText("🔑 عند وجود تطابق مباشر في قاعدة بيانات الجهاز تصلك إجابة فورية موثوقة، وإلا يُستخدم مفتاح OpenRouter الخاص بك مع بحث في ويكيبيديا.");
+                modeHintText.setText("🔑 عند وجود تطابق مباشر في قاعدة بيانات الجهاز تصلك إجابة فورية موثوقة، وإلا يُستخدم مفتاح OpenRouter الخاص بك مع بحث في Physiopedia ثم ويكيبيديا.");
             } else {
-                hint.setText("✅ الأسئلة المطابقة لقاعدة بيانات الجهاز (130 حالة) تُجاب فورًا وبدقة 100% بدون إنترنت. غير ذلك، يُستخدم بحث ويكيبيديا + مزوّد مجاني كخلفية عامة تكميلية.");
+                modeHintText.setText("✅ الأسئلة المطابقة لقاعدة بيانات الجهاز (130 حالة) تُجاب فورًا وبدقة 100% بدون إنترنت. غير ذلك، يُستخدم بحث Physiopedia (مرجع علاج طبيعي متخصص) ثم ويكيبيديا + مزوّد مجاني كخلفية عامة تكميلية.");
             }
         }
     }
@@ -240,15 +239,22 @@ public class AiAssistantActivity extends AppCompatActivity {
             // موثقة من قاعدة بيانات الجهاز تُستخدم كخلفية للنموذج بدل إجابة مباشرة.
             DataManager.GroundingResult grounding = DataManager.buildGroundingContext(this, text, 3);
 
-            // المرحلة الثانية: تأريض خارجي - بحث في موسوعة ويكيبيديا (مجاني، بدون مفتاح)
-            WikipediaClient.Result wiki = WikipediaClient.search(text);
+            // المرحلة الثانية: تأريض خارجي من مصادر موثوقة - نجرّب أولًا
+            // Physiopedia (مرجع متخصص في العلاج الطبيعي، مراجَع من أخصائيين)،
+            // ولو مفيش نتيجة نرجع تلقائيًا لموسوعة ويكيبيديا العامة كبديل.
+            // بالترتيب ده: "يبحث ← يفكر ويجمع المعلومات ← يرسل الإجابة".
+            PhysiopediaClient.Result physio = PhysiopediaClient.search(text);
+            WikipediaClient.Result wiki = physio == null ? WikipediaClient.search(text) : null;
 
             StringBuilder extraContext = new StringBuilder();
             if (grounding != null) {
                 extraContext.append("بروتوكولات موثقة ذات صلة من قاعدة بيانات الجهاز:\n")
                         .append(grounding.contextText).append("\n\n");
             }
-            if (wiki != null) {
+            if (physio != null) {
+                extraContext.append("خلفية معرفية متخصصة من Physiopedia (مرجع علاج طبيعي، مقالة: ")
+                        .append(physio.title).append("):\n").append(physio.extract);
+            } else if (wiki != null) {
                 extraContext.append("خلفية معرفية عامة من ويكيبيديا (مقالة: ").append(wiki.title).append("):\n")
                         .append(wiki.extract);
             }
@@ -267,16 +273,19 @@ public class AiAssistantActivity extends AppCompatActivity {
 
                         String sourceLabel = null;
                         String sourceUrl = null;
-                        if (groundedCount > 0 && wiki != null) {
-                            sourceLabel = "⚠️ إجابة تكميلية عامة (لا يوجد تطابق مباشر) - بروتوكولات قريبة (" + groundedCount + ") + ويكيبيديا: " + wiki.title;
-                            sourceUrl = wiki.sourceUrl;
+                        String externalTitle = physio != null ? physio.title : (wiki != null ? wiki.title : null);
+                        String externalUrl = physio != null ? physio.sourceUrl : (wiki != null ? wiki.sourceUrl : null);
+                        String externalName = physio != null ? "Physiopedia" : "ويكيبيديا";
+                        if (groundedCount > 0 && externalTitle != null) {
+                            sourceLabel = "⚠️ إجابة تكميلية عامة (لا يوجد تطابق مباشر) - بروتوكولات قريبة (" + groundedCount + ") + " + externalName + ": " + externalTitle;
+                            sourceUrl = externalUrl;
                         } else if (groundedCount > 0) {
                             sourceLabel = "⚠️ إجابة تكميلية عامة - أقرب بروتوكولات في القاعدة (" + groundedCount + ")، بدون تطابق مباشر مؤكد";
-                        } else if (wiki != null) {
-                            sourceLabel = "⚠️ إجابة عامة من ويكيبيديا (خارج قاعدة بيانات الجهاز): " + wiki.title;
-                            sourceUrl = wiki.sourceUrl;
+                        } else if (externalTitle != null) {
+                            sourceLabel = "⚠️ إجابة عامة من " + externalName + " (خارج قاعدة بيانات الجهاز): " + externalTitle;
+                            sourceUrl = externalUrl;
                         } else {
-                            sourceLabel = "⚠️ إجابة عامة من معرفة النموذج (بدون مصدر موثّق من الجهاز أو ويكيبيديا)";
+                            sourceLabel = "⚠️ إجابة عامة من معرفة النموذج (بدون مصدر موثّق من الجهاز أو المصادر الخارجية)";
                         }
 
                         adapter.addMessage(new ChatMessage(ChatMessage.ROLE_AI, reply, sourceLabel, sourceUrl, text));
@@ -298,7 +307,7 @@ public class AiAssistantActivity extends AppCompatActivity {
 
     private void setTypingStage(int stage) {
         typingIndicator.setVisibility(View.VISIBLE);
-        typingText.setText(stage == 1 ? "🔎 يبحث في ويكيبيديا وقاعدة بيانات الجهاز..." : "🤖 يفكر في الإجابة...");
+        typingText.setText(stage == 1 ? "🔎 يبحث في Physiopedia وقاعدة بيانات الجهاز..." : "🤖 يفكر في الإجابة...");
     }
 
     private void openSaveAsCase(String aiText) {

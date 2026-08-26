@@ -63,11 +63,12 @@ public class SettingsActivity extends AppCompatActivity {
         Button exportBtn = findViewById(R.id.btn_export);
         Button clearBtn = findViewById(R.id.btn_clear_all);
         Button aboutBtn = findViewById(R.id.btn_about);
-
+        Button privacyPolicyBtn = findViewById(R.id.btn_privacy_policy);
         aiKeyField.setText(prefs().getString(KEY_AI_API_KEY, ""));
         saveKeyBtn.setOnClickListener(v -> saveAiKey());
         clearChatHistoryBtn.setOnClickListener(v -> confirmClearChatHistory());
         aboutBtn.setOnClickListener(v -> showAboutDialog());
+        privacyPolicyBtn.setOnClickListener(v -> startActivity(new android.content.Intent(this, PrivacyPolicyActivity.class)));
 
         TextInputEditText instructionsField = findViewById(R.id.ai_custom_instructions_field);
         instructionsField.setText(AiPrompts.getCustomInstructions(this));
@@ -113,7 +114,8 @@ public class SettingsActivity extends AppCompatActivity {
         String message = "AST-2012A Clinical Master\nالإصدار 1.0\n\n" +
                 "تطبيق أندرويد أصلي مكتوب بالكامل بلغة Java - بدون WebView أو متصفح.\n" +
                 "130 حالة سريرية موثقة + موسوعة أنماط الجهاز + مساعد ذكي مجاني.\n\n" +
-                "كل بياناتك (الحالات المخصصة، سجل المحادثة، الإعدادات) محفوظة محليًا على جهازك فقط، ولا تُرسل لأي سيرفر خاص بالتطبيق.";
+                "كل بياناتك (الحالات المخصصة، سجل المحادثة، الإعدادات) محفوظة محليًا على جهازك فقط، ولا تُرسل لأي سيرفر خاص بالتطبيق.\n\n" +
+                "🩺 تطوير ومحتوى سريري: المعالج الفيزيائي سلمان";
         new MaterialAlertDialogBuilder(this)
                 .setTitle("عن التطبيق")
                 .setMessage(message)

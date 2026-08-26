@@ -348,7 +348,7 @@ public class MainActivity extends AppCompatActivity {
         resultsList.setVisibility(View.GONE);
         aiInlineAnswerScroll.setVisibility(View.GONE);
         aiInlineLoading.setVisibility(View.VISIBLE);
-        setAiInlineLoadingText("🔎 يبحث في ويكيبيديا وقاعدة بيانات الجهاز...");
+        setAiInlineLoadingText("🔎 يبحث في Physiopedia وقاعدة بيانات الجهاز...");
 
         SharedPreferences prefs = getSharedPreferences("settings_prefs", MODE_PRIVATE);
         String apiKey = prefs.getString("ai_api_key", "");
@@ -357,21 +357,26 @@ public class MainActivity extends AppCompatActivity {
             // المرحلة الأولى: تأريض محلي - بروتوكولات موثقة من قاعدة بيانات الجهاز
             DataManager.GroundingResult grounding = DataManager.buildGroundingContext(this, query, 3);
 
-            // المرحلة الثانية: تأريض خارجي - بحث في موسوعة ويكيبيديا (مجاني، بدون مفتاح)
-            WikipediaClient.Result wiki = WikipediaClient.search(query);
+            // المرحلة الثانية: تأريض خارجي من مصدر متخصص موثوق أولًا
+            // (Physiopedia)، ولو مفيش نتيجة نرجع تلقائيًا لويكيبيديا العامة.
+            PhysiopediaClient.Result physio = PhysiopediaClient.search(query);
+            WikipediaClient.Result wiki = physio == null ? WikipediaClient.search(query) : null;
 
             StringBuilder extraContext = new StringBuilder();
             if (grounding != null) {
                 extraContext.append("بروتوكولات موثقة ذات صلة من قاعدة بيانات الجهاز:\n")
                         .append(grounding.contextText).append("\n\n");
             }
-            if (wiki != null) {
+            if (physio != null) {
+                extraContext.append("خلفية معرفية متخصصة من Physiopedia (مرجع علاج طبيعي، مقالة: ")
+                        .append(physio.title).append("):\n").append(physio.extract);
+            } else if (wiki != null) {
                 extraContext.append("خلفية معرفية عامة من ويكيبيديا (مقالة: ").append(wiki.title).append("):\n")
                         .append(wiki.extract);
             }
             final String systemPromptToUse = AiPrompts.buildSystemPrompt(this,
                     extraContext.length() > 0 ? extraContext.toString() : null);
-            final String sourceNote = buildSourceNote(grounding, wiki);
+            final String sourceNote = buildSourceNote(grounding, physio, wiki);
 
             runOnUiThread(() -> setAiInlineLoadingText("🤖 يفكر في الإجابة..."));
 
@@ -405,15 +410,17 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /** جملة شفافة قصيرة توضح مصدر المعلومة المستخدَمة في الرد (قاعدة بيانات
-     *  الجهاز و/أو ويكيبيديا) - نفس فكرة شارة المصدر في شاشة المحادثة. */
-    private String buildSourceNote(DataManager.GroundingResult grounding, WikipediaClient.Result wiki) {
+     *  الجهاز و/أو Physiopedia/ويكيبيديا) - نفس فكرة شارة المصدر في شاشة المحادثة. */
+    private String buildSourceNote(DataManager.GroundingResult grounding, PhysiopediaClient.Result physio, WikipediaClient.Result wiki) {
         int groundedCount = grounding != null ? grounding.caseCount : 0;
-        if (groundedCount > 0 && wiki != null) {
-            return "📖 المصدر: قاعدة بيانات الجهاز (" + groundedCount + ") + ويكيبيديا: " + wiki.title;
+        String externalTitle = physio != null ? physio.title : (wiki != null ? wiki.title : null);
+        String externalName = physio != null ? "Physiopedia" : "ويكيبيديا";
+        if (groundedCount > 0 && externalTitle != null) {
+            return "📖 المصدر: قاعدة بيانات الجهاز (" + groundedCount + ") + " + externalName + ": " + externalTitle;
         } else if (groundedCount > 0) {
             return "📖 المصدر: قاعدة بيانات الجهاز (" + groundedCount + " بروتوكول موثّق)";
-        } else if (wiki != null) {
-            return "📖 المصدر: ويكيبيديا - " + wiki.title;
+        } else if (externalTitle != null) {
+            return "📖 المصدر: " + externalName + " - " + externalTitle;
         }
         return null;
     }
