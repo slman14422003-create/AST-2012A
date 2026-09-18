@@ -23,6 +23,8 @@ jobs:
 
       - name: تجهيز Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: ''
 
       - name: تجهيز Gradle
         uses: gradle/actions/setup-gradle@v4
