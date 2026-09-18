@@ -5,11 +5,11 @@ import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
-import android.view.MenuItem;
 import android.view.View;
 import android.view.animation.AnimationUtils;
 import android.view.animation.LayoutAnimationController;
 import android.widget.Button;
+import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -20,7 +20,6 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
 import com.google.android.material.textfield.TextInputEditText;
-import com.google.android.material.appbar.MaterialToolbar;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -53,9 +52,15 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        MaterialToolbar toolbar = findViewById(R.id.toolbar);
-        toolbar.setOnMenuItemClickListener(this::onToolbarItemClick);
-        syncThemeIcon(toolbar);
+        ImageButton themeToggleBtn = findViewById(R.id.btn_theme_toggle);
+        ImageButton settingsBtn = findViewById(R.id.btn_settings);
+        syncThemeIcon(themeToggleBtn);
+        themeToggleBtn.setOnClickListener(v -> {
+            String newMode = ThemeManager.cycleMode(this);
+            Toast.makeText(this, ThemeManager.labelFor(newMode), Toast.LENGTH_SHORT).show();
+            recreate();
+        });
+        settingsBtn.setOnClickListener(v -> navigateTo(SettingsActivity.class));
 
         searchField = findViewById(R.id.search_field);
         emptyHintContainer = findViewById(R.id.empty_hint_container);
@@ -185,18 +190,16 @@ public class MainActivity extends AppCompatActivity {
     /** يحدّث أيقونة زر الوضع الليلي/النهاري في الشريط العلوي لتعكس الحالة
      *  الحالية فعليًا (شمس/قمر/تباين) بدل أيقونة قمر ثابتة دايمًا بغض
      *  النظر عن الوضع الفعلي المفعّل. */
-    private void syncThemeIcon(MaterialToolbar toolbar) {
-        MenuItem item = toolbar.getMenu().findItem(R.id.action_theme_toggle);
-        if (item == null) return;
+    private void syncThemeIcon(ImageButton themeToggleBtn) {
         switch (ThemeManager.getCurrentMode(this)) {
             case ThemeManager.MODE_LIGHT:
-                item.setIcon(R.drawable.ic_theme_light);
+                themeToggleBtn.setImageResource(R.drawable.ic_theme_light);
                 break;
             case ThemeManager.MODE_DARK:
-                item.setIcon(R.drawable.ic_theme_dark);
+                themeToggleBtn.setImageResource(R.drawable.ic_theme_dark);
                 break;
             default:
-                item.setIcon(R.drawable.ic_theme_auto);
+                themeToggleBtn.setImageResource(R.drawable.ic_theme_auto);
         }
     }
 
@@ -218,20 +221,6 @@ public class MainActivity extends AppCompatActivity {
                     overridePendingTransition(R.anim.slide_up_in, R.anim.fade_out);
                 })
                 .show();
-    }
-
-    private boolean onToolbarItemClick(MenuItem item) {
-        if (item.getItemId() == R.id.action_settings) {
-            navigateTo(SettingsActivity.class);
-            return true;
-        }
-        if (item.getItemId() == R.id.action_theme_toggle) {
-            String newMode = ThemeManager.cycleMode(this);
-            Toast.makeText(this, ThemeManager.labelFor(newMode), Toast.LENGTH_SHORT).show();
-            recreate();
-            return true;
-        }
-        return false;
     }
 
     /** يعرض قائمة الحالات المفضّلة فقط، متجاوزًا محرك البحث. */
