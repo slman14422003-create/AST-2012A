@@ -52,7 +52,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="المساعد الذكي"
+                    android:text="Phizyo AI"
                     android:textColor="@color/text_primary"
                     android:textDirection="rtl"
                     android:textSize="16sp"
@@ -163,7 +163,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
-            android:text="🤖 المساعد الذكي يفكر..."
+            android:text="🤖 Phizyo AI يفكر..."
             android:textColor="@color/text_secondary"
             android:textDirection="rtl"
             android:textSize="12sp" />

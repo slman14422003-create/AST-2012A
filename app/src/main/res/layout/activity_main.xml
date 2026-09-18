@@ -58,7 +58,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:letterSpacing="0.005"
-                    android:text="AST-2012A"
+                    android:text="Phizyo Studio"
                     android:textColor="@color/text_primary"
                     android:textSize="19sp"
                     android:textStyle="bold" />
@@ -76,7 +76,7 @@
                 android:layout_marginTop="1dp"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:text="Clinical Master · مساعد العلاج الطبيعي الشامل"
+                android:text="دليل جهاز AST-2012A · مساعد العلاج الطبيعي الشامل"
                 android:textColor="@color/text_tertiary"
                 android:textSize="11sp" />
         </LinearLayout>
@@ -293,7 +293,7 @@
                 android:foreground="?attr/selectableItemBackground"
                 android:paddingHorizontal="18dp"
                 android:paddingVertical="10dp"
-                android:text="🤖 اسأل المساعد الذكي بدل ذلك"
+                android:text="🤖 اسأل Phizyo AI بدل ذلك"
                 android:textColor="@color/white"
                 android:textDirection="rtl"
                 android:textSize="13sp"
@@ -318,7 +318,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="8dp"
-                    android:text="المساعد الذكي يفكر..."
+                    android:text="Phizyo AI يفكر..."
                     android:textColor="@color/text_secondary"
                     android:textDirection="rtl"
                     android:textSize="12sp" />
@@ -343,7 +343,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="10dp"
                         android:gravity="end"
-                        android:text="🤖 رد المساعد الذكي"
+                        android:text="🤖 رد Phizyo AI"
                         android:textColor="@color/primary_cyan_dark"
                         android:textDirection="rtl"
                         android:textSize="12.5sp"
@@ -444,7 +444,7 @@
                     android:foreground="?attr/selectableItemBackground"
                     android:paddingHorizontal="16dp"
                     android:paddingVertical="9dp"
-                    android:text="🤖 المساعد الذكي"
+                    android:text="🤖 Phizyo AI"
                     android:textColor="@color/white"
                     android:textDirection="rtl"
                     android:textSize="12.5sp"

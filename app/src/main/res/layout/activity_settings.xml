@@ -88,10 +88,10 @@
                     android:textSize="13.5sp" />
             </LinearLayout>
 
-            <!-- ============== قسم: المساعد الذكي ============== -->
+            <!-- ============== قسم: Phizyo AI ============== -->
             <TextView
                 style="@style/SectionHeader"
-                android:text="🤖 المساعد الذكي" />
+                android:text="🤖 Phizyo AI" />
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -105,7 +105,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:gravity="end"
-                    android:text="كيف يعمل المساعد الذكي؟"
+                    android:text="كيف يعمل Phizyo AI؟"
                     android:textColor="@color/text_primary"
                     android:textDirection="rtl"
                     android:textSize="13sp"
@@ -116,11 +116,85 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
                     android:gravity="end"
-                    android:text="1️⃣ أي سؤال يطابق قاعدة بيانات الجهاز (130 حالة موثقة) يُجاب فورًا من البيانات نفسها بدون إنترنت وبدقة 100%.&#10;&#10;2️⃣ غير ذلك، يُستخدم بحث Physiopedia أولًا (مرجع متخصص في العلاج الطبيعي مراجَع من أخصائيين)، ثم ويكيبيديا (عربي ثم إنجليزي) كخلفية معرفية عامة تكميلية لو مفيش نتيجة، وتُعرض دائمًا بشارة مصدر واضحة مميّزة عن بيانات الجهاز.&#10;&#10;3️⃣ الصياغة النهائية تمرّ على مزوّد ذكاء اصطناعي مجاني بالكامل بدون مفتاح (بالتناوب التلقائي بين أكثر من مزوّد لضمان الاستمرارية) — لا يلزمك أي اشتراك أو تسجيل."
+                    android:text="1️⃣ أي سؤال يطابق قاعدة بيانات الجهاز (130 حالة موثقة) يُجاب فورًا من البيانات نفسها بدون إنترنت وبدقة 100%.&#10;&#10;2️⃣ غير ذلك، يُستخدم بحث Physiopedia أولًا (مرجع متخصص في العلاج الطبيعي مراجَع من أخصائيين)، ثم ويكيبيديا (عربي ثم إنجليزي) كخلفية معرفية عامة تكميلية لو مفيش نتيجة، وتُعرض دائمًا بشارة مصدر واضحة مميّزة عن بيانات الجهاز.&#10;&#10;3️⃣ الصياغة النهائية: لو أضفت رابط Cloudflare Worker الخاص بك تحت، تتم الصياغة من خلاله أولًا. غير ذلك يُستخدم مفتاح OpenRouter (لو أضفته)، وإلا فمزوّد ذكاء اصطناعي مجاني بالكامل بالتناوب التلقائي — لا يلزمك أي اشتراك أو تسجيل في كل الأحوال."
                     android:textColor="@color/text_secondary"
                     android:textDirection="rtl"
                     android:textSize="12sp" />
             </LinearLayout>
+
+            <!-- رابط Cloudflare Worker: الخيار ذو الأولوية الأولى - أضِف رابط
+                 الووركر المنشور من ملف worker.js المرفق واضغط "اختبار الاتصال"
+                 للتأكد إنه شغال فورًا. -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                android:background="@drawable/bg_glass_card_soft"
+                android:gravity="end"
+                android:padding="12dp"
+                android:text="☁️ الخيار الأول (موصى به): انشر ملف worker.js المرفق كـ Cloudflare Worker مجاني (بدون أي مفتاح API مطلوب - الووركر نفسه هو اللي بيوصل بذكاء Cloudflare AI)، وألصق رابطه هنا فقط.&#10;&#10;🔒 الرابط يُحفظ على جهازك فقط. اضغط «اختبار الاتصال» بعد الحفظ للتأكد إنه شغال."
+                android:textColor="@color/text_secondary"
+                android:textDirection="rtl"
+                android:textSize="12sp" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:hint="رابط Cloudflare Worker (اختياري)"
+                app:boxBackgroundColor="@color/glass_fill_soft"
+                app:boxCornerRadiusBottomEnd="14dp"
+                app:boxCornerRadiusBottomStart="14dp"
+                app:boxCornerRadiusTopEnd="14dp"
+                app:boxCornerRadiusTopStart="14dp"
+                app:boxStrokeColor="@color/primary_cyan"
+                app:endIconMode="clear_text">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/ai_worker_url_field"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="https://your-worker.workers.dev"
+                    android:inputType="textUri"
+                    android:textDirection="ltr" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="22dp"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btn_save_worker_url"
+                    style="@style/PrimaryButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:layout_weight="1"
+                    android:text="💾 حفظ" />
+
+                <Button
+                    android:id="@+id/btn_test_worker"
+                    style="@style/GlassButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="4dp"
+                    android:layout_weight="1"
+                    android:text="🧪 اختبار الاتصال" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:gravity="end"
+                android:text="⬇️ الخيار الثاني: مفتاح OpenRouter"
+                android:textColor="@color/text_primary"
+                android:textDirection="rtl"
+                android:textSize="13sp"
+                android:textStyle="bold" />
 
             <TextView
                 android:layout_width="match_parent"
@@ -170,7 +244,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="6dp"
                 android:gravity="end"
-                android:text="🎓 تعليمات مخصّصة للمساعد الذكي (اختياري)"
+                android:text="🎓 تعليمات مخصّصة لـ Phizyo AI (اختياري)"
                 android:textColor="@color/text_primary"
                 android:textDirection="rtl"
                 android:textSize="13sp"
@@ -224,7 +298,7 @@
                     android:layout_margin="4dp"
                     android:gravity="end|center_vertical"
                     android:paddingVertical="12dp"
-                    android:text="🗑️ مسح سجل محادثة المساعد الذكي"
+                    android:text="🗑️ مسح سجل محادثة Phizyo AI"
                     android:textAllCaps="false"
                     android:textColor="@color/text_primary"
                     android:textDirection="rtl"
@@ -275,6 +349,74 @@
                     android:text="🗑️ مسح كل الحالات المخصصة"
                     android:textAllCaps="false"
                     android:textColor="@color/accent_red"
+                    android:textDirection="rtl"
+                    android:textSize="13.5sp" />
+            </LinearLayout>
+
+            <!-- ============== قسم: ميزات إضافية ============== -->
+            <TextView
+                style="@style/SectionHeader"
+                android:text="⭐ ميزات إضافية" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="26dp"
+                android:background="@drawable/bg_glass_card"
+                android:orientation="vertical"
+                android:padding="4dp">
+
+                <Button
+                    android:id="@+id/btn_share_app"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="4dp"
+                    android:gravity="end|center_vertical"
+                    android:paddingVertical="12dp"
+                    android:text="📤 مشاركة التطبيق"
+                    android:textAllCaps="false"
+                    android:textColor="@color/text_primary"
+                    android:textDirection="rtl"
+                    android:textSize="13.5sp" />
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginHorizontal="10dp"
+                    android:background="@color/glass_border_soft" />
+
+                <Button
+                    android:id="@+id/btn_rate_app"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="4dp"
+                    android:gravity="end|center_vertical"
+                    android:paddingVertical="12dp"
+                    android:text="⭐ قيّم التطبيق"
+                    android:textAllCaps="false"
+                    android:textColor="@color/text_primary"
+                    android:textDirection="rtl"
+                    android:textSize="13.5sp" />
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginHorizontal="10dp"
+                    android:background="@color/glass_border_soft" />
+
+                <Button
+                    android:id="@+id/btn_feedback"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="4dp"
+                    android:gravity="end|center_vertical"
+                    android:paddingVertical="12dp"
+                    android:text="✉️ تواصل معنا / أرسل ملاحظات"
+                    android:textAllCaps="false"
+                    android:textColor="@color/text_primary"
                     android:textDirection="rtl"
                     android:textSize="13.5sp" />
             </LinearLayout>
