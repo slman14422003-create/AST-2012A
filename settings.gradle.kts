@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "AST-2012A Clinical Master"
+rootProject.name = "Phizyo Studio"
 include(":app")
