@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- رأس الشاشة الموحّد الجديد: بطاقة واحدة متصلة (شعار + عنوان + أيقونات)
+     بزوايا سفلية دائرية بدل الشريط المسطح القديم المكوّن من طبقتين منفصلتين
+     بخط فاصل حاد بينهما - يعطي إحساس "بطاقة" عصرية واحدة متماسكة. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/glass_fill_strong" />
+    <corners
+        android:bottomLeftRadius="22dp"
+        android:bottomRightRadius="22dp"
+        android:topLeftRadius="0dp"
+        android:topRightRadius="0dp" />
+</shape>
