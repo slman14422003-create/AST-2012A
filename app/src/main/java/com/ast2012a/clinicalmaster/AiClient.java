@@ -203,22 +203,44 @@ public class AiClient {
             InputStream is = status >= 200 && status < 300 ? conn.getInputStream() : conn.getErrorStream();
             String responseBody = readStream(is);
 
-            if (status < 200 || status >= 300 || responseBody == null || responseBody.trim().isEmpty()) {
-                callback.onError("WORKER_FAILED");
+            if (status < 200 || status >= 300) {
+                String serverError = extractWorkerError(responseBody);
+                callback.onError(serverError != null
+                        ? "رد الووركر بخطأ: " + serverError
+                        : "الووركر رجّع HTTP " + status + " بدون تفاصيل إضافية.");
+                return;
+            }
+            if (responseBody == null || responseBody.trim().isEmpty()) {
+                callback.onError("الووركر رجّع ردًا فارغًا.");
                 return;
             }
 
             String reply = extractWorkerReply(responseBody);
             if (reply == null || reply.trim().isEmpty()) {
-                callback.onError("WORKER_FAILED");
+                callback.onError("تعذّر قراءة رد الووركر (شكل غير متوقع). الرد الخام: " + responseBody);
                 return;
             }
             callback.onSuccess(reply.trim());
 
         } catch (Exception e) {
-            callback.onError("WORKER_FAILED");
+            callback.onError("تعذر الوصول لرابط الووركر: " + (e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()));
         } finally {
             if (conn != null) conn.disconnect();
+        }
+    }
+
+    /** يقرأ حقل الخطأ من رد الووركر لو موجود بصيغة {"error": "..."} - العقد
+     *  المستخدم في worker.js المرفق عند فشل أي خطوة (Binding مفقود، الموديل
+     *  متقاعد، JSON غير صالح...). عرض النص ده مباشرة للمستخدم بيوفّر وقت
+     *  تشخيص كبير بدل رسالة عامة مبهمة. */
+    private static String extractWorkerError(String responseBody) {
+        if (responseBody == null || responseBody.trim().isEmpty()) return null;
+        try {
+            JSONObject json = new JSONObject(responseBody);
+            if (json.has("error")) return json.optString("error", null);
+            return null;
+        } catch (Exception e) {
+            return null;
         }
     }
 

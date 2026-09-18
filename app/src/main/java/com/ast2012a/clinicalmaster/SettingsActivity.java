@@ -231,7 +231,8 @@ public class SettingsActivity extends AppCompatActivity {
             public void onError(String message) {
                 runOnUiThread(() -> new MaterialAlertDialogBuilder(SettingsActivity.this)
                         .setTitle("❌ تعذر الاتصال بالووركر")
-                        .setMessage("تأكد من:\n• الرابط صحيح ومنسوخ كامل من Cloudflare.\n• الووركر منشور (Deployed) وفعّال.\n• جهازك متصل بالإنترنت.\n\nطالما الرابط فاضي أو معطّل، التطبيق هيرجع تلقائيًا للوضع المجاني الافتراضي بدون ما يتوقف.")
+                        .setMessage("تفاصيل الخطأ:\n" + message +
+                                "\n\nلو الرسالة بتقول \"model deprecated\" أو حاجة شبهها، يبقى Cloudflare قفلوا الموديل المستخدم وتحتاج تحدّث اسم الموديل في worker.js. غير كده تأكد من:\n• الرابط صحيح ومنسوخ كامل من Cloudflare.\n• الووركر منشور (Deployed) وفعّال.\n• جهازك متصل بالإنترنت.\n\nطالما الرابط فاضي أو معطّل، التطبيق هيرجع تلقائيًا للوضع المجاني الافتراضي بدون ما يتوقف.")
                         .setPositiveButton("تمام", null)
                         .show());
             }
