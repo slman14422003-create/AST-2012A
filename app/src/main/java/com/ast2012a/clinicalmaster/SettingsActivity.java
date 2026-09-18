@@ -1,8 +1,12 @@
 package com.ast2012a.clinicalmaster;
 
 import android.Manifest;
+import android.content.ActivityNotFoundException;
+import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.widget.Button;
@@ -21,6 +25,8 @@ import com.google.android.material.textfield.TextInputEditText;
 
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * شاشة الإعدادات: إشعارات حقيقية عبر NotificationManager (منسوبة للتطبيق
@@ -33,10 +39,17 @@ public class SettingsActivity extends AppCompatActivity {
     private static final String PREFS = "settings_prefs";
     private static final String KEY_NOTIF_ENABLED = "notif_enabled";
     private static final String KEY_AI_API_KEY = "ai_api_key";
+    private static final String KEY_AI_WORKER_URL = "ai_worker_url";
+
+    // ⚠️ غيّر هذا لبريدك الفعلي قبل النشر - يُستخدم فقط لفتح تطبيق البريد
+    // بمستلم مبدئي، المستخدم يقدر يغيّره قبل الإرسال براحته.
+    private static final String SUPPORT_EMAIL = "support@phizyostudio.app";
 
     private Button notifBtn;
     private TextInputEditText aiKeyField;
+    private TextInputEditText workerUrlField;
     private ActivityResultLauncher<String> permissionLauncher;
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -58,17 +71,31 @@ public class SettingsActivity extends AppCompatActivity {
 
         notifBtn = findViewById(R.id.btn_notif);
         aiKeyField = findViewById(R.id.ai_key_field);
+        workerUrlField = findViewById(R.id.ai_worker_url_field);
         Button saveKeyBtn = findViewById(R.id.btn_save_key);
+        Button saveWorkerUrlBtn = findViewById(R.id.btn_save_worker_url);
+        Button testWorkerBtn = findViewById(R.id.btn_test_worker);
         Button clearChatHistoryBtn = findViewById(R.id.btn_clear_chat_history);
         Button exportBtn = findViewById(R.id.btn_export);
         Button clearBtn = findViewById(R.id.btn_clear_all);
         Button aboutBtn = findViewById(R.id.btn_about);
         Button privacyPolicyBtn = findViewById(R.id.btn_privacy_policy);
+        Button shareBtn = findViewById(R.id.btn_share_app);
+        Button rateBtn = findViewById(R.id.btn_rate_app);
+        Button feedbackBtn = findViewById(R.id.btn_feedback);
+
         aiKeyField.setText(prefs().getString(KEY_AI_API_KEY, ""));
+        workerUrlField.setText(prefs().getString(KEY_AI_WORKER_URL, ""));
+
         saveKeyBtn.setOnClickListener(v -> saveAiKey());
+        saveWorkerUrlBtn.setOnClickListener(v -> saveWorkerUrl());
+        testWorkerBtn.setOnClickListener(v -> testWorkerConnection());
         clearChatHistoryBtn.setOnClickListener(v -> confirmClearChatHistory());
         aboutBtn.setOnClickListener(v -> showAboutDialog());
-        privacyPolicyBtn.setOnClickListener(v -> startActivity(new android.content.Intent(this, PrivacyPolicyActivity.class)));
+        privacyPolicyBtn.setOnClickListener(v -> startActivity(new Intent(this, PrivacyPolicyActivity.class)));
+        shareBtn.setOnClickListener(v -> shareApp());
+        rateBtn.setOnClickListener(v -> rateApp());
+        feedbackBtn.setOnClickListener(v -> sendFeedback());
 
         TextInputEditText instructionsField = findViewById(R.id.ai_custom_instructions_field);
         instructionsField.setText(AiPrompts.getCustomInstructions(this));
@@ -76,7 +103,7 @@ public class SettingsActivity extends AppCompatActivity {
         saveInstructionsBtn.setOnClickListener(v -> {
             String text = instructionsField.getText() == null ? "" : instructionsField.getText().toString();
             AiPrompts.setCustomInstructions(this, text);
-            Toast.makeText(this, "✅ تم حفظ تعليمات المساعد الذكي.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "✅ تم حفظ تعليمات Phizyo AI.", Toast.LENGTH_SHORT).show();
         });
 
         permissionLauncher = registerForActivityResult(
@@ -101,7 +128,7 @@ public class SettingsActivity extends AppCompatActivity {
     private void confirmClearChatHistory() {
         new MaterialAlertDialogBuilder(this)
                 .setTitle("تأكيد")
-                .setMessage("سيتم حذف سجل محادثة المساعد الذكي بالكامل. متأكد؟")
+                .setMessage("سيتم حذف سجل محادثة Phizyo AI بالكامل. متأكد؟")
                 .setPositiveButton("مسح", (dialog, which) -> {
                     AiChatStore.clear(this);
                     Toast.makeText(this, "تم مسح سجل المحادثة.", Toast.LENGTH_SHORT).show();
@@ -111,9 +138,9 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     private void showAboutDialog() {
-        String message = "AST-2012A Clinical Master\nالإصدار 1.0\n\n" +
+        String message = "Phizyo Studio\nالإصدار " + getVersionLabel() + "\n\n" +
                 "تطبيق أندرويد أصلي مكتوب بالكامل بلغة Java - بدون WebView أو متصفح.\n" +
-                "130 حالة سريرية موثقة + موسوعة أنماط الجهاز + مساعد ذكي مجاني.\n\n" +
+                "130 حالة سريرية موثقة لجهاز AST-2012A + موسوعة أنماط الجهاز + مساعد ذكي (Phizyo AI) مجاني.\n\n" +
                 "كل بياناتك (الحالات المخصصة، سجل المحادثة، الإعدادات) محفوظة محليًا على جهازك فقط، ولا تُرسل لأي سيرفر خاص بالتطبيق.\n\n" +
                 "🩺 تطوير ومحتوى سريري: المعالج الفيزيائي سلمان";
         new MaterialAlertDialogBuilder(this)
@@ -121,6 +148,17 @@ public class SettingsActivity extends AppCompatActivity {
                 .setMessage(message)
                 .setPositiveButton("حسنًا", null)
                 .show();
+    }
+
+    /** اسم الإصدار الفعلي من معلومات الحزمة بدل رقم ثابت مكتوب باليد، حتى
+     *  يفضل دقيقًا تلقائيًا مع كل رفعة جديدة بدون تعديل يدوي في الكود. */
+    private String getVersionLabel() {
+        try {
+            PackageInfo info = getPackageManager().getPackageInfo(getPackageName(), 0);
+            return info.versionName != null ? info.versionName : "1.0";
+        } catch (PackageManager.NameNotFoundException e) {
+            return "1.0";
+        }
     }
 
     private void saveAiKey() {
@@ -153,11 +191,99 @@ public class SettingsActivity extends AppCompatActivity {
         return key.trim();
     }
 
+    // -----------------------------------------------------------------
+    // رابط Cloudflare Worker الخاص بمساعد Phizyo AI
+    // -----------------------------------------------------------------
+
+    private void saveWorkerUrl() {
+        String raw = workerUrlField.getText() == null ? "" : workerUrlField.getText().toString();
+        String url = raw.trim();
+
+        if (!url.isEmpty() && !url.startsWith("http://") && !url.startsWith("https://")) {
+            Toast.makeText(this, "⚠️ الرابط لازم يبدأ بـ https:// - تأكد إنك نسخت رابط الووركر كامل من Cloudflare.", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        prefs().edit().putString(KEY_AI_WORKER_URL, url).apply();
+        Toast.makeText(this, url.isEmpty() ? "تم مسح رابط الووركر - رجع الوضع المجاني الافتراضي." : "✅ تم حفظ رابط الووركر.", Toast.LENGTH_SHORT).show();
+    }
+
+    /** اختبار اتصال فوري بالووركر المحفوظ حاليًا، لتأكيد إنه "بس تحط
+     *  الرابط ويشتغل" فعلًا قبل ما تسكّر شاشة الإعدادات. */
+    private void testWorkerConnection() {
+        String url = workerUrlField.getText() == null ? "" : workerUrlField.getText().toString().trim();
+        if (url.isEmpty()) {
+            Toast.makeText(this, "أضف رابط الووركر أولًا ثم اضغط حفظ.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Toast.makeText(this, "🧪 جاري اختبار الاتصال بالووركر...", Toast.LENGTH_SHORT).show();
+        executor.execute(() -> AiClient.testWorker(url, new AiClient.Callback() {
+            @Override
+            public void onSuccess(String reply) {
+                runOnUiThread(() -> new MaterialAlertDialogBuilder(SettingsActivity.this)
+                        .setTitle("✅ الووركر شغال")
+                        .setMessage("رد الووركر:\n\n" + reply)
+                        .setPositiveButton("تمام", null)
+                        .show());
+            }
+
+            @Override
+            public void onError(String message) {
+                runOnUiThread(() -> new MaterialAlertDialogBuilder(SettingsActivity.this)
+                        .setTitle("❌ تعذر الاتصال بالووركر")
+                        .setMessage("تأكد من:\n• الرابط صحيح ومنسوخ كامل من Cloudflare.\n• الووركر منشور (Deployed) وفعّال.\n• جهازك متصل بالإنترنت.\n\nطالما الرابط فاضي أو معطّل، التطبيق هيرجع تلقائيًا للوضع المجاني الافتراضي بدون ما يتوقف.")
+                        .setPositiveButton("تمام", null)
+                        .show());
+            }
+        }));
+    }
+
+    // -----------------------------------------------------------------
+    // ميزات إضافية بأسلوب أي تطبيق تاني: مشاركة، تقييم، تواصل
+    // -----------------------------------------------------------------
+
+    private void shareApp() {
+        Intent shareIntent = new Intent(Intent.ACTION_SEND);
+        shareIntent.setType("text/plain");
+        shareIntent.putExtra(Intent.EXTRA_TEXT,
+                "🩺 جرّب تطبيق Phizyo Studio - دليل استخدام جهاز AST-2012A ومساعد العلاج الطبيعي الذكي Phizyo AI!");
+        try {
+            startActivity(Intent.createChooser(shareIntent, "مشاركة التطبيق"));
+        } catch (ActivityNotFoundException e) {
+            Toast.makeText(this, "تعذر فتح قائمة المشاركة.", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void rateApp() {
+        String pkg = getPackageName();
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=" + pkg)));
+        } catch (ActivityNotFoundException e) {
+            try {
+                startActivity(new Intent(Intent.ACTION_VIEW,
+                        Uri.parse("https://play.google.com/store/apps/details?id=" + pkg)));
+            } catch (ActivityNotFoundException e2) {
+                Toast.makeText(this, "تعذر فتح متجر التطبيقات.", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+    private void sendFeedback() {
+        Intent intent = new Intent(Intent.ACTION_SENDTO);
+        intent.setData(Uri.parse("mailto:" + SUPPORT_EMAIL));
+        intent.putExtra(Intent.EXTRA_SUBJECT, "ملاحظات حول تطبيق Phizyo Studio");
+        try {
+            startActivity(intent);
+        } catch (ActivityNotFoundException e) {
+            Toast.makeText(this, "لا يوجد تطبيق بريد مثبّت على جهازك.", Toast.LENGTH_SHORT).show();
+        }
+    }
+
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             android.app.NotificationChannel channel = new android.app.NotificationChannel(
-                    CHANNEL_ID, "تنبيهات AST-2012A", android.app.NotificationManager.IMPORTANCE_DEFAULT);
-            channel.setDescription("إشعارات عامة من تطبيق AST-2012A Clinical Master");
+                    CHANNEL_ID, "تنبيهات Phizyo Studio", android.app.NotificationManager.IMPORTANCE_DEFAULT);
+            channel.setDescription("إشعارات عامة من تطبيق Phizyo Studio");
             android.app.NotificationManager manager = getSystemService(android.app.NotificationManager.class);
             if (manager != null) manager.createNotificationChannel(channel);
         }
@@ -203,7 +329,7 @@ public class SettingsActivity extends AppCompatActivity {
     private void sendTestNotification() {
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.ic_popup_reminder)
-                .setContentTitle("AST-2012A Clinical Master")
+                .setContentTitle("Phizyo Studio")
                 .setContentText("✅ الإشعارات تعمل بنجاح - هذا إشعار حقيقي من التطبيق نفسه.")
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                 .setAutoCancel(true);
@@ -243,6 +369,12 @@ public class SettingsActivity extends AppCompatActivity {
                 })
                 .setNegativeButton("إلغاء", null)
                 .show();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        executor.shutdownNow();
     }
 
     @Override

@@ -75,7 +75,7 @@ public class EncyclopediaActivity extends AppCompatActivity {
         container.scheduleLayoutAnimation();
 
         TextView aiHint = new TextView(this);
-        aiHint.setText("💡 اضغط مطولًا على أي نمط لسؤال المساعد الذكي عنه");
+        aiHint.setText("💡 اضغط مطولًا على أي نمط لسؤال Phizyo AI عنه");
         aiHint.setTextColor(getColor(R.color.text_secondary));
         aiHint.setTextSize(11);
         aiHint.setGravity(android.view.Gravity.CENTER);

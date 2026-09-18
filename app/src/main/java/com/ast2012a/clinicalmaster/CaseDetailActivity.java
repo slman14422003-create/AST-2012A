@@ -102,30 +102,27 @@ public class CaseDetailActivity extends AppCompatActivity {
         tp.bottomMargin = 24;
         container.addView(titleView, tp);
 
-        addField("النمط", currentCase.mode);
-        addField("التردد", currentCase.freq);
-        addField("القناة", currentCase.channel);
-        addField("المدة", currentCase.duration);
+        addStatGrid();
 
         if (!currentCase.poles.isEmpty()) {
-            addField("الأقطاب", String.join("\n", currentCase.poles));
+            addField("⚡ الأقطاب", String.join("\n", currentCase.poles));
         }
-        addField("الشرح الإكلينيكي", currentCase.explanation);
+        addField("📋 الشرح الإكلينيكي", currentCase.explanation);
         if (currentCase.symptoms != null && !currentCase.symptoms.isEmpty()) {
-            addField("الأعراض", currentCase.symptoms);
+            addField("🩺 الأعراض", currentCase.symptoms);
         }
         if (currentCase.sessionsPlan != null && !currentCase.sessionsPlan.isEmpty()) {
-            addField("خطة الجلسات", currentCase.sessionsPlan);
+            addField("📅 خطة الجلسات", currentCase.sessionsPlan);
         }
         if (currentCase.tip != null && !currentCase.tip.isEmpty()) {
-            addField("نصيحة", currentCase.tip);
+            addField("💡 نصيحة", currentCase.tip);
         }
 
         List<String> safetyNotes = DataManager.getGeneralSafetyNote(currentCase.mode);
         if (!safetyNotes.isEmpty()) {
             StringBuilder sb = new StringBuilder();
             for (String n : safetyNotes) sb.append("• ").append(n).append("\n");
-            addField("⚠️ ملاحظات سلامة عامة", sb.toString().trim());
+            addField("⚠️ ملاحظات سلامة عامة", sb.toString().trim(), true);
         }
 
         String term = currentCase.title.startsWith("بروتوكول")
@@ -165,7 +162,7 @@ public class CaseDetailActivity extends AppCompatActivity {
         }
 
         Button askAiBtn = new Button(this);
-        askAiBtn.setText("🤖 اسأل المساعد الذكي عن هذه الحالة");
+        askAiBtn.setText("🤖 اسأل Phizyo AI عن هذه الحالة");
         LinearLayout.LayoutParams askAiParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         askAiParams.topMargin = 10;
@@ -202,9 +199,61 @@ public class CaseDetailActivity extends AppCompatActivity {
         }
     }
 
+    /** شبكة 2×2 مدمجة لإعدادات الجهاز الأساسية (النمط/التردد/القناة/المدة)
+     *  أعلى الشاشة، بدل 4 بطاقات منفصلة كاملة العرض بنفس شكل أي حقل وصفي
+     *  تاني - تجميعها في رقائق صغيرة يخليها تُقرأ كمجموعة واحدة متجانسة
+     *  وأسرع في المسح البصري من أعلى تفاصيل الحالة. */
+    private void addStatGrid() {
+        String[][] stats = {
+                {"🎯 النمط", currentCase.mode},
+                {"📡 التردد", currentCase.freq},
+                {"🔌 القناة", currentCase.channel},
+                {"⏱️ المدة", currentCase.duration},
+        };
+
+        LinearLayout row = null;
+        for (String[] stat : stats) {
+            String value = stat[1];
+            if (value == null || value.isEmpty()) continue;
+
+            if (row == null) {
+                row = new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                rp.bottomMargin = 8;
+                row.setLayoutParams(rp);
+                container.addView(row);
+            }
+
+            View chip = LayoutInflater.from(this).inflate(R.layout.item_stat_chip, row, false);
+            ((TextView) chip.findViewById(R.id.stat_label)).setText(stat[0]);
+            ((TextView) chip.findViewById(R.id.stat_value)).setText(value);
+            LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) chip.getLayoutParams();
+            if (row.getChildCount() == 0) {
+                lp.setMarginEnd(4);
+            } else {
+                lp.setMarginStart(4);
+            }
+            row.addView(chip);
+
+            if (row.getChildCount() == 2) row = null;
+        }
+    }
+
     private void addField(String label, String value) {
+        addField(label, value, false);
+    }
+
+    /** @param warning لو true، تُعرض البطاقة بتلوين تنبيه (طوبي فاتح) بدل
+     *  الخلفية المحايدة العادية - تُستخدم لملاحظات السلامة العامة حتى تبرز
+     *  بصريًا عن باقي الحقول الوصفية. */
+    private void addField(String label, String value, boolean warning) {
         if (value == null || value.isEmpty()) value = "-";
         View block = LayoutInflater.from(this).inflate(R.layout.item_field_block, container, false);
+        if (warning) {
+            block.setBackgroundResource(R.drawable.bg_glass_card_warning);
+        }
         TextView labelView = block.findViewById(R.id.field_label);
         TextView valueView = block.findViewById(R.id.field_value);
         labelView.setText(label);

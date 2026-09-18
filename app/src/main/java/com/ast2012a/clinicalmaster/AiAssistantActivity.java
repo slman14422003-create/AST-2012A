@@ -49,6 +49,7 @@ public class AiAssistantActivity extends AppCompatActivity {
     private View quickPromptsTitle;
     private LinearLayout quickPromptsRow;
     private String apiKey;
+    private String workerUrl;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
     private static final String[] QUICK_PROMPTS = {
@@ -151,8 +152,11 @@ public class AiAssistantActivity extends AppCompatActivity {
         super.onResume();
         SharedPreferences prefs = getSharedPreferences("settings_prefs", MODE_PRIVATE);
         apiKey = prefs.getString("ai_api_key", "");
+        workerUrl = prefs.getString("ai_worker_url", "");
         if (modeHintText != null) {
-            if (apiKey != null && !apiKey.isEmpty()) {
+            if (workerUrl != null && !workerUrl.isEmpty()) {
+                modeHintText.setText("☁️ عند وجود تطابق مباشر في قاعدة بيانات الجهاز تصلك إجابة فورية موثوقة، وإلا تُستخدم Cloudflare Worker الخاصة بك مع بحث في Physiopedia ثم ويكيبيديا.");
+            } else if (apiKey != null && !apiKey.isEmpty()) {
                 modeHintText.setText("🔑 عند وجود تطابق مباشر في قاعدة بيانات الجهاز تصلك إجابة فورية موثوقة، وإلا يُستخدم مفتاح OpenRouter الخاص بك مع بحث في Physiopedia ثم ويكيبيديا.");
             } else {
                 modeHintText.setText("✅ الأسئلة المطابقة لقاعدة بيانات الجهاز (130 حالة) تُجاب فورًا وبدقة 100% بدون إنترنت. غير ذلك، يُستخدم بحث Physiopedia (مرجع علاج طبيعي متخصص) ثم ويكيبيديا + مزوّد مجاني كخلفية عامة تكميلية.");
@@ -172,7 +176,7 @@ public class AiAssistantActivity extends AppCompatActivity {
         if (adapter.getItemCount() == 0) return;
         new MaterialAlertDialogBuilder(this)
                 .setTitle("مسح المحادثة")
-                .setMessage("هل تريد مسح كل سجل المحادثة مع المساعد الذكي نهائيًا؟")
+                .setMessage("هل تريد مسح كل سجل المحادثة مع Phizyo AI نهائيًا؟")
                 .setPositiveButton("مسح", (dialog, which) -> {
                     adapter.clearAll();
                     AiChatStore.clear(this);
@@ -213,6 +217,7 @@ public class AiAssistantActivity extends AppCompatActivity {
         setTypingStage(1);
 
         final String finalApiKey = apiKey;
+        final String finalWorkerUrl = workerUrl;
         executor.execute(() -> {
             // المرحلة صفر: هل يوجد تطابق مباشر وواثق في قاعدة بيانات الجهاز؟
             // لو أه، نجاوب فورًا من البيانات الموثقة نفسها - بدون إنترنت وبدون
@@ -265,7 +270,7 @@ public class AiAssistantActivity extends AppCompatActivity {
 
             runOnUiThread(() -> setTypingStage(2));
 
-            AiClient.sendMessage(finalApiKey, systemPromptToUse, text, new AiClient.Callback() {
+            AiClient.sendMessage(finalApiKey, finalWorkerUrl, systemPromptToUse, text, new AiClient.Callback() {
                 @Override
                 public void onSuccess(String reply) {
                     runOnUiThread(() -> {

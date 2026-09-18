@@ -341,6 +341,7 @@ public class MainActivity extends AppCompatActivity {
 
         SharedPreferences prefs = getSharedPreferences("settings_prefs", MODE_PRIVATE);
         String apiKey = prefs.getString("ai_api_key", "");
+        String workerUrl = prefs.getString("ai_worker_url", "");
 
         executor.execute(() -> {
             // المرحلة الأولى: تأريض محلي - بروتوكولات موثقة من قاعدة بيانات الجهاز
@@ -369,7 +370,7 @@ public class MainActivity extends AppCompatActivity {
 
             runOnUiThread(() -> setAiInlineLoadingText("🤖 يفكر في الإجابة..."));
 
-            AiClient.sendMessage(apiKey, systemPromptToUse, query, new AiClient.Callback() {
+            AiClient.sendMessage(apiKey, workerUrl, systemPromptToUse, query, new AiClient.Callback() {
                 @Override
                 public void onSuccess(String reply) {
                     runOnUiThread(() -> {

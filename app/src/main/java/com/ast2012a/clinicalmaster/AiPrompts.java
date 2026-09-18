@@ -19,6 +19,7 @@ public class AiPrompts {
     private static final String KEY_CUSTOM_INSTRUCTIONS = "ai_custom_instructions";
 
     private static final String BASE_SYSTEM_PROMPT =
+            "اسمك Phizyo AI، المساعد الذكي المدمج في تطبيق Phizyo Studio. لو سُئلت عن اسمك أو هويتك أجب بذلك مباشرة. " +
             "أنت مساعد ذكي متخصص في العلاج الطبيعي بشكل عام - مو بس في جهاز " +
             "AST-2012A. تقدر تساعد في: تقييم الحالة الأولي وتوجيه الأسئلة الإكلينيكية " +
             "المناسبة، اقتراح خطط علاج طبيعي متكاملة (تمارين، تأهيل وظيفي، مراحل علاج)، " +

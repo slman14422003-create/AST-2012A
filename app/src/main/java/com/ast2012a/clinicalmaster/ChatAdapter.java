@@ -82,7 +82,7 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ViewHolder> {
         boolean isUser = m.role == ChatMessage.ROLE_USER;
         Context ctx = holder.itemView.getContext();
 
-        holder.role.setText(isUser ? "أنت" : "المساعد الذكي");
+        holder.role.setText(isUser ? "أنت" : ctx.getString(R.string.ai_assistant_name));
         holder.avatar.setText(isUser ? "🧑" : "🤖");
         holder.avatar.setBackgroundResource(isUser ? R.drawable.bg_avatar_circle : R.drawable.bg_avatar_circle_ai);
         holder.time.setText(DateFormat.format("hh:mm a", m.timestamp));

@@ -14,18 +14,18 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
 /**
- * عميل الذكاء الاصطناعي. المسار المجاني الافتراضي (بدون مفتاح) بيجرب
- * مزوّدين مختلفين تلقائيًا بالترتيب - لو الأول فشل أو كان مزدحمًا، بيجرب
- * الثاني فورًا بدون ما يظهر أي خطأ للمستخدم، فاحتمال "الذكاء الاصطناعي
- * مش شغال خالص" يقل كثيرًا:
+ * عميل الذكاء الاصطناعي (Phizyo AI). ترتيب الأولوية عند إرسال أي سؤال:
  *
- * 1) LLM7.io - endpoint موثّق متوافق مع OpenAI، استخدام مجهول تمامًا
- *    (api_key="unused") - https://docs.llm7.io/quickstart
- * 2) Pollinations.ai - endpoint نصي مجاني بدون مفتاح، موديل "openai-large"
- *    تحديدًا (وليس "openai" العادي المدفوع) - https://text.pollinations.ai
- *
- * لو المستخدم عنده مفتاح OpenRouter خاص بيه (من الإعدادات)، بيُستخدم هو
- * فقط بدل السلسلة المجانية دي بالكامل.
+ * 1) رابط Cloudflare Worker الخاص بالمستخدم (لو أضافه من الإعدادات) -
+ *    ووركر بسيط بيستخدم Cloudflare Workers AI مجانًا عبر AI Binding
+ *    (بدون أي مفتاح API مطلوب داخل التطبيق نفسه - الووركر هو اللي بيحمل
+ *    صلاحية الوصول على حساب Cloudflare بتاع المستخدم). يكفي نشر الووركر
+ *    مرة واحدة (ملف worker.js المرفق) ولصق رابطه هنا فقط.
+ * 2) مفتاح OpenRouter الخاص بالمستخدم - لو أضافه، ومفيش ووركر أو الووركر فشل.
+ * 3) السلسلة المجانية الافتراضية بدون أي إعداد (LLM7 ثم Pollinations،
+ *    بمحاولة إعادة واحدة لكل مزوّد) - تُستخدم دائمًا كخط رجوع أخير مهما
+ *    كان الإعداد، عشان يفضل المساعد شغال قدر الإمكان حتى لو فشل كل شيء
+ *    فوقها.
  */
 public class AiClient {
 
@@ -43,65 +43,49 @@ public class AiClient {
         void onError(String message);
     }
 
-    /**
-     * يُستدعى من Thread خلفية (مش الـ UI Thread). السلسلة المجانية الافتراضية
-     * (بدون مفتاح) بتجرب حتى 4 محاولات قبل ما تستسلم، عشان تقل حالات
-     * "الذكاء الاصطناعي مش شغال" الناتجة عن ازدحام لحظي في أي مزوّد واحد:
-     * LLM7 → إعادة محاولة LLM7 مرة واحدة (فشل الشبكة غالبًا مؤقت) →
-     * Pollinations → إعادة محاولة Pollinations مرة واحدة.
-     */
+    /** التوقيع القديم (بدون رابط ووركر) - مُبقى عليه حتى ما ينكسر أي
+     *  استدعاء قديم؛ يكافئ استدعاء التوقيع الجديد بدون رابط ووركر. */
     public static void sendMessage(String apiKey, String systemContext, String userMessage, Callback callback) {
-        if (apiKey == null || apiKey.trim().isEmpty()) {
-            sendViaLlm7(systemContext, userMessage, new Callback() {
+        sendMessage(apiKey, null, systemContext, userMessage, callback);
+    }
+
+    /**
+     * يُستدعى من Thread خلفية (مش الـ UI Thread).
+     * @param apiKey مفتاح OpenRouter الاختياري.
+     * @param workerUrl رابط Cloudflare Worker الاختياري - أولوية أعلى من apiKey لو مُضاف.
+     */
+    public static void sendMessage(String apiKey, String workerUrl, String systemContext,
+                                    String userMessage, Callback callback) {
+        if (workerUrl != null && !workerUrl.trim().isEmpty()) {
+            sendViaWorker(workerUrl.trim(), systemContext, userMessage, new Callback() {
                 @Override
                 public void onSuccess(String reply) {
                     callback.onSuccess(reply);
                 }
 
                 @Override
-                public void onError(String firstError) {
-                    // محاولة ثانية سريعة لنفس المزوّد الأول قبل التبديل - أغلب
-                    // أخطاء الشبكة على الموبايل مؤقتة (انقطاع لحظي، تبديل شبكة).
-                    sendViaLlm7(systemContext, userMessage, new Callback() {
-                        @Override
-                        public void onSuccess(String reply) {
-                            callback.onSuccess(reply);
-                        }
-
-                        @Override
-                        public void onError(String retryError) {
-                            sendViaPollinations(systemContext, userMessage, new Callback() {
-                                @Override
-                                public void onSuccess(String reply) {
-                                    callback.onSuccess(reply);
-                                }
-
-                                @Override
-                                public void onError(String secondError) {
-                                    sendViaPollinations(systemContext, userMessage, new Callback() {
-                                        @Override
-                                        public void onSuccess(String reply) {
-                                            callback.onSuccess(reply);
-                                        }
-
-                                        @Override
-                                        public void onError(String finalError) {
-                                            callback.onError("تعذر الوصول لأي من خدمات الذكاء الاصطناعي المجانية حاليًا (قد تكون مزدحمة أو الاتصال بالإنترنت غير مستقر). حاول بعد قليل، أو أضف مفتاح OpenRouter الخاص بك من الإعدادات كبديل أكثر ثباتًا.");
-                                        }
-                                    });
-                                }
-                            });
-                        }
-                    });
+                public void onError(String workerError) {
+                    // الووركر فشل (رابط غلط، الووركر متوقف، أو تجاوز حد
+                    // الاستخدام المجاني اليومي على Cloudflare)؛ نكمل تلقائيًا
+                    // على باقي السلسلة بدل ما نوقف المحادثة بخطأ نهائي.
+                    sendViaKeyOrFreeChain(apiKey, systemContext, userMessage, callback);
                 }
             });
         } else {
+            sendViaKeyOrFreeChain(apiKey, systemContext, userMessage, callback);
+        }
+    }
+
+    private static void sendViaKeyOrFreeChain(String apiKey, String systemContext,
+                                               String userMessage, Callback callback) {
+        if (apiKey == null || apiKey.trim().isEmpty()) {
+            sendFreeChain(systemContext, userMessage, callback);
+        } else {
             // تحسين موثوقية: لو مفتاح OpenRouter الخاص بالمستخدم فشل (مفتاح
             // منتهي/غير صالح، أو تجاوز الحد المسموح على الخطة المجانية من
-            // OpenRouter نفسها - 20 طلب/دقيقة أو 50 طلب/يوم بدون رصيد
-            // مشحون)، لا نوقف المحادثة بخطأ نهائي؛ بدل كده نكمل تلقائيًا
-            // على نفس سلسلة المزوّدين المجانيين الافتراضية بدون مفتاح، عشان
-            // يفضل المساعد الذكي شغال دايمًا قدر الإمكان.
+            // OpenRouter نفسها)، لا نوقف المحادثة بخطأ نهائي؛ بدل كده نكمل
+            // تلقائيًا على نفس سلسلة المزوّدين المجانيين الافتراضية بدون
+            // مفتاح، عشان يفضل المساعد الذكي شغال دايمًا قدر الإمكان.
             sendChatCompletionJson(OPENROUTER_ENDPOINT, apiKey.trim(), OPENROUTER_MODEL, systemContext, userMessage,
                     null, new Callback() {
                         @Override
@@ -138,8 +122,138 @@ public class AiClient {
         }
     }
 
+    /** السلسلة المجانية الافتراضية بدون أي مفتاح ولا ووركر: حتى 4 محاولات
+     *  (LLM7 → إعادة محاولة LLM7 → Pollinations → إعادة محاولة Pollinations)
+     *  قبل ما تستسلم، عشان تقل حالات "الذكاء الاصطناعي مش شغال" الناتجة عن
+     *  ازدحام لحظي في أي مزوّد واحد. */
+    private static void sendFreeChain(String systemContext, String userMessage, Callback callback) {
+        sendViaLlm7(systemContext, userMessage, new Callback() {
+            @Override
+            public void onSuccess(String reply) {
+                callback.onSuccess(reply);
+            }
+
+            @Override
+            public void onError(String firstError) {
+                sendViaLlm7(systemContext, userMessage, new Callback() {
+                    @Override
+                    public void onSuccess(String reply) {
+                        callback.onSuccess(reply);
+                    }
+
+                    @Override
+                    public void onError(String retryError) {
+                        sendViaPollinations(systemContext, userMessage, new Callback() {
+                            @Override
+                            public void onSuccess(String reply) {
+                                callback.onSuccess(reply);
+                            }
+
+                            @Override
+                            public void onError(String secondError) {
+                                sendViaPollinations(systemContext, userMessage, new Callback() {
+                                    @Override
+                                    public void onSuccess(String reply) {
+                                        callback.onSuccess(reply);
+                                    }
+
+                                    @Override
+                                    public void onError(String finalError) {
+                                        callback.onError("تعذر الوصول لأي من خدمات الذكاء الاصطناعي المجانية حاليًا (قد تكون مزدحمة أو الاتصال بالإنترنت غير مستقر). حاول بعد قليل، أو أضف رابط Cloudflare Worker أو مفتاح OpenRouter الخاص بك من شاشة الإعدادات كبديل أكثر ثباتًا.");
+                                    }
+                                });
+                            }
+                        });
+                    }
+                });
+            }
+        });
+    }
+
     // -----------------------------------------------------------------
-    // المزوّد الأول: LLM7.io
+    // Cloudflare Worker (رابط المستخدم الخاص - أولوية أولى)
+    // -----------------------------------------------------------------
+
+    /**
+     * يرسل POST بصيغة JSON بسيطة {"system": "...", "message": "..."}
+     * لرابط الووركر، ويتوقع ردًا بصيغة {"reply": "..."} - نفس العقد
+     * المستخدم في نموذج الووركر المرفق (worker.js). العقد بسيط عمدًا حتى
+     * "لصق الرابط فقط" يشتغل بدون أي إعداد إضافي داخل التطبيق.
+     */
+    private static void sendViaWorker(String workerUrl, String systemContext, String userMessage, Callback callback) {
+        HttpURLConnection conn = null;
+        try {
+            URL url = new URL(workerUrl);
+            conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setConnectTimeout(15000);
+            conn.setReadTimeout(45000);
+            conn.setDoOutput(true);
+
+            JSONObject body = new JSONObject();
+            body.put("system", systemContext == null ? "" : systemContext);
+            body.put("message", userMessage);
+
+            OutputStream os = conn.getOutputStream();
+            os.write(body.toString().getBytes(StandardCharsets.UTF_8));
+            os.close();
+
+            int status = conn.getResponseCode();
+            InputStream is = status >= 200 && status < 300 ? conn.getInputStream() : conn.getErrorStream();
+            String responseBody = readStream(is);
+
+            if (status < 200 || status >= 300 || responseBody == null || responseBody.trim().isEmpty()) {
+                callback.onError("WORKER_FAILED");
+                return;
+            }
+
+            String reply = extractWorkerReply(responseBody);
+            if (reply == null || reply.trim().isEmpty()) {
+                callback.onError("WORKER_FAILED");
+                return;
+            }
+            callback.onSuccess(reply.trim());
+
+        } catch (Exception e) {
+            callback.onError("WORKER_FAILED");
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+    }
+
+    /** يقرأ رد الووركر بأي من الشكلين الشائعين: {"reply": "..."} أو
+     *  {"response": "..."} (عقد worker.js المرفق)، أو شكل متوافق مع OpenAI
+     *  ({"choices":[{"message":{"content": "..."}}]}) لو المستخدم عدّل
+     *  الووركر بنفسه ليرجّع هذا الشكل بدلًا منه. */
+    private static String extractWorkerReply(String responseBody) {
+        try {
+            JSONObject json = new JSONObject(responseBody);
+            if (json.has("reply")) {
+                return json.optString("reply", null);
+            }
+            if (json.has("response")) {
+                return json.optString("response", null);
+            }
+            JSONArray choices = json.optJSONArray("choices");
+            if (choices != null && choices.length() > 0) {
+                JSONObject msg = choices.getJSONObject(0).optJSONObject("message");
+                if (msg != null) return msg.optString("content", null);
+            }
+            return null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** فحص اتصال بسيط بالووركر (تُستخدم من زر "اختبار الاتصال" في شاشة
+     *  الإعدادات) - يرسل رسالة تجريبية قصيرة ويرجّع نجاح/فشل مباشرة. */
+    public static void testWorker(String workerUrl, Callback callback) {
+        sendViaWorker(workerUrl, "أجب بكلمة واحدة فقط للتأكد من عمل الاتصال.", "قل: تم الاتصال بنجاح ✅", callback);
+    }
+
+    // -----------------------------------------------------------------
+    // المزوّد الأول من السلسلة المجانية: LLM7.io
     // -----------------------------------------------------------------
 
     private static void sendViaLlm7(String systemContext, String userMessage, Callback callback) {
