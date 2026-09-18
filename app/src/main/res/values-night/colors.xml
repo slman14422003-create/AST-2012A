@@ -38,6 +38,10 @@
     <color name="accent_green">#79C592</color>
     <color name="accent_gold">#D9AC6C</color>
 
+    <!-- بطاقة تنبيه السلامة - نسخة الوضع الليلي -->
+    <color name="warning_fill">#2E1D18</color>
+    <color name="warning_border">#4A2E24</color>
+
     <color name="white">#FFFFFF</color>
     <color name="black">#000000</color>
     <color name="overlay_scrim">#CC000000</color>
