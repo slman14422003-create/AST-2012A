@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- بطاقة مميّزة لملاحظات السلامة في شاشة تفاصيل الحالة - نفس شكل البطاقة
+     العادية لكن بتلوين طوبي فاتح وحدّ أوضح، حتى تبرز بصريًا عن باقي حقول
+     الشاشة بدل ما تكون بنفس وزن أي حقل وصفي عادي. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="@color/warning_fill" />
+    <corners android:radius="14dp" />
+    <stroke android:width="1.4dp" android:color="@color/warning_border" />
+</shape>
