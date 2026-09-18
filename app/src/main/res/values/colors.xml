@@ -39,6 +39,11 @@
     <color name="accent_green">#4C8860</color>
     <color name="accent_gold">#B07E33</color>
 
+    <!-- بطاقة تنبيه السلامة في شاشة تفاصيل الحالة: تلوين طوبي فاتح يميّزها
+         بصريًا عن باقي بطاقات الحقول العادية -->
+    <color name="warning_fill">#FBEAE6</color>
+    <color name="warning_border">#E8C4BB</color>
+
     <color name="white">#FFFFFF</color>
     <color name="black">#000000</color>
     <color name="overlay_scrim">#A6000000</color>

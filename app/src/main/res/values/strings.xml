@@ -1,3 +1,4 @@
 <resources>
-    <string name="app_name">AST-2012A Clinical Master</string>
+    <string name="app_name">Phizyo Studio</string>
+    <string name="ai_assistant_name">Phizyo AI</string>
 </resources>
