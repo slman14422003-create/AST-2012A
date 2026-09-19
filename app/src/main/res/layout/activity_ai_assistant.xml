@@ -100,7 +100,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:gravity="end"
-            android:text="🤖 يعمل حاليًا بالوضع المجاني الجاهز (بدون مفتاح). يمكنك إضافة مفتاح OpenRouter اختياري من الإعدادات لتجربة نموذج بديل."
+            android:text="✅ الأسئلة المطابقة لقاعدة بيانات الجهاز تُجاب فورًا بدون إنترنت. غير ذلك، تُصاغ الإجابة عبر Phizyo AI."
             android:textColor="@color/text_secondary"
             android:textDirection="rtl"
             android:textSize="11.5sp" />

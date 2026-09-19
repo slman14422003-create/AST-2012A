@@ -116,128 +116,53 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
                     android:gravity="end"
-                    android:text="1️⃣ أي سؤال يطابق قاعدة بيانات الجهاز (130 حالة موثقة) يُجاب فورًا من البيانات نفسها بدون إنترنت وبدقة 100%.&#10;&#10;2️⃣ غير ذلك، يُستخدم بحث Physiopedia أولًا (مرجع متخصص في العلاج الطبيعي مراجَع من أخصائيين)، ثم ويكيبيديا (عربي ثم إنجليزي) كخلفية معرفية عامة تكميلية لو مفيش نتيجة، وتُعرض دائمًا بشارة مصدر واضحة مميّزة عن بيانات الجهاز.&#10;&#10;3️⃣ الصياغة النهائية: لو أضفت رابط Cloudflare Worker الخاص بك تحت، تتم الصياغة من خلاله أولًا. غير ذلك يُستخدم مفتاح OpenRouter (لو أضفته)، وإلا فمزوّد ذكاء اصطناعي مجاني بالكامل بالتناوب التلقائي — لا يلزمك أي اشتراك أو تسجيل في كل الأحوال."
+                    android:text="1️⃣ أي سؤال يطابق قاعدة بيانات الجهاز (130 حالة موثقة) يُجاب فورًا من البيانات نفسها بدون إنترنت وبدقة 100%.&#10;&#10;2️⃣ غير ذلك، يُستخدم بحث Physiopedia أولًا (مرجع متخصص في العلاج الطبيعي مراجَع من أخصائيين)، ثم ويكيبيديا (عربي ثم إنجليزي) كخلفية معرفية عامة تكميلية لو مفيش نتيجة.&#10;&#10;3️⃣ الصياغة النهائية تتم دائمًا عبر Phizyo AI - مزوّد ذكاء اصطناعي واحد ثابت مبني داخل التطبيق، وتلتزم بأي تعليمات مخصّصة تضيفها تحت."
                     android:textColor="@color/text_secondary"
                     android:textDirection="rtl"
                     android:textSize="12sp" />
             </LinearLayout>
 
-            <!-- رابط Cloudflare Worker: الخيار ذو الأولوية الأولى - أضِف رابط
-                 الووركر المنشور من ملف worker.js المرفق واضغط "اختبار الاتصال"
-                 للتأكد إنه شغال فورًا. -->
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                android:background="@drawable/bg_glass_card_soft"
-                android:gravity="end"
-                android:padding="12dp"
-                android:text="☁️ الخيار الأول (موصى به): انشر ملف worker.js المرفق كـ Cloudflare Worker مجاني (بدون أي مفتاح API مطلوب - الووركر نفسه هو اللي بيوصل بذكاء Cloudflare AI)، وألصق رابطه هنا فقط.&#10;&#10;🔒 الرابط يُحفظ على جهازك فقط. اضغط «اختبار الاتصال» بعد الحفظ للتأكد إنه شغال."
-                android:textColor="@color/text_secondary"
-                android:textDirection="rtl"
-                android:textSize="12sp" />
-
-            <com.google.android.material.textfield.TextInputLayout
-                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="10dp"
-                android:hint="رابط Cloudflare Worker (اختياري)"
-                app:boxBackgroundColor="@color/glass_fill_soft"
-                app:boxCornerRadiusBottomEnd="14dp"
-                app:boxCornerRadiusBottomStart="14dp"
-                app:boxCornerRadiusTopEnd="14dp"
-                app:boxCornerRadiusTopStart="14dp"
-                app:boxStrokeColor="@color/primary_cyan"
-                app:endIconMode="clear_text">
-
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/ai_worker_url_field"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:hint="https://your-worker.workers.dev"
-                    android:inputType="textUri"
-                    android:textDirection="ltr" />
-            </com.google.android.material.textfield.TextInputLayout>
-
+            <!-- رابط الووركر ثابت داخل التطبيق (AiClient.FIXED_WORKER_URL) وغير
+                 قابل للتعديل من هنا - معروض هنا للشفافية فقط، مع زر اختبار
+                 اتصال فوري. -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="22dp"
-                android:orientation="horizontal">
-
-                <Button
-                    android:id="@+id/btn_save_worker_url"
-                    style="@style/PrimaryButton"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="4dp"
-                    android:layout_weight="1"
-                    android:text="💾 حفظ" />
-
-                <Button
-                    android:id="@+id/btn_test_worker"
-                    style="@style/GlassButton"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginEnd="4dp"
-                    android:layout_weight="1"
-                    android:text="🧪 اختبار الاتصال" />
-            </LinearLayout>
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="10dp"
-                android:gravity="end"
-                android:text="⬇️ الخيار الثاني: مفتاح OpenRouter"
-                android:textColor="@color/text_primary"
-                android:textDirection="rtl"
-                android:textSize="13sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
                 android:layout_marginBottom="12dp"
                 android:background="@drawable/bg_glass_card_soft"
-                android:gravity="end"
-                android:padding="12dp"
-                android:text="⚙️ تقدر (اختياريًا) تضيف مفتاح API مجاني من openrouter.ai لتجربة نموذج بديل بدل السلسلة المجانية الافتراضية.&#10;⚠️ الصق المفتاح فقط (يبدأ بـ sk-or-v1-...) — بدون كتابة export ولا أي أوامر.&#10;&#10;🔒 المفتاح يُحفظ على جهازك فقط، ولا يُرسَل لأي مكان غير OpenRouter مباشرة.&#10;🔁 لو ظهرت رسالة أن المفتاح غير صالح أو انتهت صلاحيته، أعد إصداره من openrouter.ai/keys — التطبيق يرجع تلقائيًا للوضع المجاني بدون مفتاح لو حصل أي عطل مؤقت في مفتاحك."
-                android:textColor="@color/text_secondary"
-                android:textDirection="rtl"
-                android:textSize="12sp" />
+                android:orientation="vertical"
+                android:padding="12dp">
 
-            <com.google.android.material.textfield.TextInputLayout
-                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="10dp"
-                android:hint="مفتاح API اختياري (OpenRouter)"
-                app:boxBackgroundColor="@color/glass_fill_soft"
-                app:boxCornerRadiusBottomEnd="14dp"
-                app:boxCornerRadiusBottomStart="14dp"
-                app:boxCornerRadiusTopEnd="14dp"
-                app:boxCornerRadiusTopStart="14dp"
-                app:boxStrokeColor="@color/primary_cyan"
-                app:endIconMode="clear_text">
-
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/ai_key_field"
+                <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:inputType="textPassword"
-                    android:textDirection="ltr" />
-            </com.google.android.material.textfield.TextInputLayout>
+                    android:gravity="end"
+                    android:text="☁️ المزوّد الثابت (Cloudflare Worker)"
+                    android:textColor="@color/text_primary"
+                    android:textDirection="rtl"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/worker_url_fixed_label"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:gravity="end"
+                    android:textColor="@color/text_secondary"
+                    android:textDirection="ltr"
+                    android:textIsSelectable="true"
+                    android:textSize="12sp" />
+            </LinearLayout>
 
             <Button
-                android:id="@+id/btn_save_key"
+                android:id="@+id/btn_test_worker"
                 style="@style/PrimaryButton"
-                android:layout_marginBottom="10dp"
-                android:text="💾 حفظ المفتاح" />
+                android:layout_marginBottom="22dp"
+                android:text="🧪 اختبار الاتصال" />
 
-            <!-- تعليمات مخصّصة للمساعد الذكي: المستخدم يقدر "يدرّبه" حسب
-                 طلبه (أسلوب الإجابة، تركيز معيّن، تفضيلات...) وتُضاف تلقائيًا
+            <!-- تعليمات مخصّصة لـ Phizyo AI: المستخدم يقدر "يدرّبه" حسب طلبه
+                 (أسلوب الإجابة، تركيز معيّن، تفضيلات...) وتُضاف تلقائيًا
                  لتعليمات النظام في كل محادثة (المحادثة الكاملة والرد السريع). -->
             <TextView
                 android:layout_width="match_parent"
@@ -265,7 +190,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="10dp"
-                android:hint="تعليماتك للمساعد الذكي">
+                android:hint="تعليماتك لـ Phizyo AI">
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/ai_custom_instructions_field"
