@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- شارة مصدر أخف من بطاقة زجاجية عادية: تعبئة مائلة لون التمييز بدون حدّ،
+     بنفس روح "شارات الاقتباس" (citation pills) في تطبيقات المحادثة الحديثة. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="@color/m3_primary_container" />
+    <corners android:radius="20dp" />
+</shape>
