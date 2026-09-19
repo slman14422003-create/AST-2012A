@@ -105,6 +105,24 @@
         <item name="android:textSize">12sp</item>
     </style>
 
+    <!-- صف إعدادات موحّد (شاشة الإعدادات) - سطر واحد كامل العرض، ارتفاع
+         مريح للمس، ومحاذاة لليمين بنفس روح صفوف قوائم Claude/iOS. نفس
+         عنصر Button القديم بالضبط (بدون أي تغيير في نوع العنصر) عشان
+         يفضل الكود في SettingsActivity.java شغّال بدون أي تعديل. -->
+    <style name="SettingsRow" parent="Widget.Material3.Button.TextButton">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_margin">2dp</item>
+        <item name="android:minHeight">52dp</item>
+        <item name="android:gravity">end|center_vertical</item>
+        <item name="android:paddingHorizontal">14dp</item>
+        <item name="android:paddingVertical">14dp</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textDirection">rtl</item>
+        <item name="android:textSize">13.5sp</item>
+    </style>
+
     <!-- زر ثانوي عام (بطاقة بيضاء بحد رفيع) يُستخدم في شاشات التفاصيل والإعدادات -->
     <style name="GlassButton">
         <item name="android:layout_width">match_parent</item>
