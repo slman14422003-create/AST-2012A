@@ -43,13 +43,28 @@
                 android:textSize="11sp"
                 android:textStyle="bold" />
 
-            <TextView
-                android:id="@+id/bubble_avatar"
+            <FrameLayout
+                android:id="@+id/bubble_avatar_frame"
                 android:layout_width="24dp"
                 android:layout_height="24dp"
-                android:background="@drawable/bg_avatar_circle"
-                android:gravity="center"
-                android:textSize="11sp" />
+                android:background="@drawable/bg_avatar_circle">
+
+                <TextView
+                    android:id="@+id/bubble_avatar"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:gravity="center"
+                    android:textSize="11sp" />
+
+                <ImageView
+                    android:id="@+id/bubble_avatar_icon"
+                    android:layout_width="13dp"
+                    android:layout_height="13dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="@string/ai_assistant_name"
+                    android:src="@drawable/ic_ai_bot"
+                    android:visibility="gone" />
+            </FrameLayout>
         </LinearLayout>
 
         <TextView

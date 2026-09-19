@@ -71,13 +71,18 @@
                     android:background="@drawable/dot_accent" />
             </LinearLayout>
 
+            <!-- كانت هنا نص ثابت "دليل جهاز AST-2012A · ..." بيوحي إن
+                 التطبيق خاص بجهاز باسم تقني غريب - بينما الاسم الفعلي
+                 للمنتج هو Phizyo بس. استُبدل بعبارة ترحيب قصيرة تتغيّر
+                 حسب وقت اليوم (GreetingProvider) تُملأ من MainActivity. -->
             <TextView
+                android:id="@+id/header_subtitle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="1dp"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:text="دليل جهاز AST-2012A · مساعد العلاج الطبيعي الشامل"
+                android:text="مساعد العلاج الطبيعي الذكي"
                 android:textColor="@color/text_tertiary"
                 android:textSize="11sp" />
         </LinearLayout>
@@ -285,7 +290,7 @@
                 android:foreground="?attr/selectableItemBackground"
                 android:paddingHorizontal="18dp"
                 android:paddingVertical="10dp"
-                android:text="🤖 اسأل Phizyo AI بدل ذلك"
+                android:text="✨ اسأل Phizyo AI بدل ذلك"
                 android:textColor="@color/white"
                 android:textDirection="rtl"
                 android:textSize="13sp"
@@ -335,7 +340,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="10dp"
                         android:gravity="end"
-                        android:text="🤖 رد Phizyo AI"
+                        android:text="✨ رد Phizyo AI"
                         android:textColor="@color/primary_cyan_dark"
                         android:textDirection="rtl"
                         android:textSize="12.5sp"
@@ -436,7 +441,7 @@
                     android:foreground="?attr/selectableItemBackground"
                     android:paddingHorizontal="16dp"
                     android:paddingVertical="9dp"
-                    android:text="🤖 Phizyo AI"
+                    android:text="✨ Phizyo AI"
                     android:textColor="@color/white"
                     android:textDirection="rtl"
                     android:textSize="12.5sp"
