@@ -25,7 +25,11 @@ public class ClinicalMasterApp extends Application {
         ThemeManager.applySavedTheme(this);
 
         DynamicColorsOptions options = new DynamicColorsOptions.Builder()
-                .setPrecondition((activity, theme) -> DynamicColors.isDynamicColorAvailable())
+                .setPrecondition((activity, theme) -> DynamicColors.isDynamicColorAvailable()
+                        // شاشة splash مستثناة عمدًا: لازم تفضل بنفس لون علامة
+                        // Claude الثابت (claude_orange) دايمًا، مش لون ديناميكي
+                        // مستخرج من خلفية جهاز المستخدم.
+                        && !(activity instanceof SplashActivity))
                 .build();
         DynamicColors.applyToActivitiesIfAvailable(this, options);
     }
