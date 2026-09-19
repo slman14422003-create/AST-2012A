@@ -148,7 +148,7 @@ public class AiAssistantActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         if (modeHintText != null) {
-            modeHintText.setText("✅ الأسئلة المطابقة لقاعدة بيانات الجهاز (130 حالة) تُجاب فورًا وبدقة 100% بدون إنترنت. غير ذلك، يُستخدم بحث Physiopedia (مرجع علاج طبيعي متخصص) ثم ويكيبيديا كخلفية، وتُصاغ الإجابة النهائية دائمًا عبر Phizyo AI.");
+            modeHintText.setText("Phizyo AI بيقرر بنفسه إمتى يحتاج يبحث في قاعدة بيانات الجهاز أو Physiopedia - وتقدر كمان تتكلم معاه عادي زي أي مساعد ذكي.");
         }
     }
 
@@ -189,7 +189,9 @@ public class AiAssistantActivity extends AppCompatActivity {
 
     /**
      * المسار الموحّد لإرسال أي سؤال (سواء مكتوب يدويًا، من شريحة اقتراح
-     * سريع، أو إعادة محاولة). يمر بمرحلتي التأريض ثم يستدعي النموذج.
+     * سريع، أو إعادة محاولة). القرار كامل بين "دردشة طبيعية مباشرة" أو
+     * "بحث/تأريض ثم رد" بقى مسؤولية AiOrchestrator - والنموذج نفسه هو
+     * اللي يحسم الاختيار ده مش قاعدة ثابتة في الشاشة.
      */
     private void sendQuery(String text, boolean addUserBubble) {
         if (text == null || text.trim().isEmpty()) return;
@@ -202,103 +204,61 @@ public class AiAssistantActivity extends AppCompatActivity {
             input.setText("");
         }
 
-        setTypingStage(1);
+        setTypingStage(0);
 
-        executor.execute(() -> {
-            // المرحلة صفر: هل يوجد تطابق مباشر وواثق في قاعدة بيانات الجهاز؟
-            // لو أه، نجاوب فورًا من البيانات الموثقة نفسها - بدون إنترنت وبدون
-            // أي نموذج ذكاء اصطناعي خارجي - إجابة مضمونة الدقة 100%.
-            DataManager.SearchResult direct = DataManager.search(text, DataManager.loadBuiltinDatabase(this));
-            if (!direct.items.isEmpty() && !direct.isFallback) {
-                CaseItem top = direct.items.get(0);
-                String reply = DataManager.buildLocalAnswer(top);
-                if (direct.items.size() > 1) {
-                    reply += "\n\nℹ️ توجد " + (direct.items.size() - 1) + " حالة أخرى مطابقة أيضًا في القاعدة يمكن مراجعتها من شاشة البحث الرئيسية.";
-                }
-                final String finalReply = reply;
-                runOnUiThread(() -> {
-                    typingIndicator.setVisibility(View.GONE);
-                    adapter.addMessage(new ChatMessage(ChatMessage.ROLE_AI, finalReply,
-                            "قاعدة بيانات الجهاز الموثقة (إجابة فورية بدون إنترنت)", null, text));
-                    AiChatStore.save(AiAssistantActivity.this, adapter.getMessages());
-                    chatList.smoothScrollToPosition(adapter.getItemCount() - 1);
-                });
-                return;
-            }
+        executor.execute(() -> AiOrchestrator.answer(this, text,
+                new AiOrchestrator.StageListener() {
+                    @Override public void onClassifying() { runOnUiThread(() -> setTypingStage(0)); }
+                    @Override public void onSearching() { runOnUiThread(() -> setTypingStage(1)); }
+                    @Override public void onThinking() { runOnUiThread(() -> setTypingStage(2)); }
+                },
+                new AiOrchestrator.ResultCallback() {
+                    @Override
+                    public void onChatReply(String reply) {
+                        runOnUiThread(() -> {
+                            typingIndicator.setVisibility(View.GONE);
+                            adapter.addMessage(new ChatMessage(ChatMessage.ROLE_AI, reply, null, null, text));
+                            AiChatStore.save(AiAssistantActivity.this, adapter.getMessages());
+                            chatList.smoothScrollToPosition(adapter.getItemCount() - 1);
+                        });
+                    }
 
-            // المرحلة الأولى: تأريض محلي أوسع (تطابق جزئي/تقريبي) - بروتوكولات
-            // موثقة من قاعدة بيانات الجهاز تُستخدم كخلفية للنموذج بدل إجابة مباشرة.
-            DataManager.GroundingResult grounding = DataManager.buildGroundingContext(this, text, 3);
+                    @Override
+                    public void onGroundedReply(String reply, String sourceLabel, String sourceUrl) {
+                        runOnUiThread(() -> {
+                            typingIndicator.setVisibility(View.GONE);
+                            adapter.addMessage(new ChatMessage(ChatMessage.ROLE_AI, reply, sourceLabel, sourceUrl, text));
+                            AiChatStore.save(AiAssistantActivity.this, adapter.getMessages());
+                            chatList.smoothScrollToPosition(adapter.getItemCount() - 1);
+                        });
+                    }
 
-            // المرحلة الثانية: تأريض خارجي من مصادر موثوقة - نجرّب أولًا
-            // Physiopedia (مرجع متخصص في العلاج الطبيعي، مراجَع من أخصائيين)،
-            // ولو مفيش نتيجة نرجع تلقائيًا لموسوعة ويكيبيديا العامة كبديل.
-            // بالترتيب ده: "يبحث ← يفكر ويجمع المعلومات ← يرسل الإجابة".
-            PhysiopediaClient.Result physio = PhysiopediaClient.search(text);
-            WikipediaClient.Result wiki = physio == null ? WikipediaClient.search(text) : null;
-
-            StringBuilder extraContext = new StringBuilder();
-            if (grounding != null) {
-                extraContext.append("بروتوكولات موثقة ذات صلة من قاعدة بيانات الجهاز:\n")
-                        .append(grounding.contextText).append("\n\n");
-            }
-            if (physio != null) {
-                extraContext.append("خلفية معرفية متخصصة من Physiopedia (مرجع علاج طبيعي، مقالة: ")
-                        .append(physio.title).append("):\n").append(physio.extract);
-            } else if (wiki != null) {
-                extraContext.append("خلفية معرفية عامة من ويكيبيديا (مقالة: ").append(wiki.title).append("):\n")
-                        .append(wiki.extract);
-            }
-
-            final String systemPromptToUse = AiPrompts.buildSystemPrompt(this,
-                    extraContext.length() > 0 ? extraContext.toString() : null);
-            final int groundedCount = grounding != null ? grounding.caseCount : 0;
-
-            runOnUiThread(() -> setTypingStage(2));
-
-            AiClient.sendMessage(systemPromptToUse, text, new AiClient.Callback() {
-                @Override
-                public void onSuccess(String reply) {
-                    runOnUiThread(() -> {
-                        typingIndicator.setVisibility(View.GONE);
-
-                        String sourceLabel = null;
-                        String sourceUrl = null;
-                        String externalTitle = physio != null ? physio.title : (wiki != null ? wiki.title : null);
-                        String externalUrl = physio != null ? physio.sourceUrl : (wiki != null ? wiki.sourceUrl : null);
-                        String externalName = physio != null ? "Physiopedia" : "ويكيبيديا";
-                        if (groundedCount > 0 && externalTitle != null) {
-                            sourceLabel = "⚠️ إجابة تكميلية عامة (لا يوجد تطابق مباشر) - بروتوكولات قريبة (" + groundedCount + ") + " + externalName + ": " + externalTitle;
-                            sourceUrl = externalUrl;
-                        } else if (groundedCount > 0) {
-                            sourceLabel = "⚠️ إجابة تكميلية عامة - أقرب بروتوكولات في القاعدة (" + groundedCount + ")، بدون تطابق مباشر مؤكد";
-                        } else if (externalTitle != null) {
-                            sourceLabel = "⚠️ إجابة عامة من " + externalName + " (خارج قاعدة بيانات الجهاز): " + externalTitle;
-                            sourceUrl = externalUrl;
-                        } else {
-                            sourceLabel = "⚠️ إجابة عامة من معرفة النموذج (بدون مصدر موثّق من الجهاز أو المصادر الخارجية)";
-                        }
-
-                        adapter.addMessage(new ChatMessage(ChatMessage.ROLE_AI, reply, sourceLabel, sourceUrl, text));
-                        AiChatStore.save(AiAssistantActivity.this, adapter.getMessages());
-                        chatList.smoothScrollToPosition(adapter.getItemCount() - 1);
-                    });
-                }
-
-                @Override
-                public void onError(String message) {
-                    runOnUiThread(() -> {
-                        typingIndicator.setVisibility(View.GONE);
-                        Toast.makeText(AiAssistantActivity.this, message, Toast.LENGTH_LONG).show();
-                    });
-                }
-            });
-        });
+                    @Override
+                    public void onError(String message) {
+                        runOnUiThread(() -> {
+                            typingIndicator.setVisibility(View.GONE);
+                            Toast.makeText(AiAssistantActivity.this, message, Toast.LENGTH_LONG).show();
+                        });
+                    }
+                }));
     }
 
+    /** ثلاث مراحل بس للمؤشر: 0) بيفهم قصدك (تصنيف خفيف) 1) بيبحث (لو
+     *  احتاج فعلًا) 2) بيكتب الرد النهائي. */
     private void setTypingStage(int stage) {
         typingIndicator.setVisibility(View.VISIBLE);
-        typingText.setText(stage == 1 ? "🔎 يبحث في Physiopedia وقاعدة بيانات الجهاز..." : "🤖 يفكر في الإجابة...");
+        String label;
+        switch (stage) {
+            case 1:
+                label = "🔎 يبحث في Physiopedia وقاعدة بيانات الجهاز...";
+                break;
+            case 2:
+                label = "🤖 يكتب الرد...";
+                break;
+            default:
+                label = "🤔 بيفهم قصدك...";
+        }
+        typingText.setText(label);
     }
 
     private void openSaveAsCase(String aiText) {

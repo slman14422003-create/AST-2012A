@@ -59,6 +59,11 @@ public class SettingsActivity extends AppCompatActivity {
         MaterialToolbar toolbar = findViewById(R.id.toolbar);
         toolbar.setNavigationOnClickListener(v -> finish());
 
+        TextView versionLabel = findViewById(R.id.settings_version_label);
+        if (versionLabel != null) {
+            versionLabel.setText("الإصدار " + getVersionLabel());
+        }
+
         createNotificationChannel();
 
         Button themeBtn = findViewById(R.id.btn_theme_mode);
@@ -244,7 +249,7 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     private void refreshThemeLabel(Button themeBtn) {
-        themeBtn.setText(ThemeManager.labelFor(ThemeManager.getCurrentMode(this)) + " - اضغط للتبديل");
+        themeBtn.setText("المظهر  ·  " + ThemeManager.labelFor(ThemeManager.getCurrentMode(this)));
     }
 
     private void refreshNotifLabel() {

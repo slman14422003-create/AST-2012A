@@ -44,6 +44,17 @@ public class AiClient {
     }
 
     /**
+     * استدعاء تصنيف خفيف (Router) يسبق أي رد فعلي: بيبعت رسالة المستخدم
+     * لنفس الووركر مع تعليمات AiPrompts.buildRouterPrompt() بس، ويرجع
+     * "SEARCH" أو "CHAT" (أو أي رد غير متوقع بيتعامل معاه الطرف المستدعي
+     * كحالة آمنة). القرار هنا من النموذج نفسه - مش قاعدة كلمات مفتاحية
+     * ثابتة في الكود - فهو اللي "يقرر" فعلًا هل محتاج يبحث ولا لأ.
+     * لازم يُستدعى من Thread خلفية (نفس شرط sendMessage). */
+    public static void classifyIntent(String userMessage, Callback callback) {
+        sendViaWorker(FIXED_WORKER_URL, AiPrompts.buildRouterPrompt(), userMessage, callback);
+    }
+
+    /**
      * يرسل POST بصيغة JSON بسيطة {"system": "...", "message": "..."}
      * لرابط الووركر، ويتوقع ردًا بصيغة {"reply": "..."} - نفس العقد
      * المستخدم في worker.js. عند أي فشل بيتم تمرير رسالة الخطأ الحقيقية

@@ -51,14 +51,11 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        ImageButton themeToggleBtn = findViewById(R.id.btn_theme_toggle);
+        // ملحوظة: زر تبديل الوضع الليلي/النهاري اتشال من هنا لأن نفس التحكم
+        // موجود فعلًا داخل شاشة الإعدادات ("المظهر") - مفيش داعي لتكراره في
+        // الشريط العلوي (نفس أسلوب تطبيقات زي Claude اللي بتسيب هذا التحكم
+        // داخل الإعدادات فقط بدل ما يكون زر منفصل طايف في كل شاشة).
         ImageButton settingsBtn = findViewById(R.id.btn_settings);
-        syncThemeIcon(themeToggleBtn);
-        themeToggleBtn.setOnClickListener(v -> {
-            String newMode = ThemeManager.cycleMode(this);
-            Toast.makeText(this, ThemeManager.labelFor(newMode), Toast.LENGTH_SHORT).show();
-            recreate();
-        });
         settingsBtn.setOnClickListener(v -> navigateTo(SettingsActivity.class));
 
         searchField = findViewById(R.id.search_field);
@@ -186,22 +183,6 @@ public class MainActivity extends AppCompatActivity {
         overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
     }
 
-    /** يحدّث أيقونة زر الوضع الليلي/النهاري في الشريط العلوي لتعكس الحالة
-     *  الحالية فعليًا (شمس/قمر/تباين) بدل أيقونة قمر ثابتة دايمًا بغض
-     *  النظر عن الوضع الفعلي المفعّل. */
-    private void syncThemeIcon(ImageButton themeToggleBtn) {
-        switch (ThemeManager.getCurrentMode(this)) {
-            case ThemeManager.MODE_LIGHT:
-                themeToggleBtn.setImageResource(R.drawable.ic_theme_light);
-                break;
-            case ThemeManager.MODE_DARK:
-                themeToggleBtn.setImageResource(R.drawable.ic_theme_dark);
-                break;
-            default:
-                themeToggleBtn.setImageResource(R.drawable.ic_theme_auto);
-        }
-    }
-
     /**
      * زر "+" بقى يفتح خيارين بدل ما يروح مباشرة لإضافة حالة جهاز فقط:
      * 1) حالة جديدة (بروتوكول مرتبط بجهاز AST-2012A - زي قبل).
@@ -327,7 +308,10 @@ public class MainActivity extends AppCompatActivity {
         aiInlineAnswerScroll.setVisibility(View.GONE);
     }
 
-    /** يسأل المساعد الذكي مباشرة من نفس شاشة البحث بدون الحاجة للانتقال لشاشة منفصلة. */
+    /** يسأل المساعد الذكي مباشرة من نفس شاشة البحث بدون الحاجة للانتقال
+     *  لشاشة منفصلة. بيستخدم نفس مسار القرار الموحّد (AiOrchestrator):
+     *  النموذج نفسه يقرر هل محتاج يبحث في قاعدة الجهاز/Physiopedia/ويكيبيديا
+     *  ولا يرد مباشرة، بدل ما يشغّل البحث الثلاثي إجباريًا مع كل استعلام. */
     private void askAiInline(String query) {
         if (query == null || query.trim().isEmpty()) return;
 
@@ -336,78 +320,51 @@ public class MainActivity extends AppCompatActivity {
         resultsList.setVisibility(View.GONE);
         aiInlineAnswerScroll.setVisibility(View.GONE);
         aiInlineLoading.setVisibility(View.VISIBLE);
-        setAiInlineLoadingText("🔎 يبحث في Physiopedia وقاعدة بيانات الجهاز...");
+        setAiInlineLoadingText("🤔 بيفهم قصدك...");
 
-        executor.execute(() -> {
-            // المرحلة الأولى: تأريض محلي - بروتوكولات موثقة من قاعدة بيانات الجهاز
-            DataManager.GroundingResult grounding = DataManager.buildGroundingContext(this, query, 3);
+        executor.execute(() -> AiOrchestrator.answer(this, query,
+                new AiOrchestrator.StageListener() {
+                    @Override public void onClassifying() { runOnUiThread(() -> setAiInlineLoadingText("🤔 بيفهم قصدك...")); }
+                    @Override public void onSearching() { runOnUiThread(() -> setAiInlineLoadingText("🔎 يبحث في Physiopedia وقاعدة بيانات الجهاز...")); }
+                    @Override public void onThinking() { runOnUiThread(() -> setAiInlineLoadingText("🤖 يفكر في الإجابة...")); }
+                },
+                new AiOrchestrator.ResultCallback() {
+                    @Override
+                    public void onChatReply(String reply) {
+                        runOnUiThread(() -> {
+                            aiInlineLoading.setVisibility(View.GONE);
+                            lastAiAnswer = reply;
+                            aiInlineAnswerText.setText(reply);
+                            aiInlineAnswerScroll.setVisibility(View.VISIBLE);
+                        });
+                    }
 
-            // المرحلة الثانية: تأريض خارجي من مصدر متخصص موثوق أولًا
-            // (Physiopedia)، ولو مفيش نتيجة نرجع تلقائيًا لويكيبيديا العامة.
-            PhysiopediaClient.Result physio = PhysiopediaClient.search(query);
-            WikipediaClient.Result wiki = physio == null ? WikipediaClient.search(query) : null;
+                    @Override
+                    public void onGroundedReply(String reply, String sourceLabel, String sourceUrl) {
+                        runOnUiThread(() -> {
+                            aiInlineLoading.setVisibility(View.GONE);
+                            lastAiAnswer = reply;
+                            String sourceNote = sourceLabel != null ? "📖 المصدر: " + sourceLabel : null;
+                            aiInlineAnswerText.setText(sourceNote != null ? reply + "\n\n" + sourceNote : reply);
+                            aiInlineAnswerScroll.setVisibility(View.VISIBLE);
+                        });
+                    }
 
-            StringBuilder extraContext = new StringBuilder();
-            if (grounding != null) {
-                extraContext.append("بروتوكولات موثقة ذات صلة من قاعدة بيانات الجهاز:\n")
-                        .append(grounding.contextText).append("\n\n");
-            }
-            if (physio != null) {
-                extraContext.append("خلفية معرفية متخصصة من Physiopedia (مرجع علاج طبيعي، مقالة: ")
-                        .append(physio.title).append("):\n").append(physio.extract);
-            } else if (wiki != null) {
-                extraContext.append("خلفية معرفية عامة من ويكيبيديا (مقالة: ").append(wiki.title).append("):\n")
-                        .append(wiki.extract);
-            }
-            final String systemPromptToUse = AiPrompts.buildSystemPrompt(this,
-                    extraContext.length() > 0 ? extraContext.toString() : null);
-            final String sourceNote = buildSourceNote(grounding, physio, wiki);
-
-            runOnUiThread(() -> setAiInlineLoadingText("🤖 يفكر في الإجابة..."));
-
-            AiClient.sendMessage(systemPromptToUse, query, new AiClient.Callback() {
-                @Override
-                public void onSuccess(String reply) {
-                    runOnUiThread(() -> {
-                        aiInlineLoading.setVisibility(View.GONE);
-                        lastAiAnswer = reply;
-                        aiInlineAnswerText.setText(sourceNote != null ? reply + "\n\n" + sourceNote : reply);
-                        aiInlineAnswerScroll.setVisibility(View.VISIBLE);
-                    });
-                }
-
-                @Override
-                public void onError(String message) {
-                    runOnUiThread(() -> {
-                        aiInlineLoading.setVisibility(View.GONE);
-                        askAiFallback.setVisibility(View.VISIBLE);
-                        resultsList.setVisibility(View.VISIBLE);
-                        Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show();
-                    });
-                }
-            });
-        });
+                    @Override
+                    public void onError(String message) {
+                        runOnUiThread(() -> {
+                            aiInlineLoading.setVisibility(View.GONE);
+                            askAiFallback.setVisibility(View.VISIBLE);
+                            resultsList.setVisibility(View.VISIBLE);
+                            Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show();
+                        });
+                    }
+                }));
     }
 
     private void setAiInlineLoadingText(String text) {
         TextView label = aiInlineLoading.findViewById(R.id.ai_inline_loading_text);
         if (label != null) label.setText(text);
-    }
-
-    /** جملة شفافة قصيرة توضح مصدر المعلومة المستخدَمة في الرد (قاعدة بيانات
-     *  الجهاز و/أو Physiopedia/ويكيبيديا) - نفس فكرة شارة المصدر في شاشة المحادثة. */
-    private String buildSourceNote(DataManager.GroundingResult grounding, PhysiopediaClient.Result physio, WikipediaClient.Result wiki) {
-        int groundedCount = grounding != null ? grounding.caseCount : 0;
-        String externalTitle = physio != null ? physio.title : (wiki != null ? wiki.title : null);
-        String externalName = physio != null ? "Physiopedia" : "ويكيبيديا";
-        if (groundedCount > 0 && externalTitle != null) {
-            return "📖 المصدر: قاعدة بيانات الجهاز (" + groundedCount + ") + " + externalName + ": " + externalTitle;
-        } else if (groundedCount > 0) {
-            return "📖 المصدر: قاعدة بيانات الجهاز (" + groundedCount + " بروتوكول موثّق)";
-        } else if (externalTitle != null) {
-            return "📖 المصدر: " + externalName + " - " + externalTitle;
-        }
-        return null;
     }
 
     private void setResults(List<CaseItem> items) {
