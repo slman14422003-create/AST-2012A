@@ -12,6 +12,11 @@
     <color name="bg_deep_3">#F1EDE3</color>
     <color name="bg_dark">#F5F2EA</color>
 
+    <!-- لون علامة Claude الرسمي (Japonica #D97757) - يُستخدم لأيقونة التطبيق
+         وشاشة splash فقط، ثابت بغض النظر عن الوضع الليلي/النهاري (نفس لون
+         العلامة التجارية دايمًا، زي أيقونة Claude تمامًا). -->
+    <color name="claude_orange">#D97757</color>
+
     <!-- الألوان الأساسية: طوبي دافئ (بديل السيان) + أزرق-رمادي هادئ (بديل البنفسجي) -->
     <color name="primary_cyan">#CC7B5C</color>
     <color name="primary_cyan_dark">#A85D42</color>
