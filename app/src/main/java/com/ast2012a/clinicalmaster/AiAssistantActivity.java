@@ -253,7 +253,7 @@ public class AiAssistantActivity extends AppCompatActivity {
                 label = "🔎 يبحث في Physiopedia وقاعدة بيانات الجهاز...";
                 break;
             case 2:
-                label = "🤖 يكتب الرد...";
+                label = "✨ يكتب الرد...";
                 break;
             default:
                 label = "🤔 بيفهم قصدك...";

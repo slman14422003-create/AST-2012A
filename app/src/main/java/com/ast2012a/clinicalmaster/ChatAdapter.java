@@ -83,8 +83,18 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ViewHolder> {
         Context ctx = holder.itemView.getContext();
 
         holder.role.setText(isUser ? "أنت" : ctx.getString(R.string.ai_assistant_name));
-        holder.avatar.setText(isUser ? "🧑" : "🤖");
-        holder.avatar.setBackgroundResource(isUser ? R.drawable.bg_avatar_circle : R.drawable.bg_avatar_circle_ai);
+        // المستخدم: إيموجي بسيط داخل دائرة عادية. المساعد الذكي: أيقونة
+        // الروبوت الجديدة (ic_ai_bot) بدل إيموجي 🤖 القديم، فوق دائرة
+        // بلون التمييز الرئيسي بدل الدائرة الفاتحة العادية.
+        holder.avatarFrame.setBackgroundResource(isUser ? R.drawable.bg_avatar_circle : R.drawable.bg_avatar_circle_ai);
+        if (isUser) {
+            holder.avatar.setText("🧑");
+            holder.avatar.setVisibility(View.VISIBLE);
+            holder.avatarIcon.setVisibility(View.GONE);
+        } else {
+            holder.avatar.setVisibility(View.GONE);
+            holder.avatarIcon.setVisibility(View.VISIBLE);
+        }
         holder.time.setText(DateFormat.format("hh:mm a", m.timestamp));
         holder.text.setText(m.text);
         holder.text.setBackgroundResource(isUser ? R.drawable.bg_bubble_user : R.drawable.bg_bubble_ai);
@@ -156,13 +166,17 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ViewHolder> {
 
     static class ViewHolder extends RecyclerView.ViewHolder {
         View header;
+        View avatarFrame;
+        android.widget.ImageView avatarIcon;
         TextView role, avatar, text, time, source;
         Button saveBtn, copyBtn, regenerateBtn;
         ViewHolder(View itemView) {
             super(itemView);
             header = itemView.findViewById(R.id.bubble_header);
             role = itemView.findViewById(R.id.bubble_role);
+            avatarFrame = itemView.findViewById(R.id.bubble_avatar_frame);
             avatar = itemView.findViewById(R.id.bubble_avatar);
+            avatarIcon = itemView.findViewById(R.id.bubble_avatar_icon);
             text = itemView.findViewById(R.id.bubble_text);
             time = itemView.findViewById(R.id.bubble_time);
             source = itemView.findViewById(R.id.bubble_source);

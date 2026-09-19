@@ -69,7 +69,10 @@ public class AiClient {
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Content-Type", "application/json");
             conn.setConnectTimeout(15000);
-            conn.setReadTimeout(45000);
+            // كانت 45 ثانية بس - كافية لردود قصيرة لكن ممكن تقطع ردود
+            // طويلة قبل ما الووركر يخلص كتابتها، فيوصل جزء بس للتطبيق.
+            // رفعناها لدقيقتين عشان نضمن وصول الرد كاملًا حتى لو تأخر.
+            conn.setReadTimeout(120000);
             conn.setDoOutput(true);
 
             JSONObject body = new JSONObject();

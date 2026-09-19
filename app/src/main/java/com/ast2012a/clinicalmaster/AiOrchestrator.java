@@ -73,10 +73,74 @@ public final class AiOrchestrator {
 
     private static void runChat(Context ctx, String text, StageListener stages, ResultCallback callback) {
         if (stages != null) stages.onThinking();
-        AiClient.sendMessage(AiPrompts.buildChatSystemPrompt(ctx), text, new AiClient.Callback() {
+        sendWithAutoContinue(AiPrompts.buildChatSystemPrompt(ctx), text, text, "",
+                0, new AiClient.Callback() {
             @Override public void onSuccess(String reply) { callback.onChatReply(reply); }
             @Override public void onError(String message) { callback.onError(message); }
         });
+    }
+
+    // ================================================================
+    // إكمال تلقائي للردود المقطوعة: أحيانًا الووركر/النموذج بيوقف رده في
+    // المنتصف (حد أقصى لعدد الكلمات في الطرف التاني، أو انقطاع شبكة لحظي)
+    // فيوصل للمستخدم نصف إجابة بس. بدل ما نعرض الرد الناقص زي ما هو،
+    // بنفحصه بفحص بسيط (looksTruncated) ولو بان ناقص بنطلب من نفس النموذج
+    // يكمّل بالضبط من حيث وقف - وبندمج النتيجتين قبل ما نرجّع الرد النهائي
+    // للواجهة. الحد الأقصى MAX_CONTINUATIONS محاولات إضافية بس عشان ما
+    // يفضلش يلف لو ظل الرد "يبدو" ناقصًا بسبب طبيعة المحتوى نفسه.
+    // ================================================================
+    private static final int MAX_CONTINUATIONS = 2;
+
+    private static void sendWithAutoContinue(String systemContext, String userMessage,
+            String originalQuestion, String accumulated, int attempt, AiClient.Callback finalCallback) {
+        AiClient.sendMessage(systemContext, userMessage, new AiClient.Callback() {
+            @Override
+            public void onSuccess(String reply) {
+                String combined = accumulated.isEmpty() ? reply : accumulated + reply;
+                if (attempt < MAX_CONTINUATIONS && looksTruncated(combined)) {
+                    String continueSystem = systemContext + "\n\n---\nملحوظة مهمة: هذا استكمال " +
+                            "لرد سابق على نفس السؤال الأصلي (\"" + originalQuestion + "\") انقطع " +
+                            "في المنتصف. فيما يلي آخر جزء منه فعلًا، أكمل منه مباشرة بدون تكرار " +
+                            "أي كلمة منه ولا أي مقدمة جديدة، فقط الجزء الناقص لحد ما تخلص الفكرة " +
+                            "بالكامل:\n\"\"\"\n" + lastChars(combined, 700) + "\n\"\"\"";
+                    sendWithAutoContinue(continueSystem, "أكمل من حيث توقفت بالضبط.",
+                            originalQuestion, combined, attempt + 1, finalCallback);
+                } else {
+                    finalCallback.onSuccess(combined);
+                }
+            }
+
+            @Override
+            public void onError(String message) {
+                // لو فشلت محاولة الإكمال بعد ما نجح جزء أول، الأفضل نرجّع
+                // الجزء المتاح بدل ما نضيّع رد جزئي مفيد على المستخدم.
+                if (!accumulated.isEmpty()) {
+                    finalCallback.onSuccess(accumulated);
+                } else {
+                    finalCallback.onError(message);
+                }
+            }
+        });
+    }
+
+    /** فحص تقريبي بسيط: رد طويل نسبيًا (فوق 200 حرف) وينتهي بحرف/رقم عادي
+     *  بدون أي علامة ترقيم ختامية، أو فيه عدد فردي من ``` (كتلة كود
+     *  مفتوحة ولم تُغلق) - في الحالتين الأرجح إن الرد اتقطع في نص الكلام. */
+    private static boolean looksTruncated(String text) {
+        if (text == null) return false;
+        String t = text.trim();
+        if (t.length() < 200) return false;
+        int fenceCount = 0;
+        int idx = 0;
+        while ((idx = t.indexOf("```", idx)) != -1) { fenceCount++; idx += 3; }
+        if (fenceCount % 2 != 0) return true;
+        char last = t.charAt(t.length() - 1);
+        return Character.isLetterOrDigit(last);
+    }
+
+    private static String lastChars(String text, int max) {
+        if (text == null) return "";
+        return text.length() <= max ? text : text.substring(text.length() - max);
     }
 
     private static void runGrounded(Context ctx, String text, StageListener stages, ResultCallback callback) {
@@ -125,7 +189,7 @@ public final class AiOrchestrator {
 
         if (stages != null) stages.onThinking();
 
-        AiClient.sendMessage(systemPromptToUse, text, new AiClient.Callback() {
+        sendWithAutoContinue(systemPromptToUse, text, text, "", 0, new AiClient.Callback() {
             @Override
             public void onSuccess(String reply) {
                 String sourceLabel;

@@ -162,7 +162,7 @@ public class CaseDetailActivity extends AppCompatActivity {
         }
 
         Button askAiBtn = new Button(this);
-        askAiBtn.setText("🤖 اسأل Phizyo AI عن هذه الحالة");
+        askAiBtn.setText("✨ اسأل Phizyo AI عن هذه الحالة");
         LinearLayout.LayoutParams askAiParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         askAiParams.topMargin = 10;

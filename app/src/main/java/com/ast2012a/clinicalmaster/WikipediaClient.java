@@ -69,9 +69,17 @@ public class WikipediaClient {
             String pageType = summary.optString("type", "");
             if (extract.trim().isEmpty() || "disambiguation".equals(pageType)) return null;
 
+            // /page/summary بيرجّع فقرة المقدمة بس. نجرّب نجيب نص أوسع من
+            // المقالة كاملة (action=query&prop=extracts بدون exintro) عشان
+            // خلفية معرفية أغنى، وإذا فشلت المحاولة نرجع لملخص المقدمة نفسه
+            // بدل ما نفشل بالكامل.
+            String fuller = fetchFullExtract(lang, summary.optString("title", title));
+            String bestExtract = (fuller != null && fuller.length() > extract.length()) ? fuller : extract;
+
             Result r = new Result();
             r.title = summary.optString("title", title);
-            r.extract = extract.length() > 900 ? extract.substring(0, 900) + "…" : extract;
+            // رُفع الحد من 900 لـ 2500 حرف عشان تبقى الخلفية المعرفية أدق وأغنى.
+            r.extract = bestExtract.length() > 2500 ? bestExtract.substring(0, 2500) + "…" : bestExtract;
             r.lang = lang;
             try {
                 r.sourceUrl = summary.getJSONObject("content_urls").getJSONObject("desktop").getString("page");
@@ -79,6 +87,36 @@ public class WikipediaClient {
                 r.sourceUrl = "https://" + lang + ".wikipedia.org/wiki/" + encodedTitle;
             }
             return r;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** يجيب نص أوسع من مجرد فقرة المقدمة، عبر واجهة action=query&prop=extracts
+     *  القياسية (بدون exintro) - نفس أسلوب PhysiopediaClient. بيرجع null
+     *  بأمان لو فشل الطلب، فيستمر الاستدعاء الأصلي بملخص المقدمة بدل ما يتوقف. */
+    private static String fetchFullExtract(String lang, String title) {
+        try {
+            String encodedTitle = URLEncoder.encode(title, "UTF-8");
+            String url = "https://" + lang + ".wikipedia.org/w/api.php?action=query&prop=extracts"
+                    + "&explaintext=1&titles=" + encodedTitle + "&format=json&utf8=1";
+            String json = httpGet(url);
+            if (json == null) return null;
+
+            JSONObject root = new JSONObject(json);
+            JSONObject pages = root.optJSONObject("query") != null
+                    ? root.getJSONObject("query").optJSONObject("pages")
+                    : null;
+            if (pages == null || pages.length() == 0) return null;
+
+            String extract = null;
+            java.util.Iterator<String> keys = pages.keys();
+            while (keys.hasNext()) {
+                JSONObject page = pages.optJSONObject(keys.next());
+                if (page != null) extract = page.optString("extract", null);
+                if (extract != null) break;
+            }
+            return (extract == null || extract.trim().isEmpty()) ? null : extract;
         } catch (Exception e) {
             return null;
         }

@@ -58,6 +58,11 @@ public class MainActivity extends AppCompatActivity {
         ImageButton settingsBtn = findViewById(R.id.btn_settings);
         settingsBtn.setOnClickListener(v -> navigateTo(SettingsActivity.class));
 
+        // عبارة ترحيب متغيّرة (صباح الخير/مساء الخير...) بدل النص الثابت
+        // القديم اللي كان بيوحي بربط التطبيق بجهاز باسم تقني غير مفهوم.
+        TextView headerSubtitle = findViewById(R.id.header_subtitle);
+        if (headerSubtitle != null) headerSubtitle.setText(GreetingProvider.randomGreeting());
+
         searchField = findViewById(R.id.search_field);
         emptyHintContainer = findViewById(R.id.empty_hint_container);
         // ملحوظة إصلاح كراش/عطل تفاعلي مهم: هذا الـ LinearLayout (يحتوي
@@ -326,7 +331,7 @@ public class MainActivity extends AppCompatActivity {
                 new AiOrchestrator.StageListener() {
                     @Override public void onClassifying() { runOnUiThread(() -> setAiInlineLoadingText("🤔 بيفهم قصدك...")); }
                     @Override public void onSearching() { runOnUiThread(() -> setAiInlineLoadingText("🔎 يبحث في Physiopedia وقاعدة بيانات الجهاز...")); }
-                    @Override public void onThinking() { runOnUiThread(() -> setAiInlineLoadingText("🤖 يفكر في الإجابة...")); }
+                    @Override public void onThinking() { runOnUiThread(() -> setAiInlineLoadingText("✨ يفكر في الإجابة...")); }
                 },
                 new AiOrchestrator.ResultCallback() {
                     @Override

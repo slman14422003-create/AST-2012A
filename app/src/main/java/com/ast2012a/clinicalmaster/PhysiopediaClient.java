@@ -55,8 +55,11 @@ public class PhysiopediaClient {
             if (hits == null || hits.length() == 0) return null;
             String title = hits.getJSONObject(0).getString("title");
 
+            // ملحوظة: exintro=1 كانت بتجيب فقرة المقدمة بس - شيلناها عشان
+            // نجيب نص المقالة الكامل (نظام plain text بدون HTML)، ثم بنقصّه
+            // لاحقًا بحد أقصى معقول (2500 حرف) بدل الاكتفاء بالمقدمة فقط.
             String encodedTitle = URLEncoder.encode(title, "UTF-8");
-            String extractUrl = BASE + "?action=query&prop=extracts&exintro=1&explaintext=1"
+            String extractUrl = BASE + "?action=query&prop=extracts&explaintext=1"
                     + "&titles=" + encodedTitle + "&format=json&utf8=1";
             String extractJson = httpGet(extractUrl);
             if (extractJson == null) return null;
@@ -78,7 +81,9 @@ public class PhysiopediaClient {
 
             Result r = new Result();
             r.title = title;
-            r.extract = extract.length() > 900 ? extract.substring(0, 900) + "…" : extract;
+            // رُفع الحد من 900 لـ 2500 حرف عشان تبقى خلفية معرفية أغنى ومصاغة
+            // بتفاصيل أدق بدل ملخص قصير جدًا يفقد معظم السياق المفيد.
+            r.extract = extract.length() > 2500 ? extract.substring(0, 2500) + "…" : extract;
             r.sourceUrl = "https://www.physio-pedia.com/" + title.replace(' ', '_');
             return r;
         } catch (Exception e) {
