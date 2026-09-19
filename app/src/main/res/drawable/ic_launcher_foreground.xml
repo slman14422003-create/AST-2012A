@@ -1,29 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- المقدمة: قلب نبضة كهربائية (EMS/TENS) داخل حلقة، بلون طوبي واحد
-     مسطح - يرمز مباشرة لجهاز التحفيز الكهربائي AST-2012A بهوية Claude. -->
+<!-- المقدمة: خط نبضة (Pulse/EMS waveform) واحد أبيض نظيف، بدون حلقة أو
+     نقاط ملوّنة زيادة - علامة واحدة بسيطة ومنسّقة بنفس روح علامة Claude
+     (شكل أبيض واحد فوق لون العلامة التجارية المصمت). محتواه بالكامل داخل
+     منطقة الأمان الدائرية لأيقونة Adaptive Icon (قطرها 66dp من أصل 108dp). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- حلقة خارجية ناعمة -->
-    <path
-        android:pathData="M54,20a34,34 0,1 1,0 68a34,34 0,1 1,0 -68z"
-        android:strokeColor="#33CC7B5C"
-        android:strokeWidth="2"
-        android:fillColor="#14CC7B5C" />
-
-    <!-- خط النبضة الكهربائية (Pulse/EMS waveform) -->
     <path
         android:pathData="M27,55 L40,55 L45,40 L53,70 L60,48 L65,55 L81,55"
-        android:strokeWidth="4.6"
+        android:strokeWidth="7.4"
         android:strokeLineCap="round"
         android:strokeLineJoin="round"
-        android:strokeColor="#CC7B5C"
+        android:strokeColor="#FFFFFF"
         android:fillColor="#00000000" />
-
-    <!-- نقطتا قطب (electrode dots) -->
-    <path android:pathData="M27,55m-4,0a4,4 0,1 1,8 0a4,4 0,1 1,-8 0" android:fillColor="#CC7B5C" />
-    <path android:pathData="M81,55m-4,0a4,4 0,1 1,8 0a4,4 0,1 1,-8 0" android:fillColor="#A85D42" />
 </vector>

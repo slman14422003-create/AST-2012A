@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- نقطة بيضاء لمؤشر التحميل في شاشة splash - بديل عن dot_accent.xml
+     الملوّن عشان تبان بوضوح فوق خلفية splash البرتقالية المصمتة. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="@color/white" />
+    <size android:width="8dp" android:height="8dp" />
+</shape>
