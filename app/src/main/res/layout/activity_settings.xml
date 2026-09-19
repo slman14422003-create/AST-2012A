@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- ============================================================================
-     شاشة الإعدادات — إعادة بناء كاملة: مجموعات بطاقات بيضاء نظيفة بعناوين
-     أقسام واضحة، بدل الأزرار المتفرقة المتراصة القديمة، بأسلوب أقرب لصفحة
-     إعدادات Claude/iOS.
+     شاشة الإعدادات — إعادة تصميم v2: عنوان أكبر بخط serif (زي "Settings" في
+     تطبيق Claude)، بطاقة هوية علوية (شعار + اسم + رقم الإصدار)، ومجموعات
+     بطاقات نظيفة بعناوين أقسام واضحة بدل الأزرار المتفرقة المتراصة القديمة.
+     زر تبديل الوضع الليلي/النهاري بقى صف واحد هنا بس (اتشال من الشاشة
+     الرئيسية) بنفس فكرة "Color mode" في إعدادات Claude.
      ============================================================================ -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -16,9 +18,19 @@
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
         android:background="@drawable/bg_header_container"
-        android:title="المزيد والإعدادات"
-        android:titleTextColor="@color/text_primary"
-        app:navigationIcon="@drawable/ic_close" />
+        app:contentInsetStart="20dp"
+        app:navigationIcon="@drawable/ic_close">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="serif"
+            android:text="الإعدادات"
+            android:textColor="@color/text_primary"
+            android:textDirection="rtl"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+    </com.google.android.material.appbar.MaterialToolbar>
 
     <ScrollView
         android:layout_width="match_parent"
@@ -29,6 +41,60 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:padding="16dp">
+
+            <!-- ============== بطاقة الهوية العلوية ============== -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="24dp"
+                android:background="@drawable/bg_glass_card"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="14dp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="end"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="serif"
+                        android:gravity="end"
+                        android:text="Phizyo Studio"
+                        android:textColor="@color/text_primary"
+                        android:textDirection="rtl"
+                        android:textSize="16sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/settings_version_label"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:gravity="end"
+                        android:textColor="@color/text_tertiary"
+                        android:textDirection="rtl"
+                        android:textSize="11.5sp" />
+                </LinearLayout>
+
+                <FrameLayout
+                    android:layout_width="42dp"
+                    android:layout_height="42dp"
+                    android:layout_marginStart="12dp"
+                    android:background="@drawable/bg_avatar_circle">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:gravity="center"
+                        android:text="🩺"
+                        android:textSize="18sp" />
+                </FrameLayout>
+            </LinearLayout>
 
             <!-- ============== قسم: المظهر ============== -->
             <TextView
@@ -46,17 +112,8 @@
 
                 <Button
                     android:id="@+id/btn_theme_mode"
-                    style="@style/Widget.Material3.Button.TextButton"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_margin="4dp"
-                    android:gravity="end|center_vertical"
-                    android:paddingVertical="12dp"
-                    android:text="🌓 حسب إعداد الجهاز - اضغط للتبديل"
-                    android:textAllCaps="false"
-                    android:textColor="@color/text_primary"
-                    android:textDirection="rtl"
-                    android:textSize="13.5sp" />
+                    style="@style/SettingsRow"
+                    android:text="🌓 حسب إعداد الجهاز" />
             </LinearLayout>
 
             <!-- ============== قسم: الإشعارات ============== -->
@@ -75,17 +132,8 @@
 
                 <Button
                     android:id="@+id/btn_notif"
-                    style="@style/Widget.Material3.Button.TextButton"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_margin="4dp"
-                    android:gravity="end|center_vertical"
-                    android:paddingVertical="12dp"
-                    android:text="🔕 الإشعارات غير مفعّلة - اضغط للتفعيل"
-                    android:textAllCaps="false"
-                    android:textColor="@color/text_primary"
-                    android:textDirection="rtl"
-                    android:textSize="13.5sp" />
+                    style="@style/SettingsRow"
+                    android:text="🔕 الإشعارات غير مفعّلة - اضغط للتفعيل" />
             </LinearLayout>
 
             <!-- ============== قسم: Phizyo AI ============== -->
@@ -116,7 +164,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
                     android:gravity="end"
-                    android:text="1️⃣ أي سؤال يطابق قاعدة بيانات الجهاز (130 حالة موثقة) يُجاب فورًا من البيانات نفسها بدون إنترنت وبدقة 100%.&#10;&#10;2️⃣ غير ذلك، يُستخدم بحث Physiopedia أولًا (مرجع متخصص في العلاج الطبيعي مراجَع من أخصائيين)، ثم ويكيبيديا (عربي ثم إنجليزي) كخلفية معرفية عامة تكميلية لو مفيش نتيجة.&#10;&#10;3️⃣ الصياغة النهائية تتم دائمًا عبر Phizyo AI - مزوّد ذكاء اصطناعي واحد ثابت مبني داخل التطبيق، وتلتزم بأي تعليمات مخصّصة تضيفها تحت."
+                    android:text="1️⃣ Phizyo AI نفسه هو اللي بيقرر - لكل رسالة على حدة - هل محتاج يبحث ولا لأ. لو الرسالة دردشة عادية بيرد عليك طبيعي على طول بدون أي بحث.&#10;&#10;2️⃣ لو الرسالة سؤال إكلينيكي فعلي، بيتحقق الأول من قاعدة بيانات الجهاز (130 حالة موثقة) - تطابق مباشر منها يُجاب فورًا وبدقة 100% بدون إنترنت.&#10;&#10;3️⃣ غير كده، يُستخدم بحث Physiopedia أولًا (مرجع متخصص في العلاج الطبيعي)، ثم ويكيبيديا كخلفية معرفية عامة تكميلية لو مفيش نتيجة - والصياغة النهائية دائمًا عبر Phizyo AI، وتلتزم بأي تعليمات مخصّصة تضيفها تحت."
                     android:textColor="@color/text_secondary"
                     android:textDirection="rtl"
                     android:textSize="12sp" />
@@ -217,17 +265,8 @@
 
                 <Button
                     android:id="@+id/btn_clear_chat_history"
-                    style="@style/Widget.Material3.Button.TextButton"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_margin="4dp"
-                    android:gravity="end|center_vertical"
-                    android:paddingVertical="12dp"
-                    android:text="🗑️ مسح سجل محادثة Phizyo AI"
-                    android:textAllCaps="false"
-                    android:textColor="@color/text_primary"
-                    android:textDirection="rtl"
-                    android:textSize="13.5sp" />
+                    style="@style/SettingsRow"
+                    android:text="🗑️ مسح سجل محادثة Phizyo AI" />
             </LinearLayout>
 
             <!-- ============== قسم: الحالات المخصصة ============== -->
@@ -245,17 +284,8 @@
 
                 <Button
                     android:id="@+id/btn_export"
-                    style="@style/Widget.Material3.Button.TextButton"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_margin="4dp"
-                    android:gravity="end|center_vertical"
-                    android:paddingVertical="12dp"
-                    android:text="⬇️ تصدير نسخة احتياطية من حالاتي"
-                    android:textAllCaps="false"
-                    android:textColor="@color/text_primary"
-                    android:textDirection="rtl"
-                    android:textSize="13.5sp" />
+                    style="@style/SettingsRow"
+                    android:text="⬇️ تصدير نسخة احتياطية من حالاتي" />
 
                 <View
                     android:layout_width="match_parent"
@@ -265,17 +295,9 @@
 
                 <Button
                     android:id="@+id/btn_clear_all"
-                    style="@style/Widget.Material3.Button.TextButton"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_margin="4dp"
-                    android:gravity="end|center_vertical"
-                    android:paddingVertical="12dp"
+                    style="@style/SettingsRow"
                     android:text="🗑️ مسح كل الحالات المخصصة"
-                    android:textAllCaps="false"
-                    android:textColor="@color/accent_red"
-                    android:textDirection="rtl"
-                    android:textSize="13.5sp" />
+                    android:textColor="@color/accent_red" />
             </LinearLayout>
 
             <!-- ============== قسم: ميزات إضافية ============== -->
@@ -293,17 +315,8 @@
 
                 <Button
                     android:id="@+id/btn_share_app"
-                    style="@style/Widget.Material3.Button.TextButton"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_margin="4dp"
-                    android:gravity="end|center_vertical"
-                    android:paddingVertical="12dp"
-                    android:text="📤 مشاركة التطبيق"
-                    android:textAllCaps="false"
-                    android:textColor="@color/text_primary"
-                    android:textDirection="rtl"
-                    android:textSize="13.5sp" />
+                    style="@style/SettingsRow"
+                    android:text="📤 مشاركة التطبيق" />
 
                 <View
                     android:layout_width="match_parent"
@@ -313,17 +326,8 @@
 
                 <Button
                     android:id="@+id/btn_rate_app"
-                    style="@style/Widget.Material3.Button.TextButton"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_margin="4dp"
-                    android:gravity="end|center_vertical"
-                    android:paddingVertical="12dp"
-                    android:text="⭐ قيّم التطبيق"
-                    android:textAllCaps="false"
-                    android:textColor="@color/text_primary"
-                    android:textDirection="rtl"
-                    android:textSize="13.5sp" />
+                    style="@style/SettingsRow"
+                    android:text="⭐ قيّم التطبيق" />
 
                 <View
                     android:layout_width="match_parent"
@@ -333,17 +337,8 @@
 
                 <Button
                     android:id="@+id/btn_feedback"
-                    style="@style/Widget.Material3.Button.TextButton"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_margin="4dp"
-                    android:gravity="end|center_vertical"
-                    android:paddingVertical="12dp"
-                    android:text="✉️ تواصل معنا / أرسل ملاحظات"
-                    android:textAllCaps="false"
-                    android:textColor="@color/text_primary"
-                    android:textDirection="rtl"
-                    android:textSize="13.5sp" />
+                    style="@style/SettingsRow"
+                    android:text="✉️ تواصل معنا / أرسل ملاحظات" />
             </LinearLayout>
 
             <!-- ============== قسم: عن التطبيق ============== -->
@@ -361,17 +356,8 @@
 
                 <Button
                     android:id="@+id/btn_about"
-                    style="@style/Widget.Material3.Button.TextButton"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_margin="4dp"
-                    android:gravity="end|center_vertical"
-                    android:paddingVertical="12dp"
-                    android:text="نبذة عن التطبيق والإصدار"
-                    android:textAllCaps="false"
-                    android:textColor="@color/text_primary"
-                    android:textDirection="rtl"
-                    android:textSize="13.5sp" />
+                    style="@style/SettingsRow"
+                    android:text="نبذة عن التطبيق والإصدار" />
 
                 <View
                     android:layout_width="match_parent"
@@ -381,17 +367,8 @@
 
                 <Button
                     android:id="@+id/btn_privacy_policy"
-                    style="@style/Widget.Material3.Button.TextButton"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_margin="4dp"
-                    android:gravity="end|center_vertical"
-                    android:paddingVertical="12dp"
-                    android:text="🔒 سياسة الخصوصية"
-                    android:textAllCaps="false"
-                    android:textColor="@color/text_primary"
-                    android:textDirection="rtl"
-                    android:textSize="13.5sp" />
+                    style="@style/SettingsRow"
+                    android:text="🔒 سياسة الخصوصية" />
             </LinearLayout>
 
         </LinearLayout>

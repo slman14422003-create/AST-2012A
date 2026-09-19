@@ -57,10 +57,11 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:fontFamily="serif"
                     android:letterSpacing="0.005"
                     android:text="Phizyo Studio"
                     android:textColor="@color/text_primary"
-                    android:textSize="19sp"
+                    android:textSize="19.5sp"
                     android:textStyle="bold" />
 
                 <View
@@ -81,37 +82,16 @@
                 android:textSize="11sp" />
         </LinearLayout>
 
-        <!-- كبسولة الأيقونات: الثيم + الإعدادات معًا في بطاقة واحدة منسّقة -->
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+        <!-- زر الإعدادات: دايرة واحدة نظيفة بدل الكبسولة اللي كانت بتجمعه
+             مع زر تبديل الثيم قديمًا - الثيم بقى داخل الإعدادات بس (المظهر). -->
+        <ImageButton
+            android:id="@+id/btn_settings"
+            android:layout_width="42dp"
+            android:layout_height="42dp"
             android:background="@drawable/bg_icon_group_pill"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
-
-            <ImageButton
-                android:id="@+id/btn_theme_toggle"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="تبديل الوضع الليلي/النهاري"
-                android:padding="9dp"
-                android:src="@drawable/ic_theme_auto" />
-
-            <View
-                android:layout_width="1dp"
-                android:layout_height="18dp"
-                android:background="@color/glass_border" />
-
-            <ImageButton
-                android:id="@+id/btn_settings"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="المزيد والإعدادات"
-                android:padding="9dp"
-                android:src="@drawable/ic_settings_gear" />
-        </LinearLayout>
+            android:contentDescription="المزيد والإعدادات"
+            android:padding="10dp"
+            android:src="@drawable/ic_settings_gear" />
     </LinearLayout>
 
     <!-- ============== منطقة المحتوى (مرنة) ============== -->
@@ -140,21 +120,33 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="14dp"
+                    android:layout_marginBottom="16dp"
                     android:alpha="0.9"
                     android:text="🩺"
-                    android:textSize="40sp" />
+                    android:textSize="38sp" />
+
+                <TextView
+                    android:id="@+id/empty_hint_title"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="serif"
+                    android:gravity="center"
+                    android:text="بماذا تفكر؟"
+                    android:textColor="@color/text_primary"
+                    android:textDirection="rtl"
+                    android:textSize="24sp" />
 
                 <TextView
                     android:id="@+id/empty_hint"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
                     android:gravity="center"
-                    android:lineSpacingExtra="5dp"
-                    android:text="بماذا تفكر؟&#10;ابحث عن أي حالة، نمط، أو مشكلة تقنية للحصول على التوصيف الدقيق."
+                    android:lineSpacingExtra="4dp"
+                    android:text="ابحث عن أي حالة، نمط، أو مشكلة تقنية للحصول على التوصيف الدقيق."
                     android:textColor="@color/text_secondary"
                     android:textDirection="rtl"
-                    android:textSize="14sp" />
+                    android:textSize="13.5sp" />
 
                 <LinearLayout
                     android:id="@+id/recent_searches_container"

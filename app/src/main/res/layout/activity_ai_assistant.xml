@@ -52,17 +52,18 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:fontFamily="serif"
                     android:text="Phizyo AI"
                     android:textColor="@color/text_primary"
                     android:textDirection="rtl"
-                    android:textSize="16sp"
+                    android:textSize="16.5sp"
                     android:textStyle="bold" />
 
                 <TextView
                     android:id="@+id/connection_status"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="● متصل · Physiopedia + قاعدة الجهاز"
+                    android:text="● متصل"
                     android:textColor="@color/accent_green"
                     android:textDirection="rtl"
                     android:textSize="10.5sp" />
@@ -87,12 +88,19 @@
         android:padding="12dp"
         android:visibility="visible">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+        <FrameLayout
+            android:layout_width="26dp"
+            android:layout_height="26dp"
             android:layout_marginStart="10dp"
-            android:text="ℹ️"
-            android:textSize="16sp" />
+            android:background="@drawable/bg_avatar_circle">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:text="✨"
+                android:textSize="12sp" />
+        </FrameLayout>
 
         <TextView
             android:id="@+id/mode_hint_text"
@@ -100,6 +108,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:gravity="end"
+            android:lineSpacingExtra="2dp"
             android:text="✅ الأسئلة المطابقة لقاعدة بيانات الجهاز تُجاب فورًا بدون إنترنت. غير ذلك، تُصاغ الإجابة عبر Phizyo AI."
             android:textColor="@color/text_secondary"
             android:textDirection="rtl"
@@ -141,7 +150,8 @@
         android:layout_weight="1"
         android:clipToPadding="false"
         android:paddingHorizontal="14dp"
-        android:paddingTop="10dp" />
+        android:paddingTop="10dp"
+        android:paddingBottom="6dp" />
 
     <!-- ============== فقاعة الكتابة (Typing Bubble) ============== -->
     <LinearLayout
@@ -203,6 +213,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="@drawable/bg_header_container"
+        android:elevation="8dp"
         android:orientation="vertical"
         android:paddingHorizontal="12dp"
         android:paddingVertical="10dp">
