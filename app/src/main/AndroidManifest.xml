@@ -14,15 +14,20 @@
         android:theme="@style/Theme.ClinicalMaster">
 
         <activity
-            android:name=".MainActivity"
+            android:name=".SplashActivity"
             android:exported="true"
-            android:label="@string/app_name"
-            android:windowSoftInputMode="adjustResize">
+            android:theme="@style/Theme.ClinicalMaster.Splash">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="false"
+            android:label="@string/app_name"
+            android:windowSoftInputMode="adjustResize" />
 
         <activity android:name=".CaseDetailActivity" android:exported="false" />
         <activity android:name=".AddEditCaseActivity" android:exported="false" />
