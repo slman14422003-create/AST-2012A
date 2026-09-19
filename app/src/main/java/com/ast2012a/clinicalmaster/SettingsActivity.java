@@ -10,6 +10,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.widget.Button;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
@@ -32,22 +33,21 @@ import java.util.concurrent.Executors;
  * شاشة الإعدادات: إشعارات حقيقية عبر NotificationManager (منسوبة للتطبيق
  * نفسه على أندرويد، وليست منسوبة لأي متصفح أو WebView - لأن هذا تطبيق
  * أندرويد أصلي بالكامل).
+ *
+ * Phizyo AI ليس له سوى مزوّد واحد ثابت (AiClient.FIXED_WORKER_URL) مبني
+ * داخل التطبيق نفسه - لا يوجد مفتاح API ولا رابط قابل للتعديل من هنا.
  */
 public class SettingsActivity extends AppCompatActivity {
 
     private static final String CHANNEL_ID = "clinical_master_channel";
     private static final String PREFS = "settings_prefs";
     private static final String KEY_NOTIF_ENABLED = "notif_enabled";
-    private static final String KEY_AI_API_KEY = "ai_api_key";
-    private static final String KEY_AI_WORKER_URL = "ai_worker_url";
 
     // ⚠️ غيّر هذا لبريدك الفعلي قبل النشر - يُستخدم فقط لفتح تطبيق البريد
     // بمستلم مبدئي، المستخدم يقدر يغيّره قبل الإرسال براحته.
     private static final String SUPPORT_EMAIL = "support@phizyostudio.app";
 
     private Button notifBtn;
-    private TextInputEditText aiKeyField;
-    private TextInputEditText workerUrlField;
     private ActivityResultLauncher<String> permissionLauncher;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
@@ -70,10 +70,6 @@ public class SettingsActivity extends AppCompatActivity {
         });
 
         notifBtn = findViewById(R.id.btn_notif);
-        aiKeyField = findViewById(R.id.ai_key_field);
-        workerUrlField = findViewById(R.id.ai_worker_url_field);
-        Button saveKeyBtn = findViewById(R.id.btn_save_key);
-        Button saveWorkerUrlBtn = findViewById(R.id.btn_save_worker_url);
         Button testWorkerBtn = findViewById(R.id.btn_test_worker);
         Button clearChatHistoryBtn = findViewById(R.id.btn_clear_chat_history);
         Button exportBtn = findViewById(R.id.btn_export);
@@ -84,11 +80,9 @@ public class SettingsActivity extends AppCompatActivity {
         Button rateBtn = findViewById(R.id.btn_rate_app);
         Button feedbackBtn = findViewById(R.id.btn_feedback);
 
-        aiKeyField.setText(prefs().getString(KEY_AI_API_KEY, ""));
-        workerUrlField.setText(prefs().getString(KEY_AI_WORKER_URL, ""));
+        TextView workerUrlLabel = findViewById(R.id.worker_url_fixed_label);
+        workerUrlLabel.setText(AiClient.FIXED_WORKER_URL);
 
-        saveKeyBtn.setOnClickListener(v -> saveAiKey());
-        saveWorkerUrlBtn.setOnClickListener(v -> saveWorkerUrl());
         testWorkerBtn.setOnClickListener(v -> testWorkerConnection());
         clearChatHistoryBtn.setOnClickListener(v -> confirmClearChatHistory());
         aboutBtn.setOnClickListener(v -> showAboutDialog());
@@ -140,7 +134,7 @@ public class SettingsActivity extends AppCompatActivity {
     private void showAboutDialog() {
         String message = "Phizyo Studio\nالإصدار " + getVersionLabel() + "\n\n" +
                 "تطبيق أندرويد أصلي مكتوب بالكامل بلغة Java - بدون WebView أو متصفح.\n" +
-                "130 حالة سريرية موثقة لجهاز AST-2012A + موسوعة أنماط الجهاز + مساعد ذكي (Phizyo AI) مجاني.\n\n" +
+                "130 حالة سريرية موثقة لجهاز AST-2012A + موسوعة أنماط الجهاز + مساعد ذكي (Phizyo AI).\n\n" +
                 "كل بياناتك (الحالات المخصصة، سجل المحادثة، الإعدادات) محفوظة محليًا على جهازك فقط، ولا تُرسل لأي سيرفر خاص بالتطبيق.\n\n" +
                 "🩺 تطوير ومحتوى سريري: المعالج الفيزيائي سلمان";
         new MaterialAlertDialogBuilder(this)
@@ -161,67 +155,14 @@ public class SettingsActivity extends AppCompatActivity {
         }
     }
 
-    private void saveAiKey() {
-        String raw = aiKeyField.getText() == null ? "" : aiKeyField.getText().toString();
-        String key = sanitizeApiKey(raw);
-
-        if (!key.equals(raw.trim())) {
-            // كان فيه نص زيادة (زي "export OPENROUTER_API_KEY=") فتم تنظيفه تلقائيًا
-            aiKeyField.setText(key);
-            aiKeyField.setSelection(key.length());
-            Toast.makeText(this, "تم تنظيف المفتاح تلقائيًا وإزالة أي نص زيادة (مثل export).", Toast.LENGTH_LONG).show();
-        }
-
-        prefs().edit().putString(KEY_AI_API_KEY, key).apply();
-        Toast.makeText(this, key.isEmpty() ? "تم مسح المفتاح." : "✅ تم حفظ المفتاح.", Toast.LENGTH_SHORT).show();
-    }
-
-    /**
-     * بعض المستخدمين بيلصقوا أمر Terminal كامل بالغلط زي:
-     * "export OPENROUTER_API_KEY=sk-or-v1-xxxxx" بدل المفتاح فقط.
-     * هذه الدالة بتشيل أي نص زيادة حول المفتاح الفعلي تلقائيًا.
-     */
-    private String sanitizeApiKey(String raw) {
-        if (raw == null) return "";
-        String key = raw.trim();
-        key = key.replaceAll("(?i)^export\\s+", "");
-        key = key.replaceAll("(?i)^OPENROUTER_API_KEY\\s*=\\s*", "");
-        key = key.replaceAll("^[\"']+|[\"']+$", "");
-        key = key.replaceAll(";+$", "");
-        return key.trim();
-    }
-
-    // -----------------------------------------------------------------
-    // رابط Cloudflare Worker الخاص بمساعد Phizyo AI
-    // -----------------------------------------------------------------
-
-    private void saveWorkerUrl() {
-        String raw = workerUrlField.getText() == null ? "" : workerUrlField.getText().toString();
-        String url = raw.trim();
-
-        if (!url.isEmpty() && !url.startsWith("http://") && !url.startsWith("https://")) {
-            Toast.makeText(this, "⚠️ الرابط لازم يبدأ بـ https:// - تأكد إنك نسخت رابط الووركر كامل من Cloudflare.", Toast.LENGTH_LONG).show();
-            return;
-        }
-
-        prefs().edit().putString(KEY_AI_WORKER_URL, url).apply();
-        Toast.makeText(this, url.isEmpty() ? "تم مسح رابط الووركر - رجع الوضع المجاني الافتراضي." : "✅ تم حفظ رابط الووركر.", Toast.LENGTH_SHORT).show();
-    }
-
-    /** اختبار اتصال فوري بالووركر المحفوظ حاليًا، لتأكيد إنه "بس تحط
-     *  الرابط ويشتغل" فعلًا قبل ما تسكّر شاشة الإعدادات. */
+    /** اختبار اتصال فوري بالووركر الثابت (AiClient.FIXED_WORKER_URL). */
     private void testWorkerConnection() {
-        String url = workerUrlField.getText() == null ? "" : workerUrlField.getText().toString().trim();
-        if (url.isEmpty()) {
-            Toast.makeText(this, "أضف رابط الووركر أولًا ثم اضغط حفظ.", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        Toast.makeText(this, "🧪 جاري اختبار الاتصال بالووركر...", Toast.LENGTH_SHORT).show();
-        executor.execute(() -> AiClient.testWorker(url, new AiClient.Callback() {
+        Toast.makeText(this, "🧪 جاري اختبار الاتصال بـ Phizyo AI...", Toast.LENGTH_SHORT).show();
+        executor.execute(() -> AiClient.testWorker(new AiClient.Callback() {
             @Override
             public void onSuccess(String reply) {
                 runOnUiThread(() -> new MaterialAlertDialogBuilder(SettingsActivity.this)
-                        .setTitle("✅ الووركر شغال")
+                        .setTitle("✅ Phizyo AI شغال")
                         .setMessage("رد الووركر:\n\n" + reply)
                         .setPositiveButton("تمام", null)
                         .show());
@@ -230,9 +171,9 @@ public class SettingsActivity extends AppCompatActivity {
             @Override
             public void onError(String message) {
                 runOnUiThread(() -> new MaterialAlertDialogBuilder(SettingsActivity.this)
-                        .setTitle("❌ تعذر الاتصال بالووركر")
+                        .setTitle("❌ تعذر الاتصال بـ Phizyo AI")
                         .setMessage("تفاصيل الخطأ:\n" + message +
-                                "\n\nلو الرسالة بتقول \"model deprecated\" أو حاجة شبهها، يبقى Cloudflare قفلوا الموديل المستخدم وتحتاج تحدّث اسم الموديل في worker.js. غير كده تأكد من:\n• الرابط صحيح ومنسوخ كامل من Cloudflare.\n• الووركر منشور (Deployed) وفعّال.\n• جهازك متصل بالإنترنت.\n\nطالما الرابط فاضي أو معطّل، التطبيق هيرجع تلقائيًا للوضع المجاني الافتراضي بدون ما يتوقف.")
+                                "\n\nلو الرسالة بتقول \"model deprecated\" أو حاجة شبهها، يبقى Cloudflare قفلوا الموديل المستخدم وتحتاج تحدّث اسم الموديل في worker.js. غير كده تأكد إن الووركر منشور (Deployed) وفعّال، وإن جهازك متصل بالإنترنت.")
                         .setPositiveButton("تمام", null)
                         .show());
             }

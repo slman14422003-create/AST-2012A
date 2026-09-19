@@ -1,7 +1,6 @@
 package com.ast2012a.clinicalmaster;
 
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
@@ -339,10 +338,6 @@ public class MainActivity extends AppCompatActivity {
         aiInlineLoading.setVisibility(View.VISIBLE);
         setAiInlineLoadingText("🔎 يبحث في Physiopedia وقاعدة بيانات الجهاز...");
 
-        SharedPreferences prefs = getSharedPreferences("settings_prefs", MODE_PRIVATE);
-        String apiKey = prefs.getString("ai_api_key", "");
-        String workerUrl = prefs.getString("ai_worker_url", "");
-
         executor.execute(() -> {
             // المرحلة الأولى: تأريض محلي - بروتوكولات موثقة من قاعدة بيانات الجهاز
             DataManager.GroundingResult grounding = DataManager.buildGroundingContext(this, query, 3);
@@ -370,7 +365,7 @@ public class MainActivity extends AppCompatActivity {
 
             runOnUiThread(() -> setAiInlineLoadingText("🤖 يفكر في الإجابة..."));
 
-            AiClient.sendMessage(apiKey, workerUrl, systemPromptToUse, query, new AiClient.Callback() {
+            AiClient.sendMessage(systemPromptToUse, query, new AiClient.Callback() {
                 @Override
                 public void onSuccess(String reply) {
                     runOnUiThread(() -> {

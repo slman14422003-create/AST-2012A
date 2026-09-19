@@ -2,7 +2,6 @@ package com.ast2012a.clinicalmaster;
 
 import android.animation.ObjectAnimator;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.view.MenuItem;
 import android.view.View;
@@ -25,9 +24,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * شاشة المساعد الذكي. تعمل افتراضيًا بدون أي إعداد (عبر مزوّدين مجانيين
- * بالتناوب التلقائي، بدون مفتاح)، وتستخدم مفتاح OpenRouter الخاص
- * بالمستخدم تلقائيًا لو أضافه في الإعدادات.
+ * شاشة المساعد الذكي. تعمل دائمًا عبر رابط Cloudflare Worker الثابت
+ * المبني داخل التطبيق (AiClient.FIXED_WORKER_URL) - بدون أي إعداد أو
+ * مفتاح مطلوب من المستخدم.
  *
  * كل سؤال يمر بمرحلتين تأريض (Grounding) قبل الوصول للنموذج، عشان تقل
  * الهلوسة والإجابات المخترعة قدر الإمكان:
@@ -48,8 +47,6 @@ public class AiAssistantActivity extends AppCompatActivity {
     private View quickPromptsScroll;
     private View quickPromptsTitle;
     private LinearLayout quickPromptsRow;
-    private String apiKey;
-    private String workerUrl;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
     private static final String[] QUICK_PROMPTS = {
@@ -150,17 +147,8 @@ public class AiAssistantActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        SharedPreferences prefs = getSharedPreferences("settings_prefs", MODE_PRIVATE);
-        apiKey = prefs.getString("ai_api_key", "");
-        workerUrl = prefs.getString("ai_worker_url", "");
         if (modeHintText != null) {
-            if (workerUrl != null && !workerUrl.isEmpty()) {
-                modeHintText.setText("☁️ عند وجود تطابق مباشر في قاعدة بيانات الجهاز تصلك إجابة فورية موثوقة، وإلا تُستخدم Cloudflare Worker الخاصة بك مع بحث في Physiopedia ثم ويكيبيديا.");
-            } else if (apiKey != null && !apiKey.isEmpty()) {
-                modeHintText.setText("🔑 عند وجود تطابق مباشر في قاعدة بيانات الجهاز تصلك إجابة فورية موثوقة، وإلا يُستخدم مفتاح OpenRouter الخاص بك مع بحث في Physiopedia ثم ويكيبيديا.");
-            } else {
-                modeHintText.setText("✅ الأسئلة المطابقة لقاعدة بيانات الجهاز (130 حالة) تُجاب فورًا وبدقة 100% بدون إنترنت. غير ذلك، يُستخدم بحث Physiopedia (مرجع علاج طبيعي متخصص) ثم ويكيبيديا + مزوّد مجاني كخلفية عامة تكميلية.");
-            }
+            modeHintText.setText("✅ الأسئلة المطابقة لقاعدة بيانات الجهاز (130 حالة) تُجاب فورًا وبدقة 100% بدون إنترنت. غير ذلك، يُستخدم بحث Physiopedia (مرجع علاج طبيعي متخصص) ثم ويكيبيديا كخلفية، وتُصاغ الإجابة النهائية دائمًا عبر Phizyo AI.");
         }
     }
 
@@ -216,8 +204,6 @@ public class AiAssistantActivity extends AppCompatActivity {
 
         setTypingStage(1);
 
-        final String finalApiKey = apiKey;
-        final String finalWorkerUrl = workerUrl;
         executor.execute(() -> {
             // المرحلة صفر: هل يوجد تطابق مباشر وواثق في قاعدة بيانات الجهاز؟
             // لو أه، نجاوب فورًا من البيانات الموثقة نفسها - بدون إنترنت وبدون
@@ -270,7 +256,7 @@ public class AiAssistantActivity extends AppCompatActivity {
 
             runOnUiThread(() -> setTypingStage(2));
 
-            AiClient.sendMessage(finalApiKey, finalWorkerUrl, systemPromptToUse, text, new AiClient.Callback() {
+            AiClient.sendMessage(systemPromptToUse, text, new AiClient.Callback() {
                 @Override
                 public void onSuccess(String reply) {
                     runOnUiThread(() -> {
