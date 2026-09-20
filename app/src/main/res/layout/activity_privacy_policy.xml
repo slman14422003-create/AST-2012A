@@ -66,7 +66,7 @@
                     android:layout_marginTop="8dp"
                     android:gravity="center"
                     android:lineSpacingExtra="3dp"
-                    android:text="Phizyo Studio يعمل محليًا، بدون سيرفر خاص بالتطبيق."
+                    android:text="Phizyo Studio يعمل محليًا أولًا؛ النسخ السحابي اختياري بالكامل."
                     android:textColor="@color/text_secondary"
                     android:textDirection="rtl"
                     android:textSize="14.5sp" />
@@ -111,7 +111,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
                     android:lineSpacingExtra="5dp"
-                    android:text="Phizyo Studio تطبيق يعمل بالكامل محليًا على جهازك. لا يوجد أي سيرفر خاص بالتطبيق يجمع بياناتك أو يخزّنها - كل حالة، مريض، برنامج علاج، أو محادثة تحفظها تبقى على جهازك فقط، ولا تُرسل لأي جهة، ولا يمكن للمطوّر الوصول إليها."
+                    android:text="Phizyo Studio تطبيق يعمل محليًا على جهازك بالدرجة الأولى - كل حالة، مريض، برنامج علاج، أو محادثة تحفظها تبقى مخزَّنة على جهازك أولًا. الاستثناء الوحيد هو النسخ الاحتياطي السحابي لملفات المرضى، وهو معطَّل افتراضيًا ولا يعمل إلا إذا فعّلته أنت بنفسك من الإعدادات (انظر بطاقة \"النسخ الاحتياطي السحابي\" أدناه)."
                     android:textAlignment="viewStart"
                     android:textColor="@color/text_secondary"
                     android:textDirection="rtl"
@@ -204,6 +204,52 @@
                     android:layout_marginTop="12dp"
                     android:lineSpacingExtra="5dp"
                     android:text="فقط عند استخدامك لـ Phizyo AI أو البحث عن خلفية معرفية إضافية. في هذه الحالة، جهازك يتصل مباشرة (بدون وسيط من عندنا) بواحد من اثنين:&#10;&#10;•  Physiopedia وويكيبيديا (بحث معرفي عام - بدون أي مفتاح أو تسجيل).&#10;•  رابط Cloudflare Worker واحد ثابت خاص بمساعد Phizyo AI، مبني داخل التطبيق نفسه وغير قابل للتغيير من الإعدادات.&#10;&#10;نص سؤالك فقط هو اللي يُرسل لهذه الجهات لتوليد الرد؛ لا تُرسل أي بيانات مريض أو ملف شخصي بشكل تلقائي في الخلفية."
+                    android:textAlignment="viewStart"
+                    android:textColor="@color/text_secondary"
+                    android:textDirection="rtl"
+                    android:textSize="15sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                android:background="@drawable/bg_settings_group"
+                android:orientation="vertical"
+                android:padding="20dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <ImageView
+                        android:layout_width="22dp"
+                        android:layout_height="22dp"
+                        android:importantForAccessibility="no"
+                        android:src="@drawable/ic_cloud"
+                        android:tint="@color/primary_cyan" />
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:text="النسخ الاحتياطي السحابي (اختياري)"
+                        android:textAlignment="viewStart"
+                        android:textColor="@color/text_primary"
+                        android:textDirection="rtl"
+                        android:textSize="17sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:lineSpacingExtra="5dp"
+                    android:text="مُعطَّل افتراضيًا. لو فعّلته من الإعدادات، تُرفع ملفات مرضاك (الاسم، الهاتف، الجلسات، المدفوعات، الملاحظات) إلى قاعدة بيانات Firebase Firestore الخاصة بالتطبيق، مربوطة بمعرّف جهازك فقط (مصادقة مجهولة بدون اسم أو بريد). لا يمكن لأي مستخدم آخر الوصول لبياناتك، وتقدر توقف الميزة أو تحذف بياناتك السحابية في أي وقت من الإعدادات."
                     android:textAlignment="viewStart"
                     android:textColor="@color/text_secondary"
                     android:textDirection="rtl"
