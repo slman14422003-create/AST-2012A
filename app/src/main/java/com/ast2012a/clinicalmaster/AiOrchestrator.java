@@ -42,14 +42,29 @@ public final class AiOrchestrator {
         void onThinking();
     }
 
+    /** توافقًا مع النداءات القديمة اللي مالهاش سياق مريض محدد (بحث الشاشة
+     *  الرئيسية، أو محادثة عامة مش منطلقة من ملف مريض). */
     public static void answer(Context ctx, String text, StageListener stages, ResultCallback callback) {
+        answer(ctx, text, null, stages, callback);
+    }
+
+    /**
+     * @param patientId لو السؤال منطلق من ملف مريض محدد (زر "اسأل Phizyo AI
+     *                  عن هذا المريض")، مرّر معرّفه هنا عشان يُرفَق ملخصه
+     *                  المُعرَّف (بدون اسم أو هاتف) كخلفية معرفية مباشرة -
+     *                  بدل ما يعتمد المساعد على تخمين أو سؤال المستخدم عن
+     *                  تفاصيل موجودة بالفعل في ملف المريض. مرّر null لو
+     *                  السؤال عام (غير مرتبط بمريض بعينه).
+     */
+    public static void answer(Context ctx, String text, String patientId,
+            StageListener stages, ResultCallback callback) {
         if (stages != null) stages.onClassifying();
 
         AiClient.classifyIntent(text, new AiClient.Callback() {
             @Override
             public void onSuccess(String decision) {
                 if (needsSearch(decision)) {
-                    runGrounded(ctx, text, stages, callback);
+                    runGrounded(ctx, text, patientId, stages, callback);
                 } else {
                     runChat(ctx, text, stages, callback);
                 }
@@ -59,7 +74,7 @@ public final class AiOrchestrator {
             public void onError(String message) {
                 // فشل التصنيف نفسه (مشكلة شبكة مثلًا) - نرجع للسلوك الآمن
                 // الأصلي (تأريض كامل) بدل ما نوقف الرد على المستخدم.
-                runGrounded(ctx, text, stages, callback);
+                runGrounded(ctx, text, patientId, stages, callback);
             }
         });
     }
@@ -143,7 +158,25 @@ public final class AiOrchestrator {
         return text.length() <= max ? text : text.substring(text.length() - max);
     }
 
-    private static void runGrounded(Context ctx, String text, StageListener stages, ResultCallback callback) {
+    /** كلمات دالة على إن السؤال يتكلم عن "مرضى" المستخدم بشكل عام (مش
+     *  سؤال طبي عام مستقل) - تُستخدم فقط لتقرير هل نرفق نظرة عامة مجهولة
+     *  الهوية على كل المرضى ولا لأ، بدون أي تأثير على مسار SEARCH/CHAT
+     *  نفسه (ده قرار AiClient.classifyIntent وحده). */
+    private static final String[] PATIENT_OVERVIEW_HINTS = {
+            "مرضاي", "مرضى", "المرضى", "مريضي", "حالاتي مع", "عيادتي", "مرضى العيادة"
+    };
+
+    private static boolean mentionsPatientsGenerally(String text) {
+        if (text == null) return false;
+        String t = text.trim();
+        for (String hint : PATIENT_OVERVIEW_HINTS) {
+            if (t.contains(hint)) return true;
+        }
+        return false;
+    }
+
+    private static void runGrounded(Context ctx, String text, String patientId,
+            StageListener stages, ResultCallback callback) {
         if (stages != null) stages.onSearching();
 
         // المرحلة صفر: هل يوجد تطابق مباشر وواثق في قاعدة بيانات الجهاز؟
@@ -175,6 +208,30 @@ public final class AiOrchestrator {
             extraContext.append("بروتوكولات موثقة ذات صلة من قاعدة بيانات الجهاز:\n")
                     .append(grounding.contextText).append("\n\n");
         }
+
+        // موسوعة الأنماط + دليل التشريح: مرفقان دايمًا في المسار الإكلينيكي
+        // (مصدر موثق ثابت داخل التطبيق، حجمه صغير فمفيش تكلفة تُذكر).
+        String encyclopediaContext = DataManager.buildEncyclopediaContext(ctx);
+        if (encyclopediaContext != null) {
+            extraContext.append(encyclopediaContext).append("\n\n");
+        }
+
+        // ملف المريض (مُعرَّف الهوية - بدون اسم أو هاتف إطلاقًا): يُرفق فقط
+        // لو السؤال منطلق فعليًا من ملف مريض محدد (patientId)، أو لو
+        // المستخدم بيسأل عن "مرضاه" بشكل عام فنرفق نظرة عامة مجهولة الهوية
+        // بدل ما نرفق كل بيانات العيادة مع كل سؤال إكلينيكي عادي.
+        if (patientId != null && !patientId.trim().isEmpty()) {
+            String patientContext = PatientManager.buildRedactedPatientContext(ctx, patientId);
+            if (patientContext != null && !patientContext.isEmpty()) {
+                extraContext.append(patientContext).append("\n\n");
+            }
+        } else if (mentionsPatientsGenerally(text)) {
+            String overview = PatientManager.buildAllPatientsOverviewContext(ctx);
+            if (overview != null) {
+                extraContext.append(overview).append("\n\n");
+            }
+        }
+
         if (physio != null) {
             extraContext.append("خلفية معرفية متخصصة من Physiopedia (مرجع علاج طبيعي، مقالة: ")
                     .append(physio.title).append("):\n").append(physio.extract);

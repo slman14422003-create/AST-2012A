@@ -58,6 +58,7 @@ public class AnatomyActivity extends AppCompatActivity {
                 notesView.setVisibility(View.GONE);
             }
 
+            Ui.applyPressFeedback(card);
             container.addView(card);
         }
         container.scheduleLayoutAnimation();

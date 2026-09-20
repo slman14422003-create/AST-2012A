@@ -56,6 +56,16 @@ public class MainActivity extends AppCompatActivity {
     private final Handler searchHandler = new Handler(Looper.getMainLooper());
     private Runnable pendingSearch;
 
+    // ملحوظة إصلاح خطأ "زر المفضلة يرجع للشاشة الرئيسية": refreshFavoritesView()
+    // كانت بتنادي searchField.setText("") عشان تفضي مربع البحث، وده بيشغّل
+    // TextWatcher.afterTextChanged تلقائيًا واللي بيحط showingFavorites = false
+    // ويجدول doSearch("") بعد 200ms (SEARCH_DEBOUNCE_MS) - فبعد ربع ثانية
+    // بالظبط الشاشة كانت "ترجع" لواجهة الترحيب الفارغة فوق نتيجة المفضلة
+    // اللي ظهرت لحظة واحدة قبلها، وكأن الزر مش شغال. الحل: هذا العلم يخلي
+    // afterTextChanged يتجاهل مرة واحدة بس أي تغيير برمجي (مش من كتابة
+    // المستخدم الفعلية) في النص، فمايشغلش بحث جديد ولا يلغي showingFavorites.
+    private boolean suppressNextTextChange = false;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -67,6 +77,7 @@ public class MainActivity extends AppCompatActivity {
         // داخل الإعدادات فقط بدل ما يكون زر منفصل طايف في كل شاشة).
         ImageButton settingsBtn = findViewById(R.id.btn_settings);
         settingsBtn.setOnClickListener(v -> navigateTo(SettingsActivity.class));
+        Ui.applyPressFeedback(settingsBtn);
 
         // عبارة ترحيب متغيّرة (صباح الخير/مساء الخير...) تظهر كعنوان الشاشة
         // الترحيبية (بأسلوب Claude) بدل النص الثابت القديم.
@@ -122,6 +133,13 @@ public class MainActivity extends AppCompatActivity {
         TextView aiBtn = findViewById(R.id.btn_ai_assistant);
         aiBtn.setOnClickListener(v -> navigateTo(AiAssistantActivity.class));
 
+        // تحسين انميشن: كبسولات التنقل السفلية بقت تدي إحساس ضغط فعلي
+        // (تصغير خفيف + نبضة رجوع) بدل ما تعتمد بس على تغيير لون الخلفية.
+        for (View chip : new View[]{favoritesBtn, myCasesBtn, encyclopediaBtn, anatomyBtn,
+                patientsBtn, treatmentProgramsBtn, aiBtn}) {
+            Ui.applyPressFeedback(chip);
+        }
+
         askAiFallback.setOnClickListener(v -> askAiInline(lastQuery));
 
         suggestionNote.setOnClickListener(v -> {
@@ -164,6 +182,10 @@ public class MainActivity extends AppCompatActivity {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
             @Override public void afterTextChanged(Editable s) {
+                if (suppressNextTextChange) {
+                    suppressNextTextChange = false;
+                    return;
+                }
                 showingFavorites = false;
                 final String query = s.toString();
                 if (pendingSearch != null) searchHandler.removeCallbacks(pendingSearch);
@@ -178,6 +200,7 @@ public class MainActivity extends AppCompatActivity {
     private void setupSuggestionChip(int viewId) {
         TextView chip = findViewById(viewId);
         chip.setOnClickListener(v -> searchField.setText(chip.getText()));
+        Ui.applyPressFeedback(chip);
     }
 
     @Override
@@ -228,6 +251,10 @@ public class MainActivity extends AppCompatActivity {
     /** يعرض قائمة الحالات المفضّلة فقط، متجاوزًا محرك البحث. */
     private void refreshFavoritesView() {
         showingFavorites = true;
+        // نلغي أي بحث مؤجَّل (debounced) كان في انتظاره قبل ما نمسح الحقل،
+        // وإلا كان ممكن يتنفذ بعد 200ms ويكتب فوق نتيجة المفضلة اللي هنعرضها.
+        if (pendingSearch != null) searchHandler.removeCallbacks(pendingSearch);
+        suppressNextTextChange = true;
         searchField.setText("");
         resetAiInlineState();
         emptyHintContainer.setVisibility(View.GONE);

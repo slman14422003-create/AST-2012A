@@ -46,6 +46,11 @@ public class AiAssistantActivity extends AppCompatActivity {
     private LinearLayout quickPromptsRow;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
+    /** لو الشاشة اتفتحت من ملف مريض محدد ("اسأل Phizyo AI عن هذا المريض")،
+     *  بيتخزن معرّفه هنا عشان كل سؤال في المحادثة (بما فيها إعادة المحاولة)
+     *  يفضل مرفق معاه ملخص المريض المُعرَّف (بدون اسم/هاتف) تلقائيًا. */
+    private String contextPatientId;
+
     private static final String[] QUICK_PROMPTS = {
             "اشرحلي الفرق بين TENS و EMS",
             "بروتوكول مقترح لآلام أسفل الظهر",
@@ -96,7 +101,21 @@ public class AiAssistantActivity extends AppCompatActivity {
         String prefillQuery = getIntent().getStringExtra("prefill_query");
         if (prefillQuery != null && !prefillQuery.isEmpty()) {
             input.setText(prefillQuery);
+            input.setSelection(prefillQuery.length());
         }
+
+        contextPatientId = getIntent().getStringExtra("patient_id");
+        bindPatientContextBanner();
+    }
+
+    /** لو الشاشة مرتبطة بمريض محدد، نعرض شريط توضيحي صغير أعلى المحادثة
+     *  (نفس فكرة شارة المصدر) يفهم المستخدم إن المساعد شايف ملف المريض -
+     *  بدون ذكر اسمه بالطبع، مجرد تأكيد إن السياق مرفق. */
+    private void bindPatientContextBanner() {
+        View banner = findViewById(R.id.ai_patient_context_banner);
+        if (banner == null) return;
+        banner.setVisibility(contextPatientId != null && !contextPatientId.isEmpty()
+                ? View.VISIBLE : View.GONE);
     }
 
     /** دوران مستمر بطيء لنجمة مؤشر التفكير (مثل نجمة Claude وهي تفكر). */
@@ -132,6 +151,7 @@ public class AiAssistantActivity extends AppCompatActivity {
             lp.bottomMargin = Ui.dp(this, 10);
             row.setLayoutParams(lp);
             row.setOnClickListener(v -> sendQuery(prompt, true));
+            Ui.applyPressFeedback(row);
             quickPromptsRow.addView(row);
         }
     }
@@ -194,7 +214,7 @@ public class AiAssistantActivity extends AppCompatActivity {
 
         setTypingStage(0);
 
-        executor.execute(() -> AiOrchestrator.answer(this, text,
+        executor.execute(() -> AiOrchestrator.answer(this, text, contextPatientId,
                 new AiOrchestrator.StageListener() {
                     @Override public void onClassifying() { runOnUiThread(() -> setTypingStage(0)); }
                     @Override public void onSearching() { runOnUiThread(() -> setTypingStage(1)); }

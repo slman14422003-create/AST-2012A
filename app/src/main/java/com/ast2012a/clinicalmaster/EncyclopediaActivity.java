@@ -70,6 +70,7 @@ public class EncyclopediaActivity extends AppCompatActivity {
                 return true;
             });
 
+            Ui.applyPressFeedback(card);
             container.addView(card);
         }
         container.scheduleLayoutAnimation();

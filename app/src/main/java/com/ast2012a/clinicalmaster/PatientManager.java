@@ -210,6 +210,115 @@ public class PatientManager {
         }
     }
 
+    // ---------------------------------------------------------- تأريض المساعد الذكي
+    // -----------------------------------------------------------------
+    // Phizyo AI بقى له حق الوصول لحالات المرضى (تشخيص، جلسات، تطور الألم،
+    // ملاحظات، البرامج المرتبطة) عشان يقدر فعلًا يساعد في متابعة حالة
+    // مريض معيّن أو يدي نظرة عامة على كل المرضى - لكن بشرط صارم: الاسم
+    // ورقم الهاتف ممنوع نهائيًا يوصلوا لأي نص بيتبعت لأي نموذج خارجي (حتى
+    // لو الووركر نفسه موثوق) - الطريقتين تحت أصلًا لا يقرآن الحقلين دول
+    // من كائن Patient نفسه إطلاقًا، فمفيش احتمال تسريب حتى بالخطأ.
+    // -----------------------------------------------------------------
+
+    /** حد أقصى لعدد الجلسات المُرفَقة في تأريض مريض واحد، تجنبًا لتضخيم
+     *  حجم الطلب المرسل للنموذج مع مرضى عندهم سجل جلسات طويل جدًا. */
+    private static final int MAX_SESSIONS_IN_CONTEXT = 12;
+
+    /**
+     * ملخّص مُعرَّف (مجهول الهوية) لمريض واحد - يُستخدم كخلفية معرفية للمساعد
+     * الذكي عند سؤال مرتبط بمريض محدد. لا يحتوي إطلاقًا على name أو phone.
+     */
+    public static String buildRedactedPatientContext(Patient p) {
+        if (p == null) return null;
+        StringBuilder sb = new StringBuilder();
+        sb.append("ملف مريض من عيادة المستخدم (بيانات تعريفية محذوفة عمدًا لحماية الخصوصية - ")
+          .append("لا تطلب ولا تفترض اسم المريض أو رقم هاتفه، وأشر إليه بـ \"المريض\" فقط):\n");
+        if (p.age > 0) sb.append("• العمر: ").append(p.age).append(" سنة\n");
+        if (!p.gender.trim().isEmpty()) sb.append("• الجنس: ").append(p.gender.trim()).append("\n");
+        if (!p.diagnosis.trim().isEmpty()) sb.append("• الشكوى/التشخيص: ").append(p.diagnosis.trim()).append("\n");
+        if (!p.notes.trim().isEmpty()) sb.append("• ملاحظات إكلينيكية: ").append(p.notes.trim()).append("\n");
+
+        double drop = p.averagePainDrop();
+        if (drop > -999) {
+            sb.append("• متوسط انخفاض الألم عبر الجلسات المسجَّلة: ")
+              .append(String.format(java.util.Locale.US, "%.1f", drop)).append(" نقطة\n");
+        }
+
+        List<Patient.Session> sessions = p.sessionsNewestFirst();
+        if (!sessions.isEmpty()) {
+            sb.append("• سجل الجلسات (الأحدث أولًا");
+            if (sessions.size() > MAX_SESSIONS_IN_CONTEXT) {
+                sb.append("، آخر ").append(MAX_SESSIONS_IN_CONTEXT).append(" من أصل ").append(sessions.size());
+            }
+            sb.append("):\n");
+            int shown = Math.min(MAX_SESSIONS_IN_CONTEXT, sessions.size());
+            for (int i = 0; i < shown; i++) {
+                Patient.Session s = sessions.get(i);
+                sb.append("  - ").append(Fmt.date(s.date));
+                if (!s.protocol.trim().isEmpty()) sb.append(" — البروتوكول/العلاج: ").append(s.protocol.trim());
+                if (s.hasPain()) sb.append(" — الألم قبل/بعد: ").append(s.painBefore).append("→").append(s.painAfter);
+                if (s.durationMin > 0) sb.append(" — المدة: ").append(s.durationMin).append(" دقيقة");
+                if (!s.notes.trim().isEmpty()) sb.append(" — ملاحظة: ").append(s.notes.trim());
+                sb.append("\n");
+            }
+        }
+
+        if (!p.assignments.isEmpty()) {
+            sb.append("• برامج/بروتوكولات مرتبطة بالمريض: ");
+            List<String> titles = new ArrayList<>();
+            for (Patient.Assignment a : p.assignments) if (!a.title.trim().isEmpty()) titles.add(a.title.trim());
+            sb.append(String.join("، ", titles)).append("\n");
+        }
+
+        return sb.toString().trim();
+    }
+
+    /** نفس التأريض السابق لكن لمريض واحد محدد بمعرّفه - تُستخدم لما المستخدم
+     *  يسأل المساعد الذكي عن مريض معيّن من داخل شاشة ملفه مباشرة. */
+    public static String buildRedactedPatientContext(Context ctx, String patientId) {
+        return buildRedactedPatientContext(getPatient(ctx, patientId));
+    }
+
+    /** حد أقصى لعدد المرضى المُرفَقين في نظرة عامة، تجنبًا لتضخيم الطلب
+     *  عند عيادات فيها عدد كبير من المرضى. */
+    private static final int MAX_PATIENTS_IN_OVERVIEW = 20;
+
+    /**
+     * نظرة عامة مُعرَّفة (مجهولة الهوية) على كل المرضى - تُستخدم لما سؤال
+     * المستخدم للمساعد عام عن "مرضاه" (مش عن مريض واحد بعينه)، زي "كام
+     * مريض عندي بيتحسن؟" أو "إيه أكتر تشخيص متكرر عندي؟". كل مريض بيتشار
+     * له برقم ترتيبي داخلي فقط ("مريض 1"، "مريض 2"...) - بدون اسمه إطلاقًا.
+     */
+    public static String buildAllPatientsOverviewContext(Context ctx) {
+        List<Patient> all = loadPatients(ctx);
+        if (all.isEmpty()) return null;
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("نظرة عامة مجهولة الهوية على مرضى عيادة المستخدم (بيانات تعريفية محذوفة عمدًا - ")
+          .append("لا تطلب ولا تفترض أي اسم أو رقم هاتف، أشر لكل مريض برقمه فقط زي \"مريض 1\"):\n");
+
+        int shown = Math.min(MAX_PATIENTS_IN_OVERVIEW, all.size());
+        long now = System.currentTimeMillis();
+        for (int i = 0; i < shown; i++) {
+            Patient p = all.get(i);
+            sb.append("• مريض ").append(i + 1).append(": ");
+            List<String> parts = new ArrayList<>();
+            if (p.age > 0) parts.add(p.age + " سنة");
+            if (!p.gender.trim().isEmpty()) parts.add(p.gender.trim());
+            if (!p.diagnosis.trim().isEmpty()) parts.add("التشخيص: " + p.diagnosis.trim());
+            parts.add(p.sessions.size() + " جلسة");
+            double drop = p.averagePainDrop();
+            if (drop > -999) parts.add("متوسط انخفاض الألم: " + String.format(java.util.Locale.US, "%.1f", drop));
+            Patient.Session last = p.lastSession();
+            if (last != null) parts.add("آخر جلسة: " + Fmt.relative(last.date, now));
+            sb.append(String.join(" — ", parts)).append("\n");
+        }
+        if (all.size() > shown) {
+            sb.append("(يوجد ").append(all.size() - shown).append(" مريض إضافي لم يُعرض هنا لتقليل الحجم.)\n");
+        }
+        return sb.toString().trim();
+    }
+
     // ------------------------------------------------------------------ العملة
 
     private static SharedPreferences prefs(Context ctx) {

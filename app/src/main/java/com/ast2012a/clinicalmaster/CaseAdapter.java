@@ -53,12 +53,14 @@ public class CaseAdapter extends RecyclerView.Adapter<CaseAdapter.ViewHolder> {
         holder.itemView.setOnClickListener(v -> {
             if (listener != null) listener.onCaseClick(item);
         });
+        Ui.applyPressFeedback(holder.itemView);
 
         boolean isFavorite = FavoritesManager.isFavorite(holder.itemView.getContext(), item.title);
         holder.favorite.setImageResource(isFavorite ? R.drawable.ic_star_filled : R.drawable.ic_star_outline);
         holder.favorite.setOnClickListener(v -> {
             boolean nowFavorite = FavoritesManager.toggleFavorite(holder.itemView.getContext(), item.title);
             holder.favorite.setImageResource(nowFavorite ? R.drawable.ic_star_filled : R.drawable.ic_star_outline);
+            Ui.popAnimation(holder.favorite);
             if (favoriteListener != null) favoriteListener.onFavoriteToggle(item, nowFavorite);
         });
     }

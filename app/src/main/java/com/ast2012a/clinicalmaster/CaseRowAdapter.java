@@ -90,9 +90,16 @@ public class CaseRowAdapter extends RecyclerView.Adapter<CaseRowAdapter.ViewHold
         holder.favorite.setImageResource(fav ? R.drawable.ic_star_filled : R.drawable.ic_star_outline);
 
         holder.itemView.setOnClickListener(v -> { if (callback != null) callback.onOpen(item); });
-        holder.favorite.setOnClickListener(v -> { if (callback != null) callback.onToggleFavorite(item); });
+        holder.favorite.setOnClickListener(v -> {
+            Ui.popAnimation(holder.favorite);
+            if (callback != null) callback.onToggleFavorite(item);
+        });
         holder.editBtn.setOnClickListener(v -> { if (callback != null) callback.onEdit(item); });
         holder.deleteBtn.setOnClickListener(v -> { if (callback != null) callback.onDelete(item); });
+
+        Ui.applyPressFeedback(holder.itemView);
+        Ui.applyPressFeedback(holder.editBtn);
+        Ui.applyPressFeedback(holder.deleteBtn);
     }
 
     private void addBadge(LinearLayout parent, String text, String type) {

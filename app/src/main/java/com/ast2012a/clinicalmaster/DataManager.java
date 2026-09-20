@@ -563,6 +563,55 @@ public class DataManager {
     }
 
     // -----------------------------------------------------------------
+    // تأريض موسوعة الأنماط + دليل التشريح: المساعد الذكي كان له حق الوصول
+    // لقاعدة بيانات البروتوكولات فقط (buildGroundingContext أعلاه)، بدون
+    // موسوعة الأنماط (modes_encyclopedia.json) ولا مرجع التشريح
+    // (anatomy_reference.json) - رغم إنهم جزء أساسي من معرفة التطبيق
+    // الموثقة. الاثنين صغيرا الحجم (عدد محدود من العناصر)، فبدل محرك
+    // بحث/تطابق إضافي معقّد، بنرفقهم بالكامل كخلفية معرفية مضغوطة مع أي
+    // سؤال إكلينيكي (مسار SEARCH فقط) - يضمن إن المساعد "يعرف" محتوى
+    // الموسوعة والتشريح دايمًا بدل ما يعتمد على تخمين عام.
+    // -----------------------------------------------------------------
+
+    public static String buildEncyclopediaContext(Context ctx) {
+        StringBuilder sb = new StringBuilder();
+
+        List<JSONObject> modes = loadModesEncyclopedia(ctx);
+        if (!modes.isEmpty()) {
+            sb.append("موسوعة أنماط الجهاز (مرجع موثّق داخل التطبيق):\n");
+            for (JSONObject m : modes) {
+                String name = m.optString("name", m.optString("title", ""));
+                String range = m.optString("mode", "");
+                String desc = m.optString("desc", m.optString("description", ""));
+                sb.append("• ").append(name);
+                if (!range.isEmpty()) sb.append(" (النمط: ").append(range).append(")");
+                if (!desc.isEmpty()) sb.append(" — ").append(desc);
+                sb.append("\n");
+            }
+        }
+
+        List<JSONObject> anatomy = loadAnatomyReference(ctx);
+        if (!anatomy.isEmpty()) {
+            sb.append("\nدليل التشريح (مواضع الأقطاب والمسارات العصبية/العضلية، مرجع موثّق داخل التطبيق):\n");
+            for (JSONObject a : anatomy) {
+                String region = a.optString("region", "");
+                String name = a.optString("name", "");
+                String nerve = a.optString("nerve", "");
+                String landmarks = a.optString("landmarks", "");
+                String notes = a.optString("notes", "");
+                sb.append("• ").append(name);
+                if (!region.isEmpty()) sb.append(" [").append(region).append("]");
+                if (!nerve.isEmpty()) sb.append(" — العصب: ").append(nerve);
+                if (!landmarks.isEmpty()) sb.append(" — مواضع الأقطاب: ").append(landmarks);
+                if (!notes.isEmpty()) sb.append(" — تنبيه: ").append(notes);
+                sb.append("\n");
+            }
+        }
+
+        return sb.length() == 0 ? null : sb.toString().trim();
+    }
+
+    // -----------------------------------------------------------------
     // ربط موسوعة الأنماط بقاعدة الحالات الفعلية: نستخرج أرقام الأنماط من
     // نص الموسوعة (مثال: "1 إلى 4" أو "10 و 11")، ونعدّ كم حالة سريرية
     // موثقة فعليًا تستخدم أي من هذه الأنماط - بيانات حقيقية من القاعدة

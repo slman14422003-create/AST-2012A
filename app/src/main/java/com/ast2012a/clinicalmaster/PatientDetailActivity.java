@@ -56,10 +56,14 @@ public class PatientDetailActivity extends AppCompatActivity {
 
         MaterialToolbar toolbar = findViewById(R.id.toolbar);
         toolbar.setNavigationOnClickListener(v -> finish());
-        toolbar.inflateMenu(R.menu.menu_share);
+        toolbar.inflateMenu(R.menu.menu_patient_detail);
         toolbar.setOnMenuItemClickListener(item -> {
             if (item.getItemId() == R.id.action_share) {
                 shareSummary();
+                return true;
+            }
+            if (item.getItemId() == R.id.action_ask_ai) {
+                askAiAboutThisPatient();
                 return true;
             }
             return false;
@@ -615,6 +619,24 @@ public class PatientDetailActivity extends AppCompatActivity {
                 })
                 .setNegativeButton("إلغاء", null)
                 .show();
+    }
+
+    // =====================================================================
+    // مساعد Phizyo AI (بسياق هذا المريض)
+    // =====================================================================
+
+    /** يفتح شاشة Phizyo AI مع تمرير معرّف المريض فقط (patient_id) - المساعد
+     *  بيجيب ملخص المريض بنفسه من PatientManager عند الحاجة (تشخيص، جلسات،
+     *  تطور الألم...) بدون اسمه أو هاتفه إطلاقًا؛ الاسم/الهاتف لا يُقرآن من
+     *  كائن Patient أصلًا في أي مسار تأريض، فمفيش أي احتمال تسريب حتى لو
+     *  الشاشة دي اتعدّلت لاحقًا. */
+    private void askAiAboutThisPatient() {
+        if (patient == null) return;
+        Intent i = new Intent(this, AiAssistantActivity.class);
+        i.putExtra("patient_id", patientId);
+        i.putExtra("prefill_query", "ساعدني أراجع حالة هذا المريض وأقترح خطوات العلاج القادمة المناسبة.");
+        startActivity(i);
+        overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
     }
 
     // =====================================================================

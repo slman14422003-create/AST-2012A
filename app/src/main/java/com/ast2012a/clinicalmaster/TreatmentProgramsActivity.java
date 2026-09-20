@@ -72,6 +72,12 @@ public class TreatmentProgramsActivity extends AppCompatActivity {
         emptyAction.setText("برنامج جديد");
         emptyAction.setOnClickListener(v -> openAddProgram());
         fab.setOnClickListener(v -> openAddProgram());
+        // تحسين انميشن: دخول نابض (overshoot) للزر العائم، نفس أسلوب باقي
+        // شاشات التطبيق الرئيسية بدل ما يظهر فجأة بدون حركة.
+        fab.setScaleX(0f);
+        fab.setScaleY(0f);
+        fab.animate().scaleX(1f).scaleY(1f).setStartDelay(200).setDuration(320)
+                .setInterpolator(new android.view.animation.OvershootInterpolator(1.6f)).start();
 
         searchField.addTextChangedListener(new TextWatcher() {
             @Override
@@ -187,6 +193,10 @@ public class TreatmentProgramsActivity extends AppCompatActivity {
             overridePendingTransition(R.anim.slide_up_in, R.anim.fade_out);
         });
         row.findViewById(R.id.program_btn_delete).setOnClickListener(v -> confirmDelete(t));
+
+        Ui.applyPressFeedback(row);
+        Ui.applyPressFeedback(row.findViewById(R.id.program_btn_edit));
+        Ui.applyPressFeedback(row.findViewById(R.id.program_btn_delete));
         return row;
     }
 

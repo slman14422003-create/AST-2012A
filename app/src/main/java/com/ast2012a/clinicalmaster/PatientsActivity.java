@@ -101,6 +101,12 @@ public class PatientsActivity extends AppCompatActivity {
         emptyAction.setOnClickListener(v -> openAddPatient());
 
         fab.setOnClickListener(v -> openAddPatient());
+        // تحسين انميشن: نفس دخول الزر العائم النابض (overshoot) المستخدم في
+        // الشاشة الرئيسية، بدل ما يظهر فجأة بلا أي حركة دخول.
+        fab.setScaleX(0f);
+        fab.setScaleY(0f);
+        fab.animate().scaleX(1f).scaleY(1f).setStartDelay(200).setDuration(320)
+                .setInterpolator(new android.view.animation.OvershootInterpolator(1.6f)).start();
         searchField.setHint("ابحث بالاسم أو الهاتف أو التشخيص");
         searchField.addTextChangedListener(new TextWatcher() {
             @Override
@@ -246,6 +252,12 @@ public class PatientsActivity extends AppCompatActivity {
 
         container.removeAllViews();
         for (Patient p : shown) container.addView(buildRow(p));
+        // تحسين انميشن: بطاقات المرضى كانت تظهر دفعة واحدة بدون أي حركة
+        // دخول (خلافًا لباقي شاشات القوائم في التطبيق) - نفس تأثير الدخول
+        // المتدرّج (fall/stagger) المستخدم في شاشة البحث الرئيسية والمحادثة.
+        container.setLayoutAnimation(
+                android.view.animation.AnimationUtils.loadLayoutAnimation(this, R.anim.layout_fall_stagger));
+        container.scheduleLayoutAnimation();
         noResults.setVisibility(!all.isEmpty() && shown.isEmpty() ? View.VISIBLE : View.GONE);
     }
 
@@ -302,6 +314,7 @@ public class PatientsActivity extends AppCompatActivity {
         } else {
             call.setVisibility(View.VISIBLE);
             call.setOnClickListener(v -> dial(p.phone));
+            Ui.applyPressFeedback(call);
         }
 
         row.setOnClickListener(v -> {
@@ -310,6 +323,7 @@ public class PatientsActivity extends AppCompatActivity {
             startActivity(i);
             overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
         });
+        Ui.applyPressFeedback(row);
         return row;
     }
 
