@@ -1,68 +1,64 @@
 <resources>
-    <!-- ============================================================
-         نظام الألوان - الوضع الليلي. نفس أسماء المتغيرات بالضبط الموجودة
-         في values/colors.xml (النهاري)، بقيم داكنة متناسقة. أندرويد يختار
-         الملف الصحيح تلقائيًا حسب وضع الجهاز/التطبيق - لا حاجة لأي تعديل
-         في أي Layout أو كود Java، لأن كل الشاشات تشير لنفس الأسماء. -->
+    <!-- نظام الألوان - الوضع الليلي v4. نفس أسماء المتغيرات، بعمق أكبر:
+         خلفية بنية-دخانية غنية، وأسطح مرفوعة فعلياً بدرجات لون متتابعة
+         بدل درجة واحدة شبه ثابتة. -->
 
-    <!-- خلفية التطبيق: بني-رمادي داكن دافئ (مو أسود بحت) -->
-    <color name="bg_deep_1">#18160F</color>
-    <color name="bg_deep_2">#1D1A13</color>
-    <color name="bg_deep_3">#221E16</color>
-    <color name="bg_dark">#18160F</color>
+    <color name="bg_deep_1">#15130D</color>
+    <color name="bg_deep_2">#1B1810</color>
+    <color name="bg_deep_3">#211D13</color>
+    <color name="bg_dark">#15130D</color>
 
-    <!-- الألوان الأساسية: طوبي أفتح شوي عشان يبرز على خلفية داكنة -->
-    <color name="primary_cyan">#E2916B</color>
-    <color name="primary_cyan_dark">#C87A55</color>
+    <color name="primary_cyan">#E5926B</color>
+    <color name="primary_cyan_dark">#C4744E</color>
+    <color name="primary_cyan_light">#F0AC8B</color>
     <color name="accent_violet">#8FB0C0</color>
     <color name="accent_violet_dark">#6D8E9E</color>
 
-    <!-- أسطح البطاقات: داكنة بحدود رفيعة فاتحة قليلًا -->
-    <color name="glass_fill">#24211A</color>
-    <color name="glass_fill_strong">#2A261D</color>
-    <color name="glass_fill_soft">#211D16</color>
-    <color name="glass_border">#3A3527</color>
-    <color name="glass_border_soft">#332F24</color>
-    <color name="glass_highlight">#1FFFFFFF</color>
-    <color name="glass_top_sheen">#00FFFFFF</color>
+    <color name="glass_fill">#252017</color>
+    <color name="glass_fill_strong">#2C261A</color>
+    <color name="glass_fill_soft">#201B13</color>
+    <color name="glass_border">#3D3624</color>
+    <color name="glass_border_soft">#332C1E</color>
+    <color name="glass_highlight">#26FFFFFF</color>
+    <color name="glass_top_sheen">#14FFFFFF</color>
+    <color name="shadow_soft">#40000000</color>
+    <color name="shadow_strong">#5C000000</color>
 
-    <color name="surface_dark">#24211A</color>
-    <color name="card_dark">#24211A</color>
+    <color name="surface_dark">#252017</color>
+    <color name="card_dark">#252017</color>
 
-    <color name="text_primary">#F3EFE6</color>
-    <color name="text_secondary">#B9B2A2</color>
-    <color name="text_tertiary">#8B8474</color>
+    <color name="text_primary">#F6F1E6</color>
+    <color name="text_secondary">#BDB49F</color>
+    <color name="text_tertiary">#8C8371</color>
 
-    <color name="accent_red">#E27A68</color>
-    <color name="accent_red_dark">#C85E4B</color>
-    <color name="accent_green">#79C592</color>
-    <color name="accent_gold">#D9AC6C</color>
+    <color name="accent_red">#E37E68</color>
+    <color name="accent_red_dark">#C86550</color>
+    <color name="accent_green">#7FC998</color>
+    <color name="accent_gold">#DBAE6D</color>
 
-    <!-- بطاقة تنبيه السلامة - نسخة الوضع الليلي -->
-    <color name="warning_fill">#2E1D18</color>
-    <color name="warning_border">#4A2E24</color>
+    <color name="warning_fill">#332019</color>
+    <color name="warning_border">#4E3126</color>
 
     <color name="white">#FFFFFF</color>
     <color name="black">#000000</color>
     <color name="overlay_scrim">#CC000000</color>
 
-    <!-- أدوار Material 3 الكاملة - نسخة الوضع الليلي -->
-    <color name="m3_primary_container">#6B3A22</color>
-    <color name="m3_on_primary_container">#FBDDCC</color>
+    <color name="m3_primary_container">#6E3B21</color>
+    <color name="m3_on_primary_container">#FBDECC</color>
     <color name="m3_secondary_container">#2E4650</color>
     <color name="m3_on_secondary_container">#C8DEE6</color>
-    <color name="m3_tertiary">#D9AC6C</color>
+    <color name="m3_tertiary">#DBAE6D</color>
     <color name="m3_on_tertiary">#3A2A0C</color>
     <color name="m3_tertiary_container">#5A431C</color>
     <color name="m3_on_tertiary_container">#F3E4C8</color>
-    <color name="m3_surface_variant">#211D16</color>
-    <color name="m3_on_surface_variant">#B9B2A2</color>
-    <color name="m3_outline">#8B8474</color>
-    <color name="m3_outline_variant">#332F24</color>
-    <color name="m3_error">#E27A68</color>
+    <color name="m3_surface_variant">#201B13</color>
+    <color name="m3_on_surface_variant">#BDB49F</color>
+    <color name="m3_outline">#8C8371</color>
+    <color name="m3_outline_variant">#332C1E</color>
+    <color name="m3_error">#E37E68</color>
     <color name="m3_on_error">#3A0F08</color>
     <color name="m3_error_container">#5C1F12</color>
     <color name="m3_on_error_container">#F6DAD4</color>
-    <color name="m3_surface_container">#211D16</color>
-    <color name="m3_surface_container_high">#2A261D</color>
+    <color name="m3_surface_container">#201B13</color>
+    <color name="m3_surface_container_high">#2C261A</color>
 </resources>
