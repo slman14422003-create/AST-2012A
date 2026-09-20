@@ -1,64 +1,53 @@
 <resources>
-    <!-- نظام الألوان - الوضع الليلي v4. نفس أسماء المتغيرات، بعمق أكبر:
-         خلفية بنية-دخانية غنية، وأسطح مرفوعة فعلياً بدرجات لون متتابعة
-         بدل درجة واحدة شبه ثابتة. -->
-
-    <color name="bg_deep_1">#15130D</color>
-    <color name="bg_deep_2">#1B1810</color>
-    <color name="bg_deep_3">#211D13</color>
-    <color name="bg_dark">#15130D</color>
-
-    <color name="primary_cyan">#E5926B</color>
-    <color name="primary_cyan_dark">#C4744E</color>
-    <color name="primary_cyan_light">#F0AC8B</color>
-    <color name="accent_violet">#8FB0C0</color>
-    <color name="accent_violet_dark">#6D8E9E</color>
-
-    <color name="glass_fill">#252017</color>
-    <color name="glass_fill_strong">#2C261A</color>
-    <color name="glass_fill_soft">#201B13</color>
-    <color name="glass_border">#3D3624</color>
-    <color name="glass_border_soft">#332C1E</color>
-    <color name="glass_highlight">#26FFFFFF</color>
-    <color name="glass_top_sheen">#14FFFFFF</color>
-    <color name="shadow_soft">#40000000</color>
-    <color name="shadow_strong">#5C000000</color>
-
-    <color name="surface_dark">#252017</color>
-    <color name="card_dark">#252017</color>
-
-    <color name="text_primary">#F6F1E6</color>
-    <color name="text_secondary">#BDB49F</color>
-    <color name="text_tertiary">#8C8371</color>
-
-    <color name="accent_red">#E37E68</color>
-    <color name="accent_red_dark">#C86550</color>
-    <color name="accent_green">#7FC998</color>
-    <color name="accent_gold">#DBAE6D</color>
-
-    <color name="warning_fill">#332019</color>
-    <color name="warning_border">#4E3126</color>
-
+    <color name="bg_deep_1">#171513</color>
+    <color name="bg_deep_2">#211D1A</color>
+    <color name="bg_deep_3">#2A2521</color>
+    <color name="bg_dark">#211D1A</color>
+    <color name="claude_orange">#D97757</color>
+    <color name="primary_cyan">#E08B6D</color>
+    <color name="primary_cyan_dark">#F0A98D</color>
+    <color name="primary_cyan_light">#F2B9A0</color>
+    <color name="accent_violet">#A8BDC4</color>
+    <color name="accent_violet_dark">#C2D1D5</color>
+    <color name="glass_fill">#27231F</color>
+    <color name="glass_fill_strong">#302B27</color>
+    <color name="glass_fill_soft">#24211E</color>
+    <color name="glass_border">#463D36</color>
+    <color name="glass_border_soft">#3B342E</color>
+    <color name="glass_highlight">#18FFFFFF</color>
+    <color name="glass_top_sheen">#20FFFFFF</color>
+    <color name="shadow_soft">#55000000</color>
+    <color name="shadow_strong">#70000000</color>
+    <color name="surface_dark">#27231F</color>
+    <color name="card_dark">#27231F</color>
+    <color name="text_primary">#F6F0EA</color>
+    <color name="text_secondary">#C9BCB2</color>
+    <color name="text_tertiary">#988A80</color>
+    <color name="accent_red">#E07A62</color>
+    <color name="accent_red_dark">#F09A84</color>
+    <color name="accent_green">#7EB393</color>
+    <color name="accent_gold">#D5A55D</color>
+    <color name="warning_fill">#3A2924</color>
+    <color name="warning_border">#75463A</color>
     <color name="white">#FFFFFF</color>
     <color name="black">#000000</color>
-    <color name="overlay_scrim">#CC000000</color>
-
-    <color name="m3_primary_container">#6E3B21</color>
-    <color name="m3_on_primary_container">#FBDECC</color>
-    <color name="m3_secondary_container">#2E4650</color>
-    <color name="m3_on_secondary_container">#C8DEE6</color>
-    <color name="m3_tertiary">#DBAE6D</color>
-    <color name="m3_on_tertiary">#3A2A0C</color>
-    <color name="m3_tertiary_container">#5A431C</color>
-    <color name="m3_on_tertiary_container">#F3E4C8</color>
-    <color name="m3_surface_variant">#201B13</color>
-    <color name="m3_on_surface_variant">#BDB49F</color>
-    <color name="m3_outline">#8C8371</color>
-    <color name="m3_outline_variant">#332C1E</color>
-    <color name="m3_error">#E37E68</color>
-    <color name="m3_on_error">#3A0F08</color>
-    <color name="m3_error_container">#5C1F12</color>
-    <color name="m3_on_error_container">#F6DAD4</color>
-    <color name="m3_surface_container">#201B13</color>
-    <color name="m3_surface_container_high">#2C261A</color>
+    <color name="overlay_scrim">#B3000000</color>
+    <color name="m3_primary_container">#5A3025</color>
+    <color name="m3_on_primary_container">#FFDCCF</color>
+    <color name="m3_secondary_container">#2E3C40</color>
+    <color name="m3_on_secondary_container">#D8E7EA</color>
+    <color name="m3_tertiary">#D5A55D</color>
+    <color name="m3_on_tertiary">#241A0D</color>
+    <color name="m3_tertiary_container">#4A3820</color>
+    <color name="m3_on_tertiary_container">#F6D9A9</color>
+    <color name="m3_surface_variant">#312C27</color>
+    <color name="m3_on_surface_variant">#C9BCB2</color>
+    <color name="m3_outline">#988A80</color>
+    <color name="m3_outline_variant">#463D36</color>
+    <color name="m3_error">#E07A62</color>
+    <color name="m3_on_error">#35110A</color>
+    <color name="m3_error_container">#5A2820</color>
+    <color name="m3_on_error_container">#FFDAD2</color>
+    <color name="m3_surface_container">#2D2824</color>
+    <color name="m3_surface_container_high">#39322D</color>
 </resources>
