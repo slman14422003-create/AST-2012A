@@ -1,19 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- شعار/أفاتار v4: طبقة ظل دائري تحت التدرج نفسه لإحساس ارتفاع فعلي
-     (مو بس تدرج لوني مسطح) -->
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:top="2dp">
-        <shape android:shape="oval">
-            <solid android:color="@color/shadow_strong" />
-        </shape>
-    </item>
-    <item android:bottom="2dp">
-        <shape android:shape="oval">
-            <gradient
-                android:type="linear"
-                android:angle="135"
-                android:startColor="@color/primary_cyan_light"
-                android:endColor="@color/primary_cyan_dark" />
-        </shape>
-    </item>
-</layer-list>
+<!-- شعار/أفاتار مسطح: دائرة تعبئة واحدة بلون العلامة التجارية، بدون ظل. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <solid android:color="@color/primary_cyan" />
+</shape>

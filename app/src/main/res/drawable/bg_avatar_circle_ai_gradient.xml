@@ -1,17 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:top="2dp">
-        <shape android:shape="oval">
-            <solid android:color="@color/shadow_strong" />
-        </shape>
-    </item>
-    <item android:bottom="2dp">
-        <shape android:shape="oval">
-            <gradient
-                android:type="linear"
-                android:angle="135"
-                android:startColor="@color/primary_cyan_light"
-                android:endColor="@color/accent_violet" />
-        </shape>
-    </item>
-</layer-list>
+<!-- أفاتار المساعد الذكي: دائرة تعبئة مصمتة واحدة، بدون ظل. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <solid android:color="@color/primary_cyan" />
+</shape>
