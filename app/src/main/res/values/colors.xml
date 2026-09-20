@@ -1,79 +1,75 @@
 <resources>
     <!-- ============================================================
-         نظام الألوان v3 — إعادة تصميم كاملة بروح تطبيق Claude:
-         خلفية كريمية دافئة (Warm cream) بدل الوضع الليلي الزجاجي،
-         بطاقات بيضاء نظيفة بحدود رفيعة، ولون تمييز طوبي/برتقالي دافئ
-         (Terracotta) بدل السيان-بنفسجي النيون. أسماء المتغيرات أُبقيت
-         كما هي حتى لا ينكسر أي كود Java/XML يشير إليها. -->
+         نظام الألوان v4 — تصميم احترافي من الصفر: نفس روح Claude
+         الكريمية الدافئة لكن بعمق حقيقي هذه المرة — تدرجات فعلية،
+         ظلال متعددة الطبقات، وتباين أغنى. أسماء المتغيرات أُبقيت كما
+         هي حتى لا ينكسر أي كود Java/XML يشير إليها. -->
 
-    <!-- خلفية التطبيق: تدرج كريمي خفيف جدًا (شبه مسطح) -->
-    <color name="bg_deep_1">#F8F6F1</color>
-    <color name="bg_deep_2">#F5F2EA</color>
-    <color name="bg_deep_3">#F1EDE3</color>
-    <color name="bg_dark">#F5F2EA</color>
+    <!-- خلفية التطبيق: تدرج كريمي أدفأ وأعمق قليلاً من قبل -->
+    <color name="bg_deep_1">#FAF7F0</color>
+    <color name="bg_deep_2">#F3EDE1</color>
+    <color name="bg_deep_3">#EDE4D2</color>
+    <color name="bg_dark">#F3EDE1</color>
 
-    <!-- لون علامة Claude الرسمي (Japonica #D97757) - يُستخدم لأيقونة التطبيق
-         وشاشة splash فقط، ثابت بغض النظر عن الوضع الليلي/النهاري (نفس لون
-         العلامة التجارية دايمًا، زي أيقونة Claude تمامًا). -->
+    <!-- لون علامة Claude الرسمي - شاشة splash فقط -->
     <color name="claude_orange">#D97757</color>
 
-    <!-- الألوان الأساسية: طوبي دافئ (بديل السيان) + أزرق-رمادي هادئ (بديل البنفسجي) -->
-    <color name="primary_cyan">#CC7B5C</color>
-    <color name="primary_cyan_dark">#A85D42</color>
-    <color name="accent_violet">#5C7A8A</color>
-    <color name="accent_violet_dark">#43606E</color>
+    <!-- الألوان الأساسية: طوبي دافئ أغنى (بديل السيان) + أزرق-رمادي هادئ -->
+    <color name="primary_cyan">#C96A46</color>
+    <color name="primary_cyan_dark">#9C4E31</color>
+    <color name="primary_cyan_light">#E8956F</color>
+    <color name="accent_violet">#4F7183</color>
+    <color name="accent_violet_dark">#3A5563</color>
 
-    <!-- أسطح البطاقات: بيضاء نظيفة بحدود رفيعة بدل الزجاج شبه الشفاف -->
-    <color name="glass_fill">#FFFFFF</color>
-    <color name="glass_fill_strong">#FDFCF9</color>
-    <color name="glass_fill_soft">#F0EDE4</color>
-    <color name="glass_border">#E6E2D6</color>
-    <color name="glass_border_soft">#EEEAE0</color>
-    <color name="glass_highlight">#14000000</color>
-    <color name="glass_top_sheen">#00FFFFFF</color>
+    <!-- أسطح البطاقات: بيضاء دافئة بحدود ناعمة جداً — العمق يأتي من الظل
+         الطبقي في bg_glass_card.xml وليس من حد داكن -->
+    <color name="glass_fill">#FFFEFC</color>
+    <color name="glass_fill_strong">#FFFFFF</color>
+    <color name="glass_fill_soft">#F6F1E8</color>
+    <color name="glass_border">#E9E1D0</color>
+    <color name="glass_border_soft">#EFE9DC</color>
+    <color name="glass_highlight">#1F000000</color>
+    <color name="glass_top_sheen">#59FFFFFF</color>
+    <color name="shadow_soft">#14201208</color>
+    <color name="shadow_strong">#22201208</color>
 
-    <color name="surface_dark">#FFFFFF</color>
-    <color name="card_dark">#FFFFFF</color>
+    <color name="surface_dark">#FFFEFC</color>
+    <color name="card_dark">#FFFEFC</color>
 
-    <color name="text_primary">#21201C</color>
-    <color name="text_secondary">#6E6B63</color>
-    <color name="text_tertiary">#9C988D</color>
+    <color name="text_primary">#231F19</color>
+    <color name="text_secondary">#6B6155</color>
+    <color name="text_tertiary">#9C9182</color>
 
-    <color name="accent_red">#BE4230</color>
-    <color name="accent_red_dark">#98341F</color>
-    <color name="accent_green">#4C8860</color>
-    <color name="accent_gold">#B07E33</color>
+    <color name="accent_red">#B5432B</color>
+    <color name="accent_red_dark">#8E331F</color>
+    <color name="accent_green">#3D7F55</color>
+    <color name="accent_gold">#A8752B</color>
 
-    <!-- بطاقة تنبيه السلامة في شاشة تفاصيل الحالة: تلوين طوبي فاتح يميّزها
-         بصريًا عن باقي بطاقات الحقول العادية -->
-    <color name="warning_fill">#FBEAE6</color>
-    <color name="warning_border">#E8C4BB</color>
+    <!-- بطاقة تنبيه السلامة -->
+    <color name="warning_fill">#FBEAE4</color>
+    <color name="warning_border">#E9BFAE</color>
 
     <color name="white">#FFFFFF</color>
     <color name="black">#000000</color>
     <color name="overlay_scrim">#A6000000</color>
 
-    <!-- ============================================================
-         أدوار ألوان Material 3 الكاملة (Tonal Roles) — لضبط كل عناصر
-         M3 القياسية (AlertDialog، Chip، TextInputLayout، Switch...)
-         بنفس هوية التطبيق الطوبية الدافئة، بدل ترك أدوار غير معرّفة
-         تسقط على ألوان M3 الافتراضية (بنفسجي) وتكسر الانسجام البصري. -->
-    <color name="m3_primary_container">#F4DDD2</color>
-    <color name="m3_on_primary_container">#5C2A16</color>
-    <color name="m3_secondary_container">#DCE7EA</color>
-    <color name="m3_on_secondary_container">#1F343B</color>
-    <color name="m3_tertiary">#B07E33</color>
+    <!-- أدوار Material 3 -->
+    <color name="m3_primary_container">#F3DBCB</color>
+    <color name="m3_on_primary_container">#5A2812</color>
+    <color name="m3_secondary_container">#DAE5E8</color>
+    <color name="m3_on_secondary_container">#1C333B</color>
+    <color name="m3_tertiary">#A8752B</color>
     <color name="m3_on_tertiary">#FFFFFF</color>
-    <color name="m3_tertiary_container">#F3E4C8</color>
-    <color name="m3_on_tertiary_container">#4A3512</color>
-    <color name="m3_surface_variant">#F0EDE4</color>
-    <color name="m3_on_surface_variant">#6E6B63</color>
-    <color name="m3_outline">#9C988D</color>
-    <color name="m3_outline_variant">#EEEAE0</color>
-    <color name="m3_error">#BE4230</color>
+    <color name="m3_tertiary_container">#F2E2C4</color>
+    <color name="m3_on_tertiary_container">#463010</color>
+    <color name="m3_surface_variant">#F1EBDD</color>
+    <color name="m3_on_surface_variant">#6B6155</color>
+    <color name="m3_outline">#9C9182</color>
+    <color name="m3_outline_variant">#EFE9DC</color>
+    <color name="m3_error">#B5432B</color>
     <color name="m3_on_error">#FFFFFF</color>
-    <color name="m3_error_container">#F6DAD4</color>
-    <color name="m3_on_error_container">#5C1F12</color>
-    <color name="m3_surface_container">#F3F0E8</color>
-    <color name="m3_surface_container_high">#EDE8DC</color>
+    <color name="m3_error_container">#F5D6CB</color>
+    <color name="m3_on_error_container">#591C0E</color>
+    <color name="m3_surface_container">#F1EBDD</color>
+    <color name="m3_surface_container_high">#EAE2CE</color>
 </resources>
