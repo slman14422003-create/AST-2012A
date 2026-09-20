@@ -81,6 +81,8 @@
          هوية التطبيق (خلفية بطاقة + زوايا كبيرة + ألوان الأزرار الطوبية) -->
     <style name="ThemeOverlay.ClinicalMaster.Dialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
         <item name="colorSurface">@color/glass_fill_strong</item>
+        <item name="colorSurfaceContainerHigh">@color/glass_fill_strong</item>
+        <item name="colorSurfaceContainerHighest">@color/glass_fill_strong</item>
         <item name="colorOnSurface">@color/text_primary</item>
         <item name="materialAlertDialogTitleTextStyle">@style/MaterialAlertDialog.ClinicalMaster.Title</item>
         <item name="shapeAppearanceOverlay">@style/ShapeAppearance.M3.Corner.Large</item>

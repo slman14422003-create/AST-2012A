@@ -163,4 +163,21 @@
         <item name="android:textDirection">rtl</item>
         <item name="android:textSize">15sp</item>
     </style>
+
+    <!-- لون زر الحذف/المسح الأحمر في مربعات الحوار (يشبه زر Log out في Claude) -->
+    <color name="danger_pill">#D0403A</color>
+
+    <!-- ثيم مربعات الحوار المخصّصة (ClaudeDialog): خلفية شفافة والبطاقة ترسمها الـ layout نفسها -->
+    <style name="ClaudeDialogTheme" parent="Theme.Material3.DayNight.Dialog">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsFloating">true</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="android:backgroundDimAmount">0.6</item>
+        <item name="android:layoutDirection">rtl</item>
+        <item name="android:textDirection">rtl</item>
+        <item name="colorPrimary">@color/primary_cyan</item>
+        <item name="colorOnSurface">@color/text_primary</item>
+        <item name="colorSurface">@color/glass_fill_strong</item>
+    </style>
 </resources>
