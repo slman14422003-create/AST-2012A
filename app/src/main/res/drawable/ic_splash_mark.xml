@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- علامة splash: نجمة أشعة بأطوال متفاوتة بلون العلامة (برتقالي Claude ثابت في الوضعين) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M12.00,8.80L12.00,1.40"
+        android:strokeColor="@color/claude_orange"
+        android:strokeLineCap="round"
+        android:strokeWidth="1.7" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M13.67,9.27L16.18,5.18"
+        android:strokeColor="@color/claude_orange"
+        android:strokeLineCap="round"
+        android:strokeWidth="1.7" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M14.85,10.55L20.91,7.46"
+        android:strokeColor="@color/claude_orange"
+        android:strokeLineCap="round"
+        android:strokeWidth="1.7" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M15.20,12.00L19.60,12.00"
+        android:strokeColor="@color/claude_orange"
+        android:strokeLineCap="round"
+        android:strokeWidth="1.7" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M14.73,13.67L21.21,17.64"
+        android:strokeColor="@color/claude_orange"
+        android:strokeLineCap="round"
+        android:strokeWidth="1.7" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M13.45,14.85L15.72,19.31"
+        android:strokeColor="@color/claude_orange"
+        android:strokeLineCap="round"
+        android:strokeWidth="1.7" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M12.00,15.20L12.00,21.60"
+        android:strokeColor="@color/claude_orange"
+        android:strokeLineCap="round"
+        android:strokeWidth="1.7" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M10.33,14.73L7.92,18.65"
+        android:strokeColor="@color/claude_orange"
+        android:strokeLineCap="round"
+        android:strokeWidth="1.7" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M9.15,13.45L2.82,16.68"
+        android:strokeColor="@color/claude_orange"
+        android:strokeLineCap="round"
+        android:strokeWidth="1.7" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M8.80,12.00L3.60,12.00"
+        android:strokeColor="@color/claude_orange"
+        android:strokeLineCap="round"
+        android:strokeWidth="1.7" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M9.27,10.33L3.47,6.78"
+        android:strokeColor="@color/claude_orange"
+        android:strokeLineCap="round"
+        android:strokeWidth="1.7" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M10.55,9.15L8.50,5.14"
+        android:strokeColor="@color/claude_orange"
+        android:strokeLineCap="round"
+        android:strokeWidth="1.7" />
+</vector>
