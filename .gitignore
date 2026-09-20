@@ -9,3 +9,7 @@ captures/
 .externalNativeBuild/
 .cxx/
 *.apk
+
+# مفاتيح التوقيع - لا تُرفع أبدًا
+*.jks
+*.keystore
