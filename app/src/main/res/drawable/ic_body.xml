@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- شكل جسم - دليل التشريح -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M10,4.5a2,2 0 1,0 4,0a2,2 0 1,0 -4,0"
+        android:strokeColor="@color/text_primary"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="1.9" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M5,9L12,10.5L19,9"
+        android:strokeColor="@color/text_primary"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="1.9" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M12,10.5L12,15.5"
+        android:strokeColor="@color/text_primary"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="1.9" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M12,15.5L8.5,21.5"
+        android:strokeColor="@color/text_primary"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="1.9" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M12,15.5L15.5,21.5"
+        android:strokeColor="@color/text_primary"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="1.9" />
+</vector>
