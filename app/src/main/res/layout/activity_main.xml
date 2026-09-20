@@ -26,13 +26,13 @@
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingHorizontal="16dp"
-        android:paddingTop="14dp"
-        android:paddingBottom="16dp">
+        android:paddingTop="16dp"
+        android:paddingBottom="18dp">
 
         <!-- شعار دائري بتدرج + نقطة حالة صغيرة في الزاوية -->
         <FrameLayout
-            android:layout_width="46dp"
-            android:layout_height="46dp">
+            android:layout_width="48dp"
+            android:layout_height="48dp">
 
             <FrameLayout
                 android:layout_width="46dp"
@@ -69,7 +69,7 @@
                 android:letterSpacing="0.005"
                 android:text="Phizyo Studio"
                 android:textColor="@color/text_primary"
-                android:textSize="20sp"
+                android:textSize="21sp"
                 android:textStyle="bold" />
 
             <!-- عبارة ترحيب قصيرة تتغيّر حسب وقت اليوم (GreetingProvider)
@@ -138,7 +138,7 @@
                     android:text="بماذا تفكر؟"
                     android:textColor="@color/text_primary"
                     android:textDirection="rtl"
-                    android:textSize="24sp" />
+                    android:textSize="26sp" />
 
                 <TextView
                     android:id="@+id/empty_hint"

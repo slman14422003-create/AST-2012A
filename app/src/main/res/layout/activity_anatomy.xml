@@ -9,10 +9,12 @@
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
-        android:layout_height="?attr/actionBarSize"
-        android:background="@drawable/bg_header_container"
+        android:layout_height="68dp"
+        android:background="@drawable/bg_top_bar_modern"
         android:title="🦴 دليل التشريح ومواضع الأقطاب"
         android:titleTextColor="@color/text_primary"
+        app:contentInsetStart="18dp"
+        app:contentInsetEnd="14dp"
         app:navigationIcon="@drawable/ic_close" />
 
     <ScrollView

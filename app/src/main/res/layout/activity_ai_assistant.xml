@@ -185,7 +185,7 @@
             android:layout_gravity="bottom|end"
             android:layout_margin="16dp"
             android:background="@drawable/bg_glass_card_pressed"
-            android:elevation="4dp"
+            android:elevation="0dp"
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:paddingHorizontal="15dp"
