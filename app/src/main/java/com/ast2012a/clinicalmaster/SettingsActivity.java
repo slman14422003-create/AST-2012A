@@ -52,6 +52,7 @@ public class SettingsActivity extends AppCompatActivity {
     private MaterialSwitch notifSwitch;
     private MaterialSwitch cloudAutoBackupSwitch;
     private TextView cloudStatus;
+    private TextView cloudAccountStatus;
     private TextView cloudBackupSub;
     private TextView cloudRestoreSub;
     private ActivityResultLauncher<String> permissionLauncher;
@@ -106,6 +107,8 @@ public class SettingsActivity extends AppCompatActivity {
         cloudStatus = findViewById(R.id.cloud_status);
         cloudBackupSub = findViewById(R.id.cloud_backup_sub);
         cloudRestoreSub = findViewById(R.id.cloud_restore_sub);
+        cloudAccountStatus = findViewById(R.id.cloud_account_status);
+        findViewById(R.id.btn_cloud_account).setOnClickListener(v -> showCloudAccountDialog());
         findViewById(R.id.btn_cloud_auto_backup).setOnClickListener(v -> toggleCloudAutoBackup());
         findViewById(R.id.btn_cloud_backup_now).setOnClickListener(v -> backupNowClicked());
         findViewById(R.id.btn_cloud_restore).setOnClickListener(v -> confirmRestoreFromCloud());
@@ -362,6 +365,11 @@ public class SettingsActivity extends AppCompatActivity {
     // -----------------------------------------------------------------
 
     private void refreshCloudRows() {
+        String email = FirebaseSyncManager.currentEmail(this);
+        cloudAccountStatus.setText(email != null
+                ? email
+                : "غير مسجَّل - نسختك لا تُستعاد بعد حذف التطبيق");
+
         boolean enabled = FirebaseSyncManager.isAutoBackupEnabled(this);
         cloudAutoBackupSwitch.setChecked(enabled);
         cloudStatus.setText(enabled ? "مفعّل - يُرفع تلقائيًا بعد كل تعديل" : "غير مفعّل");
@@ -375,6 +383,162 @@ public class SettingsActivity extends AppCompatActivity {
         cloudRestoreSub.setText(lastRestore > 0
                 ? "آخر استعادة: " + Fmt.relative(lastRestore, System.currentTimeMillis())
                 : "لم تتم الاستعادة بعد");
+    }
+
+    // -----------------------------------------------------------------
+    // حساب النسخ السحابي (بريد + كلمة مرور)
+    // -----------------------------------------------------------------
+
+    private void showCloudAccountDialog() {
+        String email = FirebaseSyncManager.currentEmail(this);
+        if (email != null) {
+            new ClaudeDialog(this)
+                    .setTitle("حساب النسخ السحابي")
+                    .setMessage("مسجَّل بالحساب:\n" + email + "\n\nبعد حذف التطبيق أو تغيير الجهاز: سجّل الدخول بهذا الحساب ثم اضغط «استعادة من السحابة».")
+                    .setPositiveButton("تمام", null)
+                    .setNeutralButton("تسجيل الخروج", (d, w) -> {
+                        FirebaseSyncManager.signOut(this);
+                        refreshCloudRows();
+                        Toast.makeText(this, "تم تسجيل الخروج.", Toast.LENGTH_SHORT).show();
+                    })
+                    .show();
+            return;
+        }
+
+        final android.view.View view = getLayoutInflater().inflate(R.layout.dialog_cloud_account, null);
+        final TextInputEditText emailField = view.findViewById(R.id.acc_email);
+        final TextInputEditText passField = view.findViewById(R.id.acc_pass);
+        final TextView error = view.findViewById(R.id.acc_error);
+        final TextView loginBtn = view.findViewById(R.id.acc_login);
+        final TextView registerBtn = view.findViewById(R.id.acc_register);
+        final TextView forgot = view.findViewById(R.id.acc_forgot);
+        final android.app.Dialog dialog = new ClaudeDialog(this)
+                .setTitle("حساب النسخ السحابي")
+                .setView(view)
+                .create();
+
+        view.findViewById(R.id.acc_cancel).setOnClickListener(v -> dialog.dismiss());
+
+        // callback مشترك: يعرض الخطأ داخل النافذة ويعيد تفعيل الأزرار
+        final Runnable[] unlock = new Runnable[1];
+        unlock[0] = () -> {
+            loginBtn.setEnabled(true);
+            registerBtn.setEnabled(true);
+        };
+
+        loginBtn.setOnClickListener(v -> {
+            String em = textOf(emailField);
+            String pw = textOf(passField);
+            if (!validCredentials(em, pw, error)) return;
+            loginBtn.setEnabled(false);
+            registerBtn.setEnabled(false);
+            error.setVisibility(android.view.View.GONE);
+            FirebaseSyncManager.signIn(this, em, pw, new FirebaseSyncManager.Callback() {
+                @Override public void onSuccess(String message) {
+                    runOnUiThread(() -> {
+                        dialog.dismiss();
+                        refreshCloudRows();
+                        offerRestoreAfterSignIn();
+                    });
+                }
+                @Override public void onError(String message) {
+                    runOnUiThread(() -> {
+                        unlock[0].run();
+                        error.setText(message);
+                        error.setVisibility(android.view.View.VISIBLE);
+                    });
+                }
+            });
+        });
+
+        registerBtn.setOnClickListener(v -> {
+            String em = textOf(emailField);
+            String pw = textOf(passField);
+            if (!validCredentials(em, pw, error)) return;
+            loginBtn.setEnabled(false);
+            registerBtn.setEnabled(false);
+            error.setVisibility(android.view.View.GONE);
+            FirebaseSyncManager.createAccount(this, em, pw, new FirebaseSyncManager.Callback() {
+                @Override public void onSuccess(String message) {
+                    runOnUiThread(() -> {
+                        dialog.dismiss();
+                        refreshCloudRows();
+                        Toast.makeText(SettingsActivity.this, message + " جاري رفع النسخة...", Toast.LENGTH_LONG).show();
+                        // نرفع نسخة فورًا حتى تكون محمية من حذف التطبيق
+                        FirebaseSyncManager.backupNow(SettingsActivity.this, new FirebaseSyncManager.Callback() {
+                            @Override public void onSuccess(String m) {
+                                runOnUiThread(() -> {
+                                    refreshCloudRows();
+                                    Toast.makeText(SettingsActivity.this, m, Toast.LENGTH_LONG).show();
+                                });
+                            }
+                            @Override public void onError(String m) {
+                                runOnUiThread(() -> new ClaudeDialog(SettingsActivity.this)
+                                        .setTitle("تعذّر رفع النسخة")
+                                        .setMessage(m)
+                                        .setPositiveButton("تمام", null)
+                                        .show());
+                            }
+                        });
+                    });
+                }
+                @Override public void onError(String message) {
+                    runOnUiThread(() -> {
+                        unlock[0].run();
+                        error.setText(message);
+                        error.setVisibility(android.view.View.VISIBLE);
+                    });
+                }
+            });
+        });
+
+        forgot.setOnClickListener(v -> {
+            String em = textOf(emailField);
+            if (em.isEmpty() || !android.util.Patterns.EMAIL_ADDRESS.matcher(em).matches()) {
+                error.setText("اكتب بريدك أولًا ثم اضغط «نسيت كلمة المرور».");
+                error.setVisibility(android.view.View.VISIBLE);
+                return;
+            }
+            FirebaseSyncManager.sendPasswordReset(this, em, new FirebaseSyncManager.Callback() {
+                @Override public void onSuccess(String message) {
+                    runOnUiThread(() -> {
+                        error.setVisibility(android.view.View.GONE);
+                        Toast.makeText(SettingsActivity.this, message, Toast.LENGTH_LONG).show();
+                    });
+                }
+                @Override public void onError(String message) {
+                    runOnUiThread(() -> {
+                        error.setText(message);
+                        error.setVisibility(android.view.View.VISIBLE);
+                    });
+                }
+            });
+        });
+
+        dialog.show();
+    }
+
+    private static String textOf(TextInputEditText f) {
+        return f.getText() == null ? "" : f.getText().toString().trim();
+    }
+
+    private boolean validCredentials(String email, String pass, TextView error) {
+        String msg = null;
+        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) msg = "اكتب بريدًا إلكترونيًا صحيحًا.";
+        else if (pass.length() < 6) msg = "كلمة المرور يجب أن تكون 6 أحرف على الأقل.";
+        if (msg == null) return true;
+        error.setText(msg);
+        error.setVisibility(android.view.View.VISIBLE);
+        return false;
+    }
+
+    private void offerRestoreAfterSignIn() {
+        new ClaudeDialog(this)
+                .setTitle("تم تسجيل الدخول")
+                .setMessage("هل تريد استعادة ملفات المرضى المحفوظة على هذا الحساب الآن؟ سيُستبدل ما هو موجود على الجهاز.")
+                .setPositiveButton("استعادة", (d, w) -> restoreFromCloud())
+                .setNegativeButton("لاحقًا", null)
+                .show();
     }
 
     private void toggleCloudAutoBackup() {
