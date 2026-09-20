@@ -235,6 +235,54 @@
                 </LinearLayout>
             </LinearLayout>
 
+            <!-- جدول الجلسات الأسبوعي (أيام + وقت) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_glass_card"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    style="@style/Phizyo.Label"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="جدول الجلسات" />
+
+                <TextView
+                    android:id="@+id/schedule_text"
+                    style="@style/Phizyo.Body"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/schedule_next"
+                    style="@style/Phizyo.Caption"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:visibility="gone" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/btn_edit_schedule"
+                        style="@style/Phizyo.Chip"
+                        android:drawableStart="@drawable/ic_edit"
+                        android:drawablePadding="8dp"
+                        android:drawableTint="@color/text_secondary"
+                        android:text="تحديد الجدول" />
+                </LinearLayout>
+            </LinearLayout>
+
             <!-- الموعد القادم -->
             <LinearLayout
                 android:layout_width="match_parent"

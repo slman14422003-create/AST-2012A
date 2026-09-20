@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- إضافة / تعديل حالة مخصصة — نموذج بأسلوب Claude: عناوين أقسام + بطاقات، وكل حقل باسمه فوقه -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
@@ -16,192 +17,247 @@
 
     <ScrollView
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="match_parent"
+        android:clipToPadding="false"
+        android:fillViewport="true"
+        android:scrollbars="none">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="16dp">
+            android:paddingStart="16dp"
+            android:paddingTop="6dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="32dp">
 
-            <com.google.android.material.textfield.TextInputLayout
-                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+            <TextView
+                style="@style/Phizyo.FormSection"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="10dp"
-                android:hint="الكلمات المفتاحية (مفصولة بفواصل) *">
+                android:layout_marginTop="4dp"
+                android:text="البيانات الأساسية" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_settings_group"
+                android:orientation="vertical"
+                android:padding="18dp">
+
+                <TextView
+                    style="@style/Phizyo.FormLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="0dp"
+                    android:text="الكلمات المفتاحية *" />
+
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/f_keywords"
+                    style="@style/Phizyo.FormInput"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:textDirection="rtl" />
-            </com.google.android.material.textfield.TextInputLayout>
+                    android:inputType="text|textCapSentences"
+                    android:hint="مفصولة بفواصل" />
 
-            <com.google.android.material.textfield.TextInputLayout
-                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="10dp"
-                android:hint="عنوان الحالة *">
+                <TextView
+                    style="@style/Phizyo.FormLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="عنوان الحالة *" />
+
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/f_title"
+                    style="@style/Phizyo.FormInput"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:textDirection="rtl" />
-            </com.google.android.material.textfield.TextInputLayout>
+                    android:inputType="text|textCapSentences" />
 
-            <com.google.android.material.textfield.TextInputLayout
-                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="10dp"
-                android:hint="النمط (مثال: TENS / EMS) *">
+                <TextView
+                    style="@style/Phizyo.FormLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="النمط *" />
+
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/f_mode"
+                    style="@style/Phizyo.FormInput"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:textDirection="rtl" />
-            </com.google.android.material.textfield.TextInputLayout>
+                    android:inputType="text|textCapSentences"
+                    android:hint="مثال: TENS / EMS" />
+            </LinearLayout>
 
-            <com.google.android.material.textfield.TextInputLayout
-                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+            <TextView
+                style="@style/Phizyo.FormSection"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="10dp"
-                android:hint="التردد">
+                android:layout_marginTop="20dp"
+                android:text="إعدادات الجهاز" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_settings_group"
+                android:orientation="vertical"
+                android:padding="18dp">
+
+                <TextView
+                    style="@style/Phizyo.FormLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="0dp"
+                    android:text="التردد" />
+
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/f_freq"
+                    style="@style/Phizyo.FormInput"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:textDirection="rtl" />
-            </com.google.android.material.textfield.TextInputLayout>
+                    android:inputType="text|textCapSentences" />
 
-            <com.google.android.material.textfield.TextInputLayout
-                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="10dp"
-                android:hint="القناة">
+                <TextView
+                    style="@style/Phizyo.FormLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="القناة" />
+
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/f_channel"
+                    style="@style/Phizyo.FormInput"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:textDirection="rtl" />
-            </com.google.android.material.textfield.TextInputLayout>
+                    android:inputType="text|textCapSentences" />
 
-            <com.google.android.material.textfield.TextInputLayout
-                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="10dp"
-                android:hint="المدة">
+                <TextView
+                    style="@style/Phizyo.FormLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="المدة" />
+
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/f_duration"
+                    style="@style/Phizyo.FormInput"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:textDirection="rtl" />
-            </com.google.android.material.textfield.TextInputLayout>
+                    android:inputType="text|textCapSentences" />
 
-            <com.google.android.material.textfield.TextInputLayout
-                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="10dp"
-                android:hint="القطب الموجب (+)">
+                <TextView
+                    style="@style/Phizyo.FormLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="القطب الموجب (+)" />
+
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/f_pole_pos"
+                    style="@style/Phizyo.FormInput"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:textDirection="rtl" />
-            </com.google.android.material.textfield.TextInputLayout>
+                    android:inputType="text|textCapSentences" />
 
-            <com.google.android.material.textfield.TextInputLayout
-                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="10dp"
-                android:hint="القطب السالب (-)">
+                <TextView
+                    style="@style/Phizyo.FormLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="القطب السالب (-)" />
+
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/f_pole_neg"
+                    style="@style/Phizyo.FormInput"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:textDirection="rtl" />
-            </com.google.android.material.textfield.TextInputLayout>
+                    android:inputType="text|textCapSentences" />
+            </LinearLayout>
 
-            <com.google.android.material.textfield.TextInputLayout
-                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+            <TextView
+                style="@style/Phizyo.FormSection"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="10dp"
-                android:hint="الشرح الإكلينيكي *">
+                android:layout_marginTop="20dp"
+                android:text="المحتوى السريري" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_settings_group"
+                android:orientation="vertical"
+                android:padding="18dp">
+
+                <TextView
+                    style="@style/Phizyo.FormLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="0dp"
+                    android:text="الشرح الإكلينيكي *" />
+
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/f_explanation"
+                    style="@style/Phizyo.FormInput"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:minLines="3"
+                    android:inputType="textMultiLine|textCapSentences"
                     android:gravity="top"
-                    android:textDirection="rtl" />
-            </com.google.android.material.textfield.TextInputLayout>
+                    android:minLines="4" />
 
-            <com.google.android.material.textfield.TextInputLayout
-                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="10dp"
-                android:hint="الأعراض (اختياري)">
+                <TextView
+                    style="@style/Phizyo.FormLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="الأعراض (اختياري)" />
+
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/f_symptoms"
+                    style="@style/Phizyo.FormInput"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:minLines="2"
+                    android:inputType="textMultiLine|textCapSentences"
                     android:gravity="top"
-                    android:textDirection="rtl" />
-            </com.google.android.material.textfield.TextInputLayout>
+                    android:minLines="3" />
 
-            <com.google.android.material.textfield.TextInputLayout
-                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="10dp"
-                android:hint="خطة الجلسات (اختياري)">
+                <TextView
+                    style="@style/Phizyo.FormLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="خطة الجلسات (اختياري)" />
+
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/f_sessions_plan"
+                    style="@style/Phizyo.FormInput"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:minLines="2"
+                    android:inputType="textMultiLine|textCapSentences"
                     android:gravity="top"
-                    android:textDirection="rtl" />
-            </com.google.android.material.textfield.TextInputLayout>
+                    android:minLines="3" />
 
-            <com.google.android.material.textfield.TextInputLayout
-                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="16dp"
-                android:hint="نصيحة (اختياري)">
+                <TextView
+                    style="@style/Phizyo.FormLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="نصيحة (اختياري)" />
+
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/f_tip"
+                    style="@style/Phizyo.FormInput"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:minLines="2"
+                    android:inputType="textMultiLine|textCapSentences"
                     android:gravity="top"
-                    android:textDirection="rtl" />
-            </com.google.android.material.textfield.TextInputLayout>
+                    android:minLines="2" />
+            </LinearLayout>
 
-            <Button
-                android:id="@+id/btn_submit"
-                style="@style/PrimaryButton"
-                android:layout_marginBottom="8dp"
-                android:text="حفظ الحالة" />
+                <TextView
+                    android:id="@+id/btn_submit"
+                    style="@style/Phizyo.PillPrimary"
+                    android:layout_width="match_parent"
+                    android:layout_height="54dp"
+                    android:text="حفظ الحالة" />
 
-            <Button
-                android:id="@+id/btn_cancel"
-                style="@style/Widget.Material3.Button.TextButton"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="24dp"
-                android:text="إلغاء"
-                android:textColor="@color/text_secondary" />
+                <TextView
+                    android:id="@+id/btn_cancel"
+                    style="@style/Phizyo.PillSecondary"
+                    android:layout_width="match_parent"
+                    android:layout_height="54dp"
+                    android:text="إلغاء" />
 
         </LinearLayout>
     </ScrollView>

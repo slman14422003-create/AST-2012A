@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- إضافة / تعديل بيانات المريض الأساسية -->
+<!-- إضافة / تعديل بيانات المريض — بأسلوب Claude، مع جدول الجلسات الأسبوعي (أيام + وقت) -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
@@ -15,17 +15,18 @@
         app:navigationIcon="@drawable/ic_close">
 
         <TextView
-            android:layout_gravity="center"
             android:id="@+id/toolbar_title"
             style="@style/Phizyo.HeaderTitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_gravity="center"
             android:text="مريض جديد" />
     </com.google.android.material.appbar.MaterialToolbar>
 
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:clipToPadding="false"
         android:fillViewport="true"
         android:scrollbars="none">
 
@@ -34,106 +35,150 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:paddingStart="16dp"
-            android:paddingTop="18dp"
+            android:paddingTop="6dp"
             android:paddingEnd="16dp"
             android:paddingBottom="32dp">
+
+            <TextView
+                style="@style/Phizyo.FormSection"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="البيانات الأساسية" />
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:background="@drawable/bg_glass_card"
+                android:background="@drawable/bg_settings_group"
                 android:orientation="vertical"
-                android:padding="16dp">
+                android:padding="18dp">
 
                 <TextView
-                    style="@style/Phizyo.SectionTitle"
+                    style="@style/Phizyo.FormLabel"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="14dp"
-                    android:text="البيانات الأساسية"
-                    android:textSize="15sp" />
+                    android:layout_marginTop="0dp"
+                    android:text="الاسم الكامل *" />
 
-                <com.google.android.material.textfield.TextInputLayout
-                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/field_name"
+                    style="@style/Phizyo.FormInput"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:hint="الاسم الكامل *"
-                    app:boxBackgroundColor="@color/glass_fill_soft"
-                    app:boxCornerRadiusBottomEnd="14dp"
-                    app:boxCornerRadiusBottomStart="14dp"
-                    app:boxCornerRadiusTopEnd="14dp"
-                    app:boxCornerRadiusTopStart="14dp"
-                    app:boxStrokeColor="@color/primary_cyan"
-                    app:hintTextColor="@color/text_tertiary">
-
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/field_name"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:inputType="textPersonName|textCapWords"
-                        android:textAlignment="viewStart"
-                        android:textColor="@color/text_primary"
-                        android:textDirection="rtl"
-                        android:textSize="15sp" />
-                </com.google.android.material.textfield.TextInputLayout>
-
-                <com.google.android.material.textfield.TextInputLayout
-                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    android:hint="رقم الهاتف"
-                    app:boxBackgroundColor="@color/glass_fill_soft"
-                    app:boxCornerRadiusBottomEnd="14dp"
-                    app:boxCornerRadiusBottomStart="14dp"
-                    app:boxCornerRadiusTopEnd="14dp"
-                    app:boxCornerRadiusTopStart="14dp"
-                    app:boxStrokeColor="@color/primary_cyan"
-                    app:hintTextColor="@color/text_tertiary">
-
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/field_phone"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:inputType="phone"
-                        android:textAlignment="viewStart"
-                        android:textColor="@color/text_primary"
-                        android:textDirection="ltr"
-                        android:textSize="15sp" />
-                </com.google.android.material.textfield.TextInputLayout>
-
-                <com.google.android.material.textfield.TextInputLayout
-                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    android:hint="العمر (بالسنوات)"
-                    app:boxBackgroundColor="@color/glass_fill_soft"
-                    app:boxCornerRadiusBottomEnd="14dp"
-                    app:boxCornerRadiusBottomStart="14dp"
-                    app:boxCornerRadiusTopEnd="14dp"
-                    app:boxCornerRadiusTopStart="14dp"
-                    app:boxStrokeColor="@color/primary_cyan"
-                    app:hintTextColor="@color/text_tertiary">
-
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/field_age"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:inputType="number"
-                        android:maxLength="3"
-                        android:textAlignment="viewStart"
-                        android:textColor="@color/text_primary"
-                        android:textDirection="ltr"
-                        android:textSize="15sp" />
-                </com.google.android.material.textfield.TextInputLayout>
+                    android:inputType="textPersonName|textCapWords" />
 
                 <TextView
-                    style="@style/Phizyo.Label"
+                    style="@style/Phizyo.FormLabel"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="16dp"
+                    android:text="رقم الهاتف" />
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/field_phone"
+                    style="@style/Phizyo.FormInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="phone"
+                    android:textDirection="ltr" />
+
+                <TextView
+                    style="@style/Phizyo.FormLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="العمر (بالسنوات)" />
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/field_age"
+                    style="@style/Phizyo.FormInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="number"
+                    android:textDirection="ltr"
+                    android:maxLength="3" />
+
+                <TextView
+                    style="@style/Phizyo.FormLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
                     android:text="الجنس" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/gender_male"
+                        style="@style/Phizyo.DayChip"
+                        android:layout_width="0dp"
+                        android:layout_height="46dp"
+                        android:layout_marginStart="0dp"
+                        android:text="ذكر" />
+
+                    <TextView
+                        android:id="@+id/gender_female"
+                        style="@style/Phizyo.DayChip"
+                        android:layout_width="0dp"
+                        android:layout_height="46dp"
+                        android:layout_marginEnd="0dp"
+                        android:text="أنثى" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <TextView
+                style="@style/Phizyo.FormSection"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="جدول الجلسات" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_settings_group"
+                android:orientation="vertical"
+                android:padding="18dp">
+
+                <TextView
+                    style="@style/Phizyo.FormLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="0dp"
+                    android:text="أيام الجلسات الأسبوعية" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/day_sat"
+                        style="@style/Phizyo.DayChip"
+                        android:layout_width="0dp"
+                        android:layout_height="46dp"
+                        android:text="السبت" />
+
+                    <TextView
+                        android:id="@+id/day_sun"
+                        style="@style/Phizyo.DayChip"
+                        android:layout_width="0dp"
+                        android:layout_height="46dp"
+                        android:text="الأحد" />
+
+                    <TextView
+                        android:id="@+id/day_mon"
+                        style="@style/Phizyo.DayChip"
+                        android:layout_width="0dp"
+                        android:layout_height="46dp"
+                        android:text="الاثنين" />
+
+                    <TextView
+                        android:id="@+id/day_tue"
+                        style="@style/Phizyo.DayChip"
+                        android:layout_width="0dp"
+                        android:layout_height="46dp"
+                        android:text="الثلاثاء" />
+                </LinearLayout>
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -142,123 +187,161 @@
                     android:orientation="horizontal">
 
                     <TextView
-                        android:id="@+id/gender_male"
-                        style="@style/Phizyo.Chip"
-                        android:layout_marginEnd="8dp"
-                        android:text="ذكر" />
+                        android:id="@+id/day_wed"
+                        style="@style/Phizyo.DayChip"
+                        android:layout_width="0dp"
+                        android:layout_height="46dp"
+                        android:text="الأربعاء" />
 
                     <TextView
-                        android:id="@+id/gender_female"
-                        style="@style/Phizyo.Chip"
-                        android:text="أنثى" />
+                        android:id="@+id/day_thu"
+                        style="@style/Phizyo.DayChip"
+                        android:layout_width="0dp"
+                        android:layout_height="46dp"
+                        android:text="الخميس" />
+
+                    <TextView
+                        android:id="@+id/day_fri"
+                        style="@style/Phizyo.DayChip"
+                        android:layout_width="0dp"
+                        android:layout_height="46dp"
+                        android:text="الجمعة" />
+
+                    <View
+                        android:layout_width="0dp"
+                        android:layout_height="46dp"
+                        android:layout_weight="1"
+                        android:layout_marginStart="4dp"
+                        android:layout_marginEnd="4dp" />
+                </LinearLayout>
+
+                <TextView
+                    style="@style/Phizyo.FormLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="وقت الجلسة" />
+
+                <LinearLayout
+                    android:id="@+id/session_time_row"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_input_field"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:foreground="?attr/selectableItemBackground"
+                    android:gravity="center_vertical"
+                    android:minHeight="52dp"
+                    android:orientation="horizontal"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="8dp">
+
+                    <ImageView
+                        android:layout_width="22dp"
+                        android:layout_height="22dp"
+                        android:importantForAccessibility="no"
+                        android:src="@drawable/ic_history"
+                        android:tint="@color/text_secondary" />
+
+                    <TextView
+                        android:id="@+id/session_time_text"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:text="اختر الوقت"
+                        android:textAlignment="viewStart"
+                        android:textColor="@color/text_tertiary"
+                        android:textDirection="rtl"
+                        android:textSize="15.5sp" />
+
+                    <ImageButton
+                        android:id="@+id/session_time_clear"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:background="@drawable/bg_icon_button"
+                        android:contentDescription="مسح الوقت"
+                        android:padding="11dp"
+                        android:scaleType="fitCenter"
+                        android:src="@drawable/ic_close"
+                        android:tint="@color/text_tertiary"
+                        android:visibility="gone" />
                 </LinearLayout>
             </LinearLayout>
+
+            <TextView
+                style="@style/Phizyo.FormSection"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="الحالة والحساب" />
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:background="@drawable/bg_glass_card"
+                android:background="@drawable/bg_settings_group"
                 android:orientation="vertical"
-                android:padding="16dp">
+                android:padding="18dp">
 
                 <TextView
-                    style="@style/Phizyo.SectionTitle"
+                    style="@style/Phizyo.FormLabel"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="14dp"
-                    android:text="الحالة والحساب"
-                    android:textSize="15sp" />
+                    android:layout_marginTop="0dp"
+                    android:text="الشكوى الرئيسية / التشخيص" />
 
-                <com.google.android.material.textfield.TextInputLayout
-                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/field_diagnosis"
+                    style="@style/Phizyo.FormInput"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:hint="الشكوى الرئيسية / التشخيص"
-                    app:boxBackgroundColor="@color/glass_fill_soft"
-                    app:boxCornerRadiusBottomEnd="14dp"
-                    app:boxCornerRadiusBottomStart="14dp"
-                    app:boxCornerRadiusTopEnd="14dp"
-                    app:boxCornerRadiusTopStart="14dp"
-                    app:boxStrokeColor="@color/primary_cyan"
-                    app:hintTextColor="@color/text_tertiary">
+                    android:inputType="textMultiLine|textCapSentences"
+                    android:gravity="top"
+                    android:minLines="2" />
 
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/field_diagnosis"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:inputType="textMultiLine|textCapSentences"
-                        android:minLines="2"
-                        android:textAlignment="viewStart"
-                        android:textColor="@color/text_primary"
-                        android:textDirection="rtl"
-                        android:textSize="15sp" />
-                </com.google.android.material.textfield.TextInputLayout>
-
-                <com.google.android.material.textfield.TextInputLayout
-                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                <TextView
+                    style="@style/Phizyo.FormLabel"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    android:hint="سعر الجلسة الافتراضي (اختياري)"
-                    app:boxBackgroundColor="@color/glass_fill_soft"
-                    app:boxCornerRadiusBottomEnd="14dp"
-                    app:boxCornerRadiusBottomStart="14dp"
-                    app:boxCornerRadiusTopEnd="14dp"
-                    app:boxCornerRadiusTopStart="14dp"
-                    app:boxStrokeColor="@color/primary_cyan"
-                    app:hintTextColor="@color/text_tertiary">
+                    android:text="سعر الجلسة الافتراضي (اختياري)" />
 
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/field_fee"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:inputType="numberDecimal"
-                        android:textAlignment="viewStart"
-                        android:textColor="@color/text_primary"
-                        android:textDirection="ltr"
-                        android:textSize="15sp" />
-                </com.google.android.material.textfield.TextInputLayout>
-
-                <com.google.android.material.textfield.TextInputLayout
-                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/field_fee"
+                    style="@style/Phizyo.FormInput"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    android:hint="ملاحظات"
-                    app:boxBackgroundColor="@color/glass_fill_soft"
-                    app:boxCornerRadiusBottomEnd="14dp"
-                    app:boxCornerRadiusBottomStart="14dp"
-                    app:boxCornerRadiusTopEnd="14dp"
-                    app:boxCornerRadiusTopStart="14dp"
-                    app:boxStrokeColor="@color/primary_cyan"
-                    app:hintTextColor="@color/text_tertiary">
+                    android:inputType="numberDecimal"
+                    android:textDirection="ltr" />
 
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/field_notes"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="top"
-                        android:inputType="textMultiLine|textCapSentences"
-                        android:minLines="3"
-                        android:textAlignment="viewStart"
-                        android:textColor="@color/text_primary"
-                        android:textDirection="rtl"
-                        android:textSize="15sp" />
-                </com.google.android.material.textfield.TextInputLayout>
+                <TextView
+                    style="@style/Phizyo.FormLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="ملاحظات" />
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/field_notes"
+                    style="@style/Phizyo.FormInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textMultiLine|textCapSentences"
+                    android:gravity="top"
+                    android:minLines="3" />
             </LinearLayout>
 
-            <TextView
-                android:id="@+id/btn_save"
-                style="@style/Phizyo.Button.Primary"
-                android:layout_marginTop="22dp"
-                android:text="حفظ" />
+                <TextView
+                    android:id="@+id/btn_save"
+                    style="@style/Phizyo.PillPrimary"
+                    android:layout_width="match_parent"
+                    android:layout_height="54dp"
+                    android:text="حفظ" />
 
-            <TextView
-                android:id="@+id/btn_cancel"
-                style="@style/Phizyo.Button.Secondary"
-                android:layout_marginTop="10dp"
-                android:text="إلغاء" />
+                <TextView
+                    android:id="@+id/btn_cancel"
+                    style="@style/Phizyo.PillSecondary"
+                    android:layout_width="match_parent"
+                    android:layout_height="54dp"
+                    android:text="إلغاء" />
+
         </LinearLayout>
     </ScrollView>
 </LinearLayout>
