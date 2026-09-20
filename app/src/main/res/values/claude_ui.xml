@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ============================================================================
+     أنماط بأسلوب تطبيق Claude: صفوف الإعدادات (أيقونة + عنوان + وصف اختياري
+     + سهم/قيمة)، عنوان الشريط العلوي، وأزرار الأيقونات.
+     ============================================================================ -->
+<resources>
+
+    <!-- عنوان الشريط العلوي (يوسَّط تلقائيًا عبر app:titleCentered) -->
+    <style name="TextAppearance.Phizyo.ToolbarTitle" parent="TextAppearance.Material3.TitleMedium">
+        <item name="android:fontFamily">serif</item>
+        <item name="android:textSize">18sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/text_primary</item>
+    </style>
+
+    <!-- شريط علوي موحّد -->
+    <style name="Phizyo.Toolbar" parent="Widget.Material3.Toolbar">
+        <item name="android:background">@drawable/bg_top_bar_modern</item>
+        <item name="android:elevation">0dp</item>
+        <item name="titleTextAppearance">@style/TextAppearance.Phizyo.ToolbarTitle</item>
+        <item name="titleTextColor">@color/text_primary</item>
+        <item name="titleCentered">true</item>
+        <item name="contentInsetStart">0dp</item>
+        <item name="contentInsetStartWithNavigation">0dp</item>
+    </style>
+
+    <!-- مجموعة صفوف داخل بطاقة واحدة (مثل مجموعات Claude في الإعدادات) -->
+    <style name="Settings.Group">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginBottom">14dp</item>
+        <item name="android:background">@drawable/bg_settings_group</item>
+        <item name="android:clipToOutline">true</item>
+        <item name="android:orientation">vertical</item>
+    </style>
+
+    <!-- صف واحد: أيقونة | عنوان + وصف | قيمة/سهم/مفتاح -->
+    <style name="Settings.Row">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:minHeight">64dp</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:orientation">horizontal</item>
+        <item name="android:paddingStart">18dp</item>
+        <item name="android:paddingEnd">18dp</item>
+        <item name="android:paddingTop">12dp</item>
+        <item name="android:paddingBottom">12dp</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+        <item name="android:foreground">?attr/selectableItemBackground</item>
+    </style>
+
+    <style name="Settings.RowIcon">
+        <item name="android:layout_width">24dp</item>
+        <item name="android:layout_height">24dp</item>
+        <item name="android:layout_marginEnd">16dp</item>
+        <item name="android:importantForAccessibility">no</item>
+        <item name="android:tint">@color/text_primary</item>
+    </style>
+
+    <style name="Settings.RowTitle">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:textDirection">rtl</item>
+        <item name="android:textAlignment">viewStart</item>
+    </style>
+
+    <style name="Settings.RowSubtitle">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">2dp</item>
+        <item name="android:textColor">@color/text_secondary</item>
+        <item name="android:textSize">13.5sp</item>
+        <item name="android:textDirection">rtl</item>
+        <item name="android:textAlignment">viewStart</item>
+    </style>
+
+    <style name="Settings.RowChevron">
+        <item name="android:layout_width">20dp</item>
+        <item name="android:layout_height">20dp</item>
+        <item name="android:layout_marginStart">8dp</item>
+        <item name="android:importantForAccessibility">no</item>
+        <item name="android:src">@drawable/ic_chevron_end</item>
+        <item name="android:tint">@color/text_tertiary</item>
+    </style>
+
+    <style name="Settings.Divider">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">1dp</item>
+        <item name="android:layout_marginStart">58dp</item>
+        <item name="android:background">@color/glass_border_soft</item>
+    </style>
+
+    <!-- عنوان قسم صغير فوق مجموعة -->
+    <style name="Settings.SectionLabel">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginStart">6dp</item>
+        <item name="android:layout_marginEnd">6dp</item>
+        <item name="android:layout_marginBottom">8dp</item>
+        <item name="android:textColor">@color/text_tertiary</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:textDirection">rtl</item>
+        <item name="android:textAlignment">viewStart</item>
+    </style>
+
+    <!-- زر أيقونة في الشريط العلوي / الصفوف -->
+    <style name="Phizyo.IconButton">
+        <item name="android:layout_width">44dp</item>
+        <item name="android:layout_height">44dp</item>
+        <item name="android:background">@drawable/bg_icon_button</item>
+        <item name="android:padding">10dp</item>
+        <item name="android:scaleType">fitCenter</item>
+        <item name="android:tint">@color/text_primary</item>
+    </style>
+
+    <!-- شريحة اختصار (أيقونة + نص) في رصيف الشاشة الرئيسية -->
+    <style name="Phizyo.NavChip" parent="">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginStart">4dp</item>
+        <item name="android:layout_marginEnd">4dp</item>
+        <item name="android:background">@drawable/bg_glass_chip</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+        <item name="android:foreground">?attr/selectableItemBackground</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:minHeight">40dp</item>
+        <item name="android:paddingStart">14dp</item>
+        <item name="android:paddingEnd">16dp</item>
+        <item name="android:drawablePadding">8dp</item>
+        <item name="android:drawableTint">@color/text_secondary</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textSize">13.5sp</item>
+        <item name="android:textDirection">rtl</item>
+    </style>
+
+    <!-- نص زر صغير بأيقونة (تعديل / حذف / نسخ) داخل البطاقات -->
+    <style name="Phizyo.ActionText" parent="Phizyo.Button.Text">
+        <item name="android:drawablePadding">6dp</item>
+        <item name="android:drawableTint">@color/primary_cyan_dark</item>
+    </style>
+
+    <!-- صف اقتراح في الشاشة الفارغة (كبسولة بعرض كامل + أيقونة بحث) -->
+    <style name="SuggestionRow" parent="">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginBottom">10dp</item>
+        <item name="android:background">@drawable/bg_suggestion_row</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+        <item name="android:drawableStart">@drawable/ic_search</item>
+        <item name="android:drawablePadding">12dp</item>
+        <item name="android:drawableTint">@color/text_tertiary</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:minHeight">52dp</item>
+        <item name="android:paddingStart">18dp</item>
+        <item name="android:paddingEnd">18dp</item>
+        <item name="android:textAlignment">viewStart</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textDirection">rtl</item>
+        <item name="android:textSize">15sp</item>
+    </style>
+</resources>
