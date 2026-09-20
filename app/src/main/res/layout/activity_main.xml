@@ -1,9 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- ============================================================================
-     الشاشة الرئيسية — إعادة بناء كاملة من الصفر بأسلوب Claude:
-     شريط علوي رفيع شبه شفاف + منطقة محتوى مرنة (حالة ترحيب فارغة أو نتائج)
-     + "رصيف" سفلي ثابت يحوي اختصارات التنقل ثم شريط البحث نفسه، بدل الرأس
-     الزجاجي الضخم القديم اللي كان شريط البحث فيه أعلى الشاشة.
+     الشاشة الرئيسية — تصميم مسطّح (Flat) بالكامل: بدون أي ظل صناعي، فقط
+     تعبئة + حدود رفيعة للفصل بين المناطق، بنفس روح Claude الحقيقية.
      ============================================================================ -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -12,31 +10,26 @@
     android:background="@drawable/bg_app_gradient"
     android:orientation="vertical">
 
-    <!-- ============== الشريط العلوي: إعادة تصميم v2 ==============
-         بطاقة عائمة بزوايا سفلية أوسع (26dp) وحد خفيف كامل بدل الظل وحده،
-         شعار بتدرج لوني بدل التعبئة المسطحة القديمة، ونقطة الحالة الخضراء
-         انتقلت لتلتصق بزاوية الشعار نفسه (بدل نقطة تمييز منفصلة بجانب
-         العنوان) لتوحي بـ"جاهز الآن" بدل مجرد زخرفة. زر الإعدادات بقى
-         دائرة أكبر شوي بحدّ أوضح مع تأثير ripple عند الضغط. -->
+    <!-- ============== الشريط العلوي: مسطّح، بدون ظل ============== -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="@drawable/bg_top_bar_modern"
-        android:elevation="8dp"
+        android:elevation="0dp"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingHorizontal="16dp"
-        android:paddingTop="16dp"
-        android:paddingBottom="18dp">
+        android:paddingHorizontal="20dp"
+        android:paddingTop="18dp"
+        android:paddingBottom="16dp">
 
-        <!-- شعار دائري بتدرج + نقطة حالة صغيرة في الزاوية -->
+        <!-- شعار دائري مسطح + نقطة حالة صغيرة في الزاوية -->
         <FrameLayout
-            android:layout_width="48dp"
-            android:layout_height="48dp">
+            android:layout_width="42dp"
+            android:layout_height="42dp">
 
             <FrameLayout
-                android:layout_width="46dp"
-                android:layout_height="46dp"
+                android:layout_width="42dp"
+                android:layout_height="42dp"
                 android:background="@drawable/bg_avatar_gradient">
 
                 <TextView
@@ -44,12 +37,12 @@
                     android:layout_height="wrap_content"
                     android:layout_gravity="center"
                     android:text="🩺"
-                    android:textSize="19sp" />
+                    android:textSize="18sp" />
             </FrameLayout>
 
             <View
-                android:layout_width="11dp"
-                android:layout_height="11dp"
+                android:layout_width="10dp"
+                android:layout_height="10dp"
                 android:layout_gravity="bottom|end"
                 android:background="@drawable/dot_accent" />
         </FrameLayout>
@@ -58,7 +51,7 @@
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="13dp"
+            android:layout_marginStart="12dp"
             android:layout_weight="1"
             android:orientation="vertical">
 
@@ -66,14 +59,11 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:fontFamily="serif"
-                android:letterSpacing="0.005"
                 android:text="Phizyo Studio"
                 android:textColor="@color/text_primary"
-                android:textSize="21sp"
+                android:textSize="19sp"
                 android:textStyle="bold" />
 
-            <!-- عبارة ترحيب قصيرة تتغيّر حسب وقت اليوم (GreetingProvider)
-                 تُملأ من MainActivity. -->
             <TextView
                 android:id="@+id/header_subtitle"
                 android:layout_width="match_parent"
@@ -86,15 +76,14 @@
                 android:textSize="11.5sp" />
         </LinearLayout>
 
-        <!-- زر الإعدادات: دائرة واضحة بحدّ وripple - الثيم بقى داخل
-             الإعدادات بس (المظهر). -->
+        <!-- زر الإعدادات: دائرة مسطحة بحد رفيع -->
         <ImageButton
             android:id="@+id/btn_settings"
-            android:layout_width="44dp"
-            android:layout_height="44dp"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
             android:background="@drawable/bg_glass_card_pressed"
             android:contentDescription="المزيد والإعدادات"
-            android:padding="11dp"
+            android:padding="10dp"
             android:src="@drawable/ic_settings_gear" />
     </LinearLayout>
 
@@ -104,7 +93,7 @@
         android:layout_height="0dp"
         android:layout_weight="1">
 
-        <!-- حالة فارغة: ترحيب بأسلوب Claude Home + أمثلة + عمليات بحث سابقة -->
+        <!-- حالة فارغة: ترحيب + أمثلة + عمليات بحث سابقة -->
         <ScrollView
             android:id="@+id/empty_hint_container"
             android:layout_width="match_parent"
@@ -121,13 +110,19 @@
                 android:paddingHorizontal="28dp"
                 android:paddingVertical="32dp">
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="16dp"
-                    android:alpha="0.9"
-                    android:text="🩺"
-                    android:textSize="38sp" />
+                <FrameLayout
+                    android:layout_width="64dp"
+                    android:layout_height="64dp"
+                    android:layout_marginBottom="18dp"
+                    android:background="@drawable/bg_glass_card_soft">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:gravity="center"
+                        android:text="🩺"
+                        android:textSize="28sp" />
+                </FrameLayout>
 
                 <TextView
                     android:id="@+id/empty_hint_title"
@@ -138,7 +133,7 @@
                     android:text="بماذا تفكر؟"
                     android:textColor="@color/text_primary"
                     android:textDirection="rtl"
-                    android:textSize="26sp" />
+                    android:textSize="25sp" />
 
                 <TextView
                     android:id="@+id/empty_hint"
@@ -163,7 +158,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="26dp"
-                        android:layout_marginBottom="8dp"
+                        android:layout_marginBottom="10dp"
                         android:text="🕘 عمليات بحث سابقة"
                         android:textColor="@color/text_tertiary"
                         android:textDirection="rtl"
@@ -186,58 +181,64 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="26dp"
-                    android:layout_marginBottom="8dp"
+                    android:layout_marginBottom="10dp"
                     android:text="جرّب أحد هذه الأمثلة"
                     android:textColor="@color/text_tertiary"
                     android:textDirection="rtl"
                     android:textSize="11sp" />
 
-                <LinearLayout
+                <!-- شبكة أمثلة 2×2 منظّمة بمسافات متساوية بدل عمود واحد ضيق -->
+                <GridLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:gravity="center"
-                    android:orientation="horizontal">
+                    android:alignmentMode="alignMargins"
+                    android:columnCount="2"
+                    android:useDefaultMargins="false">
 
-                    <LinearLayout
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical">
+                    <TextView
+                        android:id="@+id/chip_suggestion_1"
+                        style="@style/SuggestionChip"
+                        android:layout_width="0dp"
+                        android:layout_columnWeight="1"
+                        android:layout_margin="5dp"
+                        android:layout_row="0"
+                        android:layout_column="0"
+                        android:gravity="center"
+                        android:text="عرق النسا" />
 
-                        <LinearLayout
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginBottom="8dp"
-                            android:orientation="horizontal">
+                    <TextView
+                        android:id="@+id/chip_suggestion_2"
+                        style="@style/SuggestionChip"
+                        android:layout_width="0dp"
+                        android:layout_columnWeight="1"
+                        android:layout_margin="5dp"
+                        android:layout_row="0"
+                        android:layout_column="1"
+                        android:gravity="center"
+                        android:text="الكتف المتجمد" />
 
-                            <TextView
-                                android:id="@+id/chip_suggestion_1"
-                                style="@style/SuggestionChip"
-                                android:text="عرق النسا" />
+                    <TextView
+                        android:id="@+id/chip_suggestion_3"
+                        style="@style/SuggestionChip"
+                        android:layout_width="0dp"
+                        android:layout_columnWeight="1"
+                        android:layout_margin="5dp"
+                        android:layout_row="1"
+                        android:layout_column="0"
+                        android:gravity="center"
+                        android:text="النفق الرسغي" />
 
-                            <TextView
-                                android:id="@+id/chip_suggestion_2"
-                                style="@style/SuggestionChip"
-                                android:text="الكتف المتجمد" />
-                        </LinearLayout>
-
-                        <LinearLayout
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:gravity="center"
-                            android:orientation="horizontal">
-
-                            <TextView
-                                android:id="@+id/chip_suggestion_3"
-                                style="@style/SuggestionChip"
-                                android:text="النفق الرسغي" />
-
-                            <TextView
-                                android:id="@+id/chip_suggestion_4"
-                                style="@style/SuggestionChip"
-                                android:text="اسفل الظهر" />
-                        </LinearLayout>
-                    </LinearLayout>
-                </LinearLayout>
+                    <TextView
+                        android:id="@+id/chip_suggestion_4"
+                        style="@style/SuggestionChip"
+                        android:layout_width="0dp"
+                        android:layout_columnWeight="1"
+                        android:layout_margin="5dp"
+                        android:layout_row="1"
+                        android:layout_column="1"
+                        android:gravity="center"
+                        android:text="اسفل الظهر" />
+                </GridLayout>
             </LinearLayout>
         </ScrollView>
 
@@ -331,8 +332,9 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_margin="14dp"
+                    android:background="@drawable/bg_glass_card_soft"
                     android:orientation="vertical"
-                    android:paddingTop="4dp">
+                    android:padding="16dp">
 
                     <TextView
                         android:layout_width="match_parent"
@@ -404,25 +406,14 @@
     </FrameLayout>
 
     <!-- ============== الرصيف السفلي الثابت: اختصارات + شريط البحث ==============
-         إعادة تصميم v2: مقبض صغير علوي (sheet handle) يفصل بصريًا بين
-         منطقة المحتوى والرصيف الثابت، زوايا علوية أوسع (28dp) + حدّ رفيع
-         محيط بدل الاعتماد على الظل فقط، ومسافات أوسع بين الرقائق. تبويب
-         "Phizyo AI" بقى بتعبئة خفيفة + حدّ بلون التمييز بدل التعبئة
-         المصمتة الكاملة، حتى يبرز كأهم اختصار دون أن يطغى بصريًا. -->
+         مسطّح بالكامل بدون ظل، بحد علوي رفيع للفصل عن منطقة المحتوى. -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="@drawable/bg_bottom_dock_modern"
-        android:elevation="12dp"
+        android:elevation="0dp"
         android:orientation="vertical"
-        android:paddingTop="10dp">
-
-        <View
-            android:layout_width="38dp"
-            android:layout_height="4dp"
-            android:layout_gravity="center_horizontal"
-            android:layout_marginBottom="10dp"
-            android:background="@drawable/dot_handle" />
+        android:paddingTop="14dp">
 
         <HorizontalScrollView
             android:layout_width="match_parent"
@@ -441,13 +432,13 @@
                     android:id="@+id/btn_ai_assistant"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:minHeight="40dp"
-                    android:gravity="center"
                     android:layout_marginHorizontal="5dp"
                     android:background="@drawable/bg_chip_accent_soft"
                     android:clickable="true"
                     android:focusable="true"
                     android:foreground="?attr/selectableItemBackground"
+                    android:gravity="center"
+                    android:minHeight="40dp"
                     android:paddingHorizontal="16dp"
                     android:paddingVertical="9dp"
                     android:text="✨ Phizyo AI"
@@ -460,13 +451,13 @@
                     android:id="@+id/btn_favorites"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:minHeight="40dp"
-                    android:gravity="center"
                     android:layout_marginHorizontal="5dp"
                     android:background="@drawable/bg_glass_chip"
                     android:clickable="true"
                     android:focusable="true"
                     android:foreground="?attr/selectableItemBackground"
+                    android:gravity="center"
+                    android:minHeight="40dp"
                     android:paddingHorizontal="16dp"
                     android:paddingVertical="10dp"
                     android:text="⭐ المفضلة"
@@ -478,13 +469,13 @@
                     android:id="@+id/btn_my_cases"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:minHeight="40dp"
-                    android:gravity="center"
                     android:layout_marginHorizontal="5dp"
                     android:background="@drawable/bg_glass_chip"
                     android:clickable="true"
                     android:focusable="true"
                     android:foreground="?attr/selectableItemBackground"
+                    android:gravity="center"
+                    android:minHeight="40dp"
                     android:paddingHorizontal="16dp"
                     android:paddingVertical="10dp"
                     android:text="🗂️ حالاتي"
@@ -496,13 +487,13 @@
                     android:id="@+id/btn_encyclopedia"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:minHeight="40dp"
-                    android:gravity="center"
                     android:layout_marginHorizontal="5dp"
                     android:background="@drawable/bg_glass_chip"
                     android:clickable="true"
                     android:focusable="true"
                     android:foreground="?attr/selectableItemBackground"
+                    android:gravity="center"
+                    android:minHeight="40dp"
                     android:paddingHorizontal="16dp"
                     android:paddingVertical="10dp"
                     android:text="📖 موسوعة الأنماط"
@@ -514,13 +505,13 @@
                     android:id="@+id/btn_anatomy"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:minHeight="40dp"
-                    android:gravity="center"
                     android:layout_marginHorizontal="5dp"
                     android:background="@drawable/bg_glass_chip"
                     android:clickable="true"
                     android:focusable="true"
                     android:foreground="?attr/selectableItemBackground"
+                    android:gravity="center"
+                    android:minHeight="40dp"
                     android:paddingHorizontal="16dp"
                     android:paddingVertical="10dp"
                     android:text="🦴 دليل التشريح"
@@ -532,13 +523,13 @@
                     android:id="@+id/btn_patients"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:minHeight="40dp"
-                    android:gravity="center"
                     android:layout_marginHorizontal="5dp"
                     android:background="@drawable/bg_glass_chip"
                     android:clickable="true"
                     android:focusable="true"
                     android:foreground="?attr/selectableItemBackground"
+                    android:gravity="center"
+                    android:minHeight="40dp"
                     android:paddingHorizontal="16dp"
                     android:paddingVertical="10dp"
                     android:text="🧑‍⚕️ المرضى"
@@ -550,13 +541,13 @@
                     android:id="@+id/btn_treatment_programs"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:minHeight="40dp"
-                    android:gravity="center"
                     android:layout_marginHorizontal="5dp"
                     android:background="@drawable/bg_glass_chip"
                     android:clickable="true"
                     android:focusable="true"
                     android:foreground="?attr/selectableItemBackground"
+                    android:gravity="center"
+                    android:minHeight="40dp"
                     android:paddingHorizontal="16dp"
                     android:paddingVertical="10dp"
                     android:text="📋 برامج العلاج"
@@ -566,7 +557,7 @@
             </LinearLayout>
         </HorizontalScrollView>
 
-        <!-- شريط البحث نفسه: صف واحد ثابت أسفل الشاشة، زر الإضافة + الحقل -->
+        <!-- شريط البحث نفسه -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -593,7 +584,7 @@
                 app:elevation="0dp"
                 app:icon="@drawable/ic_add"
                 app:iconTint="@color/white"
-                app:pressedTranslationZ="2dp" />
+                app:pressedTranslationZ="0dp" />
 
             <com.google.android.material.textfield.TextInputLayout
                 style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
