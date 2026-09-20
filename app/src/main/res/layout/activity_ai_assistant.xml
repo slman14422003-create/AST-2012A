@@ -1,9 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- ============================================================================
-     شاشة المساعد الذكي — إعادة تصميم شاملة: رأس بهوية شخصية (شارة + حالة
-     اتصال)، بانر حالة بشارة أيقونة، فقاعة كتابة حقيقية، وقاعدة إدخال
-     بأسلوب "كبسولة واحدة" (حقل + زر إرسال داخل نفس الحاوية) بدل عنصرين
-     منفصلين متراكبين، بنفس روح تطبيقات المحادثة الحديثة.
+     شاشة المساعد الذكي — إعادة تصميم v2 كاملة: رأس بأفاتار متدرج اللون +
+     نقطة حالة اتصال حقيقية ملتصقة بزاويته (بدل نص "● متصل" منفصل)، بانر
+     "كيف يعمل" بشارة أنيقة بدل الحاوية المسطحة، مساحة محادثة أوسع بخلفية
+     متدرجة خفيفة تفصلها عن الرأس والقاعدة بصريًا، وقاعدة إدخال بأسلوب
+     "كبسولة عائمة" ذات ظل وحدّ واضحين بدل الصف المسطح الملتصق بالحافة.
+     كل معرّفات العناصر (IDs) التي يعتمد عليها AiAssistantActivity.java
+     أُبقيت كما هي بدون أي تغيير حتى يبقى الكود يعمل دون تعديل.
      ============================================================================ -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -12,11 +15,13 @@
     android:background="@drawable/bg_app_gradient"
     android:orientation="vertical">
 
+    <!-- ============== الرأس: هوية شخصية + حالة اتصال ============== -->
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
-        android:layout_height="66dp"
-        android:background="@drawable/bg_header_container"
+        android:layout_height="72dp"
+        android:background="@drawable/bg_top_bar_modern"
+        android:elevation="6dp"
         app:contentInsetStart="8dp"
         app:navigationIcon="@drawable/ic_close">
 
@@ -26,22 +31,30 @@
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
+            <!-- أفاتار متدرج + نقطة حالة خضراء حقيقية ملتصقة بالزاوية -->
             <FrameLayout
-                android:layout_width="38dp"
-                android:layout_height="38dp"
-                android:layout_marginEnd="10dp">
+                android:layout_width="42dp"
+                android:layout_height="42dp"
+                android:layout_marginEnd="11dp">
+
+                <FrameLayout
+                    android:layout_width="42dp"
+                    android:layout_height="42dp"
+                    android:background="@drawable/bg_avatar_circle_ai_gradient">
+
+                    <ImageView
+                        android:layout_width="21dp"
+                        android:layout_height="21dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="@string/ai_assistant_name"
+                        android:src="@drawable/ic_ai_bot" />
+                </FrameLayout>
 
                 <View
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:background="@drawable/bg_avatar_circle_ai" />
-
-                <ImageView
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
-                    android:layout_gravity="center"
-                    android:contentDescription="@string/ai_assistant_name"
-                    android:src="@drawable/ic_ai_bot" />
+                    android:layout_width="12dp"
+                    android:layout_height="12dp"
+                    android:layout_gravity="bottom|end"
+                    android:background="@drawable/dot_accent" />
             </FrameLayout>
 
             <LinearLayout
@@ -56,167 +69,179 @@
                     android:text="Phizyo AI"
                     android:textColor="@color/text_primary"
                     android:textDirection="rtl"
-                    android:textSize="16.5sp"
+                    android:textSize="17sp"
                     android:textStyle="bold" />
 
                 <TextView
                     android:id="@+id/connection_status"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="1dp"
                     android:text="● متصل"
                     android:textColor="@color/accent_green"
                     android:textDirection="rtl"
-                    android:textSize="10.5sp" />
+                    android:textSize="11sp" />
             </LinearLayout>
         </LinearLayout>
     </com.google.android.material.appbar.MaterialToolbar>
 
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:background="@color/glass_border_soft" />
-
-    <LinearLayout
-        android:id="@+id/mode_hint"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_margin="12dp"
-        android:layout_marginBottom="2dp"
-        android:background="@drawable/bg_glass_card_soft"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:padding="12dp"
-        android:visibility="visible">
-
-        <FrameLayout
-            android:layout_width="26dp"
-            android:layout_height="26dp"
-            android:layout_marginStart="10dp"
-            android:background="@drawable/bg_avatar_circle">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:gravity="center"
-                android:text="✨"
-                android:textSize="12sp" />
-        </FrameLayout>
-
-        <TextView
-            android:id="@+id/mode_hint_text"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:gravity="end"
-            android:lineSpacingExtra="2dp"
-            android:text="✅ الأسئلة المطابقة لقاعدة بيانات الجهاز تُجاب فورًا بدون إنترنت. غير ذلك، تُصاغ الإجابة عبر Phizyo AI."
-            android:textColor="@color/text_secondary"
-            android:textDirection="rtl"
-            android:textSize="11.5sp" />
-    </LinearLayout>
-
-    <TextView
-        android:id="@+id/quick_prompts_title"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
-        android:layout_marginBottom="6dp"
-        android:paddingHorizontal="14dp"
-        android:text="💬 جرّب تسأل عن..."
-        android:textColor="@color/text_tertiary"
-        android:textDirection="rtl"
-        android:textSize="11sp"
-        android:visibility="gone" />
-
-    <HorizontalScrollView
-        android:id="@+id/quick_prompts_scroll"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:paddingHorizontal="12dp"
-        android:scrollbars="none"
-        android:visibility="gone">
-
-        <LinearLayout
-            android:id="@+id/quick_prompts_row"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal" />
-    </HorizontalScrollView>
-
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/chat_list"
+    <!-- ============== منطقة المحادثة ============== -->
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:clipToPadding="false"
-        android:paddingHorizontal="14dp"
-        android:paddingTop="10dp"
-        android:paddingBottom="6dp" />
-
-    <!-- ============== فقاعة الكتابة (Typing Bubble) ============== -->
-    <LinearLayout
-        android:id="@+id/typing_indicator"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="end"
-        android:layout_marginEnd="14dp"
-        android:layout_marginBottom="10dp"
-        android:background="@drawable/bg_glass_card_pressed"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingHorizontal="14dp"
-        android:paddingVertical="10dp"
-        android:visibility="gone">
-
-        <TextView
-            android:id="@+id/typing_text"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:text="✨ Phizyo AI يفكر..."
-            android:textColor="@color/text_secondary"
-            android:textDirection="rtl"
-            android:textSize="12sp" />
+        android:layout_weight="1">
 
         <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical">
+
+            <!-- بانر "كيف يعمل" -->
+            <LinearLayout
+                android:id="@+id/mode_hint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_margin="14dp"
+                android:layout_marginBottom="4dp"
+                android:background="@drawable/bg_glass_card_soft"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="13dp"
+                android:visibility="visible">
+
+                <FrameLayout
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:layout_marginStart="10dp"
+                    android:background="@drawable/bg_avatar_gradient">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:gravity="center"
+                        android:text="✨"
+                        android:textSize="12.5sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/mode_hint_text"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="end"
+                    android:lineSpacingExtra="2dp"
+                    android:text="✅ الأسئلة المطابقة لقاعدة بيانات الجهاز تُجاب فورًا بدون إنترنت. غير ذلك، تُصاغ الإجابة عبر Phizyo AI."
+                    android:textColor="@color/text_secondary"
+                    android:textDirection="rtl"
+                    android:textSize="11.5sp" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/quick_prompts_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="8dp"
+                android:paddingHorizontal="16dp"
+                android:text="💬 جرّب تسأل عن..."
+                android:textColor="@color/text_tertiary"
+                android:textDirection="rtl"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
+
+            <HorizontalScrollView
+                android:id="@+id/quick_prompts_scroll"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp"
+                android:paddingHorizontal="12dp"
+                android:scrollbars="none"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:id="@+id/quick_prompts_row"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal" />
+            </HorizontalScrollView>
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/chat_list"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:clipToPadding="false"
+                android:paddingHorizontal="14dp"
+                android:paddingTop="6dp"
+                android:paddingBottom="10dp" />
+        </LinearLayout>
+
+        <!-- ============== فقاعة الكتابة (Typing Bubble) ============== -->
+        <LinearLayout
+            android:id="@+id/typing_indicator"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_gravity="bottom|end"
+            android:layout_margin="16dp"
+            android:background="@drawable/bg_glass_card_pressed"
+            android:elevation="4dp"
             android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:paddingHorizontal="15dp"
+            android:paddingVertical="11dp"
+            android:visibility="gone">
 
-            <View
-                android:id="@+id/typing_dot_1"
-                android:layout_width="6dp"
-                android:layout_height="6dp"
-                android:layout_marginStart="3dp"
-                android:background="@drawable/dot_accent" />
+            <TextView
+                android:id="@+id/typing_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="9dp"
+                android:text="✨ Phizyo AI يفكر..."
+                android:textColor="@color/text_secondary"
+                android:textDirection="rtl"
+                android:textSize="12sp" />
 
-            <View
-                android:id="@+id/typing_dot_2"
-                android:layout_width="6dp"
-                android:layout_height="6dp"
-                android:layout_marginStart="3dp"
-                android:background="@drawable/dot_accent" />
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
-            <View
-                android:id="@+id/typing_dot_3"
-                android:layout_width="6dp"
-                android:layout_height="6dp"
-                android:layout_marginStart="3dp"
-                android:background="@drawable/dot_accent" />
+                <View
+                    android:id="@+id/typing_dot_1"
+                    android:layout_width="6dp"
+                    android:layout_height="6dp"
+                    android:layout_marginStart="3dp"
+                    android:background="@drawable/dot_accent" />
+
+                <View
+                    android:id="@+id/typing_dot_2"
+                    android:layout_width="6dp"
+                    android:layout_height="6dp"
+                    android:layout_marginStart="3dp"
+                    android:background="@drawable/dot_accent" />
+
+                <View
+                    android:id="@+id/typing_dot_3"
+                    android:layout_width="6dp"
+                    android:layout_height="6dp"
+                    android:layout_marginStart="3dp"
+                    android:background="@drawable/dot_accent" />
+            </LinearLayout>
         </LinearLayout>
-    </LinearLayout>
+    </FrameLayout>
 
-    <!-- ============== قاعدة الإدخال: كبسولة واحدة بأسلوب تطبيقات المحادثة
-         الحديثة (الحقل وزر الإرسال داخل نفس الحاوية، بدل عنصرين متراكبين) ============== -->
+    <!-- ============== قاعدة الإدخال: كبسولة عائمة بظل وحدّ واضحين ============== -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@drawable/bg_header_container"
-        android:elevation="8dp"
+        android:background="@drawable/bg_bottom_dock_modern"
+        android:elevation="12dp"
         android:orientation="vertical"
-        android:paddingHorizontal="12dp"
-        android:paddingVertical="10dp">
+        android:paddingHorizontal="14dp"
+        android:paddingTop="14dp"
+        android:paddingBottom="14dp">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -225,20 +250,20 @@
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:paddingStart="6dp"
-            android:paddingEnd="14dp"
-            android:paddingVertical="4dp">
+            android:paddingEnd="16dp"
+            android:paddingVertical="5dp">
 
             <com.google.android.material.floatingactionbutton.FloatingActionButton
                 android:id="@+id/btn_send"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_width="42dp"
+                android:layout_height="42dp"
                 android:contentDescription="إرسال"
                 android:src="@drawable/ic_send"
                 app:backgroundTint="?attr/colorPrimary"
                 app:borderWidth="0dp"
                 app:elevation="0dp"
-                app:fabCustomSize="40dp"
-                app:maxImageSize="17dp"
+                app:fabCustomSize="42dp"
+                app:maxImageSize="18dp"
                 app:pressedTranslationZ="1dp"
                 app:tint="@color/white" />
 
@@ -247,7 +272,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:layout_marginHorizontal="10dp"
+                android:layout_marginHorizontal="11dp"
                 android:background="@android:color/transparent"
                 android:gravity="end"
                 android:hint="اسأل عن حالة، عرض، أو أي استفسار طبي..."

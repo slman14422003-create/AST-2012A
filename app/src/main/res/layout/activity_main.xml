@@ -12,90 +12,89 @@
     android:background="@drawable/bg_app_gradient"
     android:orientation="vertical">
 
-    <!-- ============== الشريط العلوي: بطاقة واحدة موحّدة وعصرية ==============
-         شعار + عنوان في جهة، ومجموعة أيقونات (الثيم + الإعدادات) داخل
-         كبسولة صغيرة منسّقة في الجهة الأخرى - بدل الطبقتين المسطحتين
-         المنفصلتين قديمًا (شريط أدوات فارغ + عنوان تحته بخط فاصل حاد). -->
+    <!-- ============== الشريط العلوي: إعادة تصميم v2 ==============
+         بطاقة عائمة بزوايا سفلية أوسع (26dp) وحد خفيف كامل بدل الظل وحده،
+         شعار بتدرج لوني بدل التعبئة المسطحة القديمة، ونقطة الحالة الخضراء
+         انتقلت لتلتصق بزاوية الشعار نفسه (بدل نقطة تمييز منفصلة بجانب
+         العنوان) لتوحي بـ"جاهز الآن" بدل مجرد زخرفة. زر الإعدادات بقى
+         دائرة أكبر شوي بحدّ أوضح مع تأثير ripple عند الضغط. -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@drawable/bg_header_card"
-        android:elevation="6dp"
+        android:background="@drawable/bg_top_bar_modern"
+        android:elevation="8dp"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingHorizontal="16dp"
-        android:paddingVertical="12dp">
+        android:paddingTop="14dp"
+        android:paddingBottom="16dp">
 
-        <!-- شعار دائري صغير -->
+        <!-- شعار دائري بتدرج + نقطة حالة صغيرة في الزاوية -->
         <FrameLayout
-            android:layout_width="42dp"
-            android:layout_height="42dp"
-            android:background="@drawable/bg_avatar_circle">
+            android:layout_width="46dp"
+            android:layout_height="46dp">
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:text="🩺"
-                android:textSize="18sp" />
+            <FrameLayout
+                android:layout_width="46dp"
+                android:layout_height="46dp"
+                android:background="@drawable/bg_avatar_gradient">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:text="🩺"
+                    android:textSize="19sp" />
+            </FrameLayout>
+
+            <View
+                android:layout_width="11dp"
+                android:layout_height="11dp"
+                android:layout_gravity="bottom|end"
+                android:background="@drawable/dot_accent" />
         </FrameLayout>
 
         <!-- عنوان + عنوان فرعي -->
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="12dp"
+            android:layout_marginStart="13dp"
             android:layout_weight="1"
             android:orientation="vertical">
 
-            <LinearLayout
+            <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
+                android:fontFamily="serif"
+                android:letterSpacing="0.005"
+                android:text="Phizyo Studio"
+                android:textColor="@color/text_primary"
+                android:textSize="20sp"
+                android:textStyle="bold" />
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:fontFamily="serif"
-                    android:letterSpacing="0.005"
-                    android:text="Phizyo Studio"
-                    android:textColor="@color/text_primary"
-                    android:textSize="19.5sp"
-                    android:textStyle="bold" />
-
-                <View
-                    android:layout_width="7dp"
-                    android:layout_height="7dp"
-                    android:layout_marginStart="7dp"
-                    android:background="@drawable/dot_accent" />
-            </LinearLayout>
-
-            <!-- كانت هنا نص ثابت "دليل جهاز AST-2012A · ..." بيوحي إن
-                 التطبيق خاص بجهاز باسم تقني غريب - بينما الاسم الفعلي
-                 للمنتج هو Phizyo بس. استُبدل بعبارة ترحيب قصيرة تتغيّر
-                 حسب وقت اليوم (GreetingProvider) تُملأ من MainActivity. -->
+            <!-- عبارة ترحيب قصيرة تتغيّر حسب وقت اليوم (GreetingProvider)
+                 تُملأ من MainActivity. -->
             <TextView
                 android:id="@+id/header_subtitle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="1dp"
+                android:layout_marginTop="2dp"
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:text="مساعد العلاج الطبيعي الذكي"
                 android:textColor="@color/text_tertiary"
-                android:textSize="11sp" />
+                android:textSize="11.5sp" />
         </LinearLayout>
 
-        <!-- زر الإعدادات: دايرة واحدة نظيفة بدل الكبسولة اللي كانت بتجمعه
-             مع زر تبديل الثيم قديمًا - الثيم بقى داخل الإعدادات بس (المظهر). -->
+        <!-- زر الإعدادات: دائرة واضحة بحدّ وripple - الثيم بقى داخل
+             الإعدادات بس (المظهر). -->
         <ImageButton
             android:id="@+id/btn_settings"
-            android:layout_width="42dp"
-            android:layout_height="42dp"
-            android:background="@drawable/bg_icon_group_pill"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="@drawable/bg_glass_card_pressed"
             android:contentDescription="المزيد والإعدادات"
-            android:padding="10dp"
+            android:padding="11dp"
             android:src="@drawable/ic_settings_gear" />
     </LinearLayout>
 
@@ -405,15 +404,25 @@
     </FrameLayout>
 
     <!-- ============== الرصيف السفلي الثابت: اختصارات + شريط البحث ==============
-         بطاقة واحدة بزاوية علوية دائرية بدل الخط الفاصل الحاد + الشريط
-         المسطح القديم، مع مسافات أوسع بين الرقائق حتى ما تبقى متلاصقة. -->
+         إعادة تصميم v2: مقبض صغير علوي (sheet handle) يفصل بصريًا بين
+         منطقة المحتوى والرصيف الثابت، زوايا علوية أوسع (28dp) + حدّ رفيع
+         محيط بدل الاعتماد على الظل فقط، ومسافات أوسع بين الرقائق. تبويب
+         "Phizyo AI" بقى بتعبئة خفيفة + حدّ بلون التمييز بدل التعبئة
+         المصمتة الكاملة، حتى يبرز كأهم اختصار دون أن يطغى بصريًا. -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@drawable/bg_bottom_dock"
-        android:elevation="10dp"
+        android:background="@drawable/bg_bottom_dock_modern"
+        android:elevation="12dp"
         android:orientation="vertical"
-        android:paddingTop="14dp">
+        android:paddingTop="10dp">
+
+        <View
+            android:layout_width="38dp"
+            android:layout_height="4dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginBottom="10dp"
+            android:background="@drawable/dot_handle" />
 
         <HorizontalScrollView
             android:layout_width="match_parent"
@@ -435,14 +444,14 @@
                     android:minHeight="40dp"
                     android:gravity="center"
                     android:layout_marginHorizontal="5dp"
-                    android:background="@drawable/bg_chip_accent"
+                    android:background="@drawable/bg_chip_accent_soft"
                     android:clickable="true"
                     android:focusable="true"
                     android:foreground="?attr/selectableItemBackground"
                     android:paddingHorizontal="16dp"
                     android:paddingVertical="9dp"
                     android:text="✨ Phizyo AI"
-                    android:textColor="@color/white"
+                    android:textColor="@color/primary_cyan_dark"
                     android:textDirection="rtl"
                     android:textSize="12.5sp"
                     android:textStyle="bold" />
@@ -564,7 +573,7 @@
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:paddingHorizontal="14dp"
-            android:paddingBottom="14dp">
+            android:paddingBottom="16dp">
 
             <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
                 android:id="@+id/fab_add"
