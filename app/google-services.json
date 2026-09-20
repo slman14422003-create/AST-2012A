@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "458863728401",
+    "project_id": "physicalpt-a9241",
+    "storage_bucket": "physicalpt-a9241.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:458863728401:android:350553a90197000f1a1eb0",
+        "android_client_info": {
+          "package_name": "com.slman.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBucC1lpWNMQCMPLLDQTwNJMN1zW3_vtBc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
