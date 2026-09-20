@@ -232,6 +232,6 @@ jobs:
 
       - name: إرسال رسم الاعتماديات (Dependabot alerts)
         continue-on-error: true
-        uses: gradle/actions/dependency-submission@v5
+        uses: gradle/actions/dependency-submission@v6
         with:
           gradle-version: '8.14.3'
