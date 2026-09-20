@@ -1,1 +1,5 @@
-
+<?xml version="1.0" encoding="utf-8"?>
+<!-- مجلد تنزيل ملفات التحديث (داخل كاش التطبيق) لمشاركته مع مُثبّت النظام -->
+<paths>
+    <cache-path name="updates" path="updates/" />
+</paths>
