@@ -4,6 +4,8 @@ import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.LayoutInflater;
@@ -55,6 +57,16 @@ public class PatientsActivity extends AppCompatActivity {
     private List<Patient> all = new ArrayList<>();
     private String currency = "";
 
+    // ملحوظة إصلاح "لاج" الكتابة في مربع البحث: كل ضغطة زر كانت تُعيد بناء
+    // كل صفوف القائمة فورًا (removeAllViews + inflate لكل مريض) على نفس
+    // اللحظة اللي يرسم فيها حرف الإدخال، فيتزاحم رسم لوحة المفاتيح مع إعادة
+    // بناء القائمة ويظهر تقطّع واضح خصوصًا مع الكتابة السريعة. الحل: تأخير
+    // بسيط (debounce) بحيث لا تُعاد القائمة إلا بعد توقف الكتابة فعليًا،
+    // بنفس أسلوب شريط بحث Claude.
+    private static final long SEARCH_DEBOUNCE_MS = 180;
+    private final Handler searchHandler = new Handler(Looper.getMainLooper());
+    private final Runnable renderListRunnable = this::renderList;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -101,7 +113,8 @@ public class PatientsActivity extends AppCompatActivity {
 
             @Override
             public void afterTextChanged(Editable s) {
-                renderList();
+                searchHandler.removeCallbacks(renderListRunnable);
+                searchHandler.postDelayed(renderListRunnable, SEARCH_DEBOUNCE_MS);
             }
         });
 
@@ -109,6 +122,12 @@ public class PatientsActivity extends AppCompatActivity {
         sortName.setOnClickListener(v -> setSort(SORT_NAME));
         sortDues.setOnClickListener(v -> setSort(SORT_DUES));
         updateSortChips();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        searchHandler.removeCallbacks(renderListRunnable);
     }
 
     private boolean onMenuItemClick(MenuItem item) {
@@ -132,6 +151,13 @@ public class PatientsActivity extends AppCompatActivity {
 
     private void openAddPatient() {
         startActivity(new Intent(this, AddEditPatientActivity.class));
+        overridePendingTransition(R.anim.slide_up_in, R.anim.fade_out);
+    }
+
+    @Override
+    public void finish() {
+        super.finish();
+        overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right);
     }
 
     private void setSort(int mode) {
@@ -282,6 +308,7 @@ public class PatientsActivity extends AppCompatActivity {
             Intent i = new Intent(this, PatientDetailActivity.class);
             i.putExtra("patient_id", p.id);
             startActivity(i);
+            overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
         });
         return row;
     }

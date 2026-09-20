@@ -24,6 +24,12 @@ public class TreatmentProgramDetailActivity extends AppCompatActivity {
     private LayoutInflater inflater;
 
     @Override
+    public void finish() {
+        super.finish();
+        overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right);
+    }
+
+    @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_treatment_program_detail);
@@ -106,6 +112,7 @@ public class TreatmentProgramDetailActivity extends AppCompatActivity {
             Intent i = new Intent(this, AddEditTreatmentProgramActivity.class);
             i.putExtra("edit_program_id", program.id);
             startActivity(i);
+            overridePendingTransition(R.anim.slide_up_in, R.anim.fade_out);
         });
         actions.findViewById(R.id.btn_program_delete).setOnClickListener(v -> confirmDelete());
         container.addView(actions);

@@ -35,6 +35,12 @@ public class DataManager {
     private static List<CaseItem> builtinCache;
     private static List<JSONObject> modesCache;
     private static List<JSONObject> anatomyCache;
+    // ملحوظة إصلاح "لاج" مربع البحث الرئيسي: allCases() كان يقرأ ملف
+    // custom_cases.json من القرص (فتح ملف + قراءة + تحليل JSON) في كل مرة،
+    // أي مع كل حرف يكتبه المستخدم في البحث، لأنه يعمل على UI thread. الحل:
+    // كاش بسيط بالذاكرة يُحدَّث فقط عند فعلي تغيير (إضافة/تعديل/حذف/مسح)،
+    // فبيقرأ القرص مرة واحدة فقط ثم يُعاد استخدامه.
+    private static List<CaseItem> customCasesCache;
 
     private static final String CUSTOM_FILE = "custom_cases.json";
 
@@ -104,9 +110,13 @@ public class DataManager {
     }
 
     public static List<CaseItem> loadCustomCases(Context ctx) {
+        if (customCasesCache != null) return customCasesCache;
         List<CaseItem> list = new ArrayList<>();
         File f = customFile(ctx);
-        if (!f.exists()) return list;
+        if (!f.exists()) {
+            customCasesCache = list;
+            return list;
+        }
         try {
             StringBuilder sb = new StringBuilder();
             BufferedReader reader = new BufferedReader(new InputStreamReader(
@@ -121,6 +131,7 @@ public class DataManager {
         } catch (Exception e) {
             e.printStackTrace();
         }
+        customCasesCache = list;
         return list;
     }
 
@@ -131,6 +142,7 @@ public class DataManager {
             FileOutputStream fos = ctx.openFileOutput(CUSTOM_FILE, Context.MODE_PRIVATE);
             fos.write(arr.toString(2).getBytes(StandardCharsets.UTF_8));
             fos.close();
+            customCasesCache = new ArrayList<>(cases);
         } catch (IOException | JSONException e) {
             e.printStackTrace();
         }

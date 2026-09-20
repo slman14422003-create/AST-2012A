@@ -26,6 +26,12 @@ public class AddEditPatientActivity extends AppCompatActivity {
     private String editingId;
     private String gender = "";
 
+    @Override
+    public void finish() {
+        super.finish();
+        overridePendingTransition(R.anim.slide_down_out, R.anim.fade_out);
+    }
+
     private TextInputEditText fieldName;
     private TextInputEditText fieldPhone;
     private TextInputEditText fieldAge;

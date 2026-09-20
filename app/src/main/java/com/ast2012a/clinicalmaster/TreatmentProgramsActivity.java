@@ -2,6 +2,8 @@ package com.ast2012a.clinicalmaster;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.LayoutInflater;
@@ -36,6 +38,12 @@ public class TreatmentProgramsActivity extends AppCompatActivity {
     private LayoutInflater inflater;
 
     private List<TreatmentProgram> all = new ArrayList<>();
+
+    // نفس إصلاح "لاج" البحث المطبّق في شاشة المرضى: تأخير بسيط قبل إعادة
+    // بناء القائمة بدل إعادة بنائها مع كل حرف.
+    private static final long SEARCH_DEBOUNCE_MS = 180;
+    private final Handler searchHandler = new Handler(Looper.getMainLooper());
+    private final Runnable renderListRunnable = this::renderList;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -76,7 +84,8 @@ public class TreatmentProgramsActivity extends AppCompatActivity {
 
             @Override
             public void afterTextChanged(Editable s) {
-                renderList();
+                searchHandler.removeCallbacks(renderListRunnable);
+                searchHandler.postDelayed(renderListRunnable, SEARCH_DEBOUNCE_MS);
             }
         });
     }
@@ -87,8 +96,21 @@ public class TreatmentProgramsActivity extends AppCompatActivity {
         reload();
     }
 
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        searchHandler.removeCallbacks(renderListRunnable);
+    }
+
+    @Override
+    public void finish() {
+        super.finish();
+        overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right);
+    }
+
     private void openAddProgram() {
         startActivity(new Intent(this, AddEditTreatmentProgramActivity.class));
+        overridePendingTransition(R.anim.slide_up_in, R.anim.fade_out);
     }
 
     private void reload() {
@@ -156,11 +178,13 @@ public class TreatmentProgramsActivity extends AppCompatActivity {
             Intent i = new Intent(this, TreatmentProgramDetailActivity.class);
             i.putExtra("program_id", t.id);
             startActivity(i);
+            overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
         });
         row.findViewById(R.id.program_btn_edit).setOnClickListener(v -> {
             Intent i = new Intent(this, AddEditTreatmentProgramActivity.class);
             i.putExtra("edit_program_id", t.id);
             startActivity(i);
+            overridePendingTransition(R.anim.slide_up_in, R.anim.fade_out);
         });
         row.findViewById(R.id.program_btn_delete).setOnClickListener(v -> confirmDelete(t));
         return row;

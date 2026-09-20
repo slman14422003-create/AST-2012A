@@ -2,6 +2,8 @@ package com.ast2012a.clinicalmaster;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.View;
@@ -43,6 +45,16 @@ public class MainActivity extends AppCompatActivity {
     private String lastAiAnswer = "";
     private boolean showingFavorites = false;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
+
+    // ملحوظة إصلاح "لاج" مربع البحث الرئيسي: doSearch() كانت تُستدعى مع كل
+    // حرف يكتبه المستخدم، وهي تعمل على UI thread (تحميل الحالات + محرك
+    // بحث فيه Levenshtein). مع الكتابة السريعة كانت تتراكم وتتزاحم مع رسم
+    // لوحة المفاتيح فيظهر تقطّع واضح. الحل: تأخير بسيط (بنفس أسلوب شريط
+    // بحث Claude) بحيث لا يُنفَّذ البحث الفعلي إلا بعد توقف الكتابة، مع
+    // تنفيذ البحث نفسه على خيط خلفية بدل UI thread.
+    private static final long SEARCH_DEBOUNCE_MS = 200;
+    private final Handler searchHandler = new Handler(Looper.getMainLooper());
+    private Runnable pendingSearch;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -153,7 +165,10 @@ public class MainActivity extends AppCompatActivity {
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
             @Override public void afterTextChanged(Editable s) {
                 showingFavorites = false;
-                doSearch(s.toString());
+                final String query = s.toString();
+                if (pendingSearch != null) searchHandler.removeCallbacks(pendingSearch);
+                pendingSearch = () -> doSearch(query);
+                searchHandler.postDelayed(pendingSearch, SEARCH_DEBOUNCE_MS);
             }
         });
 
@@ -179,6 +194,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         executor.shutdownNow();
+        if (pendingSearch != null) searchHandler.removeCallbacks(pendingSearch);
     }
 
     private void navigateTo(Class<?> activityClass) {
@@ -247,9 +263,20 @@ public class MainActivity extends AppCompatActivity {
         emptyHintContainer.setVisibility(View.GONE);
         resultsContainer.setVisibility(View.VISIBLE);
 
-        List<CaseItem> allCases = DataManager.allCases(this);
-        DataManager.SearchResult result = DataManager.search(query, allCases, FavoritesManager.getFavoriteTitles(this));
+        // البحث نفسه (تحميل الحالات + محرك البحث بما فيه مطابقة Levenshtein
+        // للاقتراحات) ينتقل لخيط خلفية بدل UI thread، حتى لا يتجمّد الرسم
+        // أثناء الكتابة السريعة. النتيجة تُطبَّق على الواجهة بعدها فقط.
+        executor.execute(() -> {
+            List<CaseItem> allCases = DataManager.allCases(this);
+            DataManager.SearchResult result = DataManager.search(query, allCases, FavoritesManager.getFavoriteTitles(this));
+            runOnUiThread(() -> {
+                if (!query.equals(lastQuery)) return; // كتب المستخدم شيئًا آخر أثناء البحث
+                applySearchResult(query, result);
+            });
+        });
+    }
 
+    private void applySearchResult(String query, DataManager.SearchResult result) {
         if (result.items.isEmpty()) {
             showNote(R.drawable.ic_alert, R.color.accent_red,
                     "لم يتم العثور على نتيجة مطابقة. جرّب صياغة أخرى.");

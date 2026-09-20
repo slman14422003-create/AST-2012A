@@ -41,6 +41,12 @@ public class PatientDetailActivity extends AppCompatActivity {
     private LinearLayout paymentsContainer;
 
     @Override
+    public void finish() {
+        super.finish();
+        overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right);
+    }
+
+    @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_patient_detail);
@@ -82,11 +88,13 @@ public class PatientDetailActivity extends AppCompatActivity {
             Intent i = new Intent(this, AddEditPatientActivity.class);
             i.putExtra("edit_patient_id", patientId);
             startActivity(i);
+            overridePendingTransition(R.anim.slide_up_in, R.anim.fade_out);
         });
         findViewById(R.id.btn_edit_patient).setOnClickListener(v -> {
             Intent i = new Intent(this, AddEditPatientActivity.class);
             i.putExtra("edit_patient_id", patientId);
             startActivity(i);
+            overridePendingTransition(R.anim.slide_up_in, R.anim.fade_out);
         });
         findViewById(R.id.btn_delete_patient).setOnClickListener(v -> confirmDeletePatient());
         findViewById(R.id.btn_more_sessions).setOnClickListener(v -> {
@@ -415,6 +423,7 @@ public class PatientDetailActivity extends AppCompatActivity {
                 Intent i = new Intent(this, TreatmentProgramDetailActivity.class);
                 i.putExtra("program_id", program.id);
                 startActivity(i);
+                overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
             });
             row.setOnLongClickListener(v -> {
                 confirmRemoveAssignment(a);
@@ -520,6 +529,7 @@ public class PatientDetailActivity extends AppCompatActivity {
         i.putExtra("case_title", c.title);
         i.putExtra("is_custom", c.custom);
         startActivity(i);
+        overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
     }
 
     // =====================================================================

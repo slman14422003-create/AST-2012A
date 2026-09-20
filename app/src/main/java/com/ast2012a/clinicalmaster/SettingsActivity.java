@@ -49,6 +49,10 @@ public class SettingsActivity extends AppCompatActivity {
     private TextView notifStatus;
     private TextView instructionsStatus;
     private MaterialSwitch notifSwitch;
+    private MaterialSwitch cloudAutoBackupSwitch;
+    private TextView cloudStatus;
+    private TextView cloudBackupSub;
+    private TextView cloudRestoreSub;
     private ActivityResultLauncher<String> permissionLauncher;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
@@ -96,14 +100,26 @@ public class SettingsActivity extends AppCompatActivity {
         findViewById(R.id.btn_export).setOnClickListener(v -> exportBackup());
         findViewById(R.id.btn_clear_all).setOnClickListener(v -> confirmClearAll());
 
+        // النسخ السحابي
+        cloudAutoBackupSwitch = findViewById(R.id.switch_cloud_auto_backup);
+        cloudStatus = findViewById(R.id.cloud_status);
+        cloudBackupSub = findViewById(R.id.cloud_backup_sub);
+        cloudRestoreSub = findViewById(R.id.cloud_restore_sub);
+        findViewById(R.id.btn_cloud_auto_backup).setOnClickListener(v -> toggleCloudAutoBackup());
+        findViewById(R.id.btn_cloud_backup_now).setOnClickListener(v -> backupNowClicked());
+        findViewById(R.id.btn_cloud_restore).setOnClickListener(v -> confirmRestoreFromCloud());
+
         // عن التطبيق
         findViewById(R.id.btn_about).setOnClickListener(v -> showAboutDialog());
-        findViewById(R.id.btn_privacy_policy).setOnClickListener(v ->
-                startActivity(new Intent(this, PrivacyPolicyActivity.class)));
+        findViewById(R.id.btn_privacy_policy).setOnClickListener(v -> {
+            startActivity(new Intent(this, PrivacyPolicyActivity.class));
+            overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
+        });
 
         refreshThemeRow();
         refreshNotifRow();
         refreshInstructionsRow();
+        refreshCloudRows();
     }
 
     // -----------------------------------------------------------------
@@ -334,6 +350,88 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     // -----------------------------------------------------------------
+    // النسخ الاحتياطي السحابي (Firebase Firestore)
+    // -----------------------------------------------------------------
+
+    private void refreshCloudRows() {
+        boolean enabled = FirebaseSyncManager.isAutoBackupEnabled(this);
+        cloudAutoBackupSwitch.setChecked(enabled);
+        cloudStatus.setText(enabled ? "مفعّل - يُرفع تلقائيًا بعد كل تعديل" : "غير مفعّل");
+
+        long lastBackup = FirebaseSyncManager.getLastBackupAt(this);
+        cloudBackupSub.setText(lastBackup > 0
+                ? "آخر رفع: " + Fmt.relative(lastBackup, System.currentTimeMillis())
+                : "لم يتم الرفع بعد");
+
+        long lastRestore = FirebaseSyncManager.getLastRestoreAt(this);
+        cloudRestoreSub.setText(lastRestore > 0
+                ? "آخر استعادة: " + Fmt.relative(lastRestore, System.currentTimeMillis())
+                : "لم تتم الاستعادة بعد");
+    }
+
+    private void toggleCloudAutoBackup() {
+        boolean newValue = !FirebaseSyncManager.isAutoBackupEnabled(this);
+        FirebaseSyncManager.setAutoBackupEnabled(this, newValue);
+        refreshCloudRows();
+        if (newValue) {
+            Toast.makeText(this, "سيُرفع نسخة تلقائية بعد كل تعديل في بيانات المرضى.", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void backupNowClicked() {
+        Toast.makeText(this, "جاري رفع نسخة احتياطية للمرضى...", Toast.LENGTH_SHORT).show();
+        FirebaseSyncManager.backupNow(this, new FirebaseSyncManager.Callback() {
+            @Override
+            public void onSuccess(String message) {
+                runOnUiThread(() -> {
+                    refreshCloudRows();
+                    Toast.makeText(SettingsActivity.this, message, Toast.LENGTH_LONG).show();
+                });
+            }
+
+            @Override
+            public void onError(String message) {
+                runOnUiThread(() -> new ClaudeDialog(SettingsActivity.this)
+                        .setTitle("تعذّر النسخ الاحتياطي")
+                        .setMessage(message)
+                        .setPositiveButton("تمام", null)
+                        .show());
+            }
+        });
+    }
+
+    private void confirmRestoreFromCloud() {
+        new ClaudeDialog(this)
+                .setTitle("استعادة من السحابة")
+                .setMessage("سيتم استبدال قائمة المرضى المحلية بالكامل بآخر نسخة محفوظة على السحابة. أي تعديلات محلية لم تُرفع بعد ستُفقد. متأكد؟")
+                .setPositiveButton("استعادة", (dialog, which) -> restoreFromCloud())
+                .setNegativeButton("إلغاء", null)
+                .show();
+    }
+
+    private void restoreFromCloud() {
+        Toast.makeText(this, "جاري الاستعادة من السحابة...", Toast.LENGTH_SHORT).show();
+        FirebaseSyncManager.restoreNow(this, new FirebaseSyncManager.Callback() {
+            @Override
+            public void onSuccess(String message) {
+                runOnUiThread(() -> {
+                    refreshCloudRows();
+                    Toast.makeText(SettingsActivity.this, message, Toast.LENGTH_LONG).show();
+                });
+            }
+
+            @Override
+            public void onError(String message) {
+                runOnUiThread(() -> new ClaudeDialog(SettingsActivity.this)
+                        .setTitle("تعذّرت الاستعادة")
+                        .setMessage(message)
+                        .setPositiveButton("تمام", null)
+                        .show());
+            }
+        });
+    }
+
+    // -----------------------------------------------------------------
     // عن التطبيق
     // -----------------------------------------------------------------
 
@@ -341,7 +439,7 @@ public class SettingsActivity extends AppCompatActivity {
         String message = "Phizyo Studio\nالإصدار " + getVersionLabel() + "\n\n" +
                 "تطبيق أندرويد أصلي مكتوب بالكامل بلغة Java - بدون WebView أو متصفح.\n" +
                 "130 حالة سريرية موثقة لجهاز AST-2012A + موسوعة أنماط الجهاز + مساعد ذكي (Phizyo AI).\n\n" +
-                "كل بياناتك (الحالات المخصصة، سجل المحادثة، الإعدادات) محفوظة محليًا على جهازك فقط، ولا تُرسل لأي سيرفر خاص بالتطبيق.\n\n" +
+                "كل بياناتك (الحالات المخصصة، سجل المحادثة، الإعدادات) محفوظة محليًا على جهازك أولًا. النسخ الاحتياطي السحابي لملفات المرضى اختياري بالكامل، ولا يُرفع شيء إلا إذا فعّلته بنفسك من الإعدادات.\n\n" +
                 "تطوير ومحتوى سريري: المعالج الفيزيائي سلمان";
         new ClaudeDialog(this)
                 .setTitle("عن التطبيق")

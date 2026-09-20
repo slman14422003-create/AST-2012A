@@ -45,6 +45,20 @@ public class PatientManager {
     }
 
     public static void savePatients(Context ctx, List<Patient> patients) {
+        writeToDisk(ctx, patients);
+        // كل حفظ محلي (إضافة/تعديل مريض، جلسة، دفعة، ربط برنامج...) يمر من
+        // هنا، فهي نقطة واحدة مناسبة لجدولة نسخة احتياطية سحابية مؤجَّلة لو
+        // كانت مفعّلة من الإعدادات. لا تفعل شيئًا لو غير مفعّلة.
+        FirebaseSyncManager.scheduleAutoBackup(ctx);
+    }
+
+    /** حفظ محلي بدون تشغيل النسخ الاحتياطي التلقائي - تستخدمه فقط عملية
+     *  "الاستعادة من السحابة" حتى لا يُعاد رفع نفس البيانات فورًا بعد نزولها. */
+    static void savePatientsSuppressingCloud(Context ctx, List<Patient> patients) {
+        writeToDisk(ctx, patients);
+    }
+
+    private static void writeToDisk(Context ctx, List<Patient> patients) {
         try {
             JSONArray arr = new JSONArray();
             for (Patient p : patients) arr.put(p.toJson());
