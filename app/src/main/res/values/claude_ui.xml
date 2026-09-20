@@ -180,4 +180,95 @@
         <item name="colorOnSurface">@color/text_primary</item>
         <item name="colorSurface">@color/glass_fill_strong</item>
     </style>
+
+    <!-- ======================= نماذج الإدخال (إضافة/تعديل) ======================= -->
+
+    <!-- عنوان صغير فوق بطاقة حقول (مثل عناوين مجموعات الإعدادات) -->
+    <style name="Phizyo.FormSection" parent="">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginStart">6dp</item>
+        <item name="android:layout_marginEnd">6dp</item>
+        <item name="android:layout_marginBottom">8dp</item>
+        <item name="android:textColor">@color/text_tertiary</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:textDirection">rtl</item>
+        <item name="android:textAlignment">viewStart</item>
+    </style>
+
+    <!-- اسم الحقل فوق الحقل نفسه -->
+    <style name="Phizyo.FormLabel" parent="">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">14dp</item>
+        <item name="android:layout_marginBottom">6dp</item>
+        <item name="android:textColor">@color/text_secondary</item>
+        <item name="android:textSize">13.5sp</item>
+        <item name="android:textDirection">rtl</item>
+        <item name="android:textAlignment">viewStart</item>
+    </style>
+
+    <!-- الحقل: مستطيل مدوّر بتعبئة هادئة (بدل الإطار البني القديم) -->
+    <style name="Phizyo.FormInput" parent="">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:background">@drawable/bg_input_field</item>
+        <item name="android:minHeight">52dp</item>
+        <item name="android:paddingStart">16dp</item>
+        <item name="android:paddingEnd">16dp</item>
+        <item name="android:paddingTop">13dp</item>
+        <item name="android:paddingBottom">13dp</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textColorHint">@color/text_tertiary</item>
+        <item name="android:textSize">15.5sp</item>
+        <item name="android:textAlignment">viewStart</item>
+        <item name="android:textDirection">rtl</item>
+    </style>
+
+    <!-- زر الحفظ (كبسولة معكوسة اللون) وزر الإلغاء (كبسولة بحدّ) -->
+    <style name="Phizyo.PillPrimary" parent="">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">54dp</item>
+        <item name="android:layout_marginTop">22dp</item>
+        <item name="android:background">@drawable/bg_pill_inverse</item>
+        <item name="android:clickable">true</item>
+        <item name="android:clipToOutline">true</item>
+        <item name="android:focusable">true</item>
+        <item name="android:foreground">?attr/selectableItemBackground</item>
+        <item name="android:gravity">center</item>
+        <item name="android:textColor">@color/bg_deep_1</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="Phizyo.PillSecondary" parent="">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">54dp</item>
+        <item name="android:layout_marginTop">10dp</item>
+        <item name="android:background">@drawable/bg_pill_outline</item>
+        <item name="android:clickable">true</item>
+        <item name="android:clipToOutline">true</item>
+        <item name="android:focusable">true</item>
+        <item name="android:foreground">?attr/selectableItemBackground</item>
+        <item name="android:gravity">center</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textSize">16sp</item>
+    </style>
+
+    <!-- شريحة يوم في جدول الجلسات (تتوزع بالتساوي على الصف) -->
+    <style name="Phizyo.DayChip" parent="">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">46dp</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:layout_marginStart">4dp</item>
+        <item name="android:layout_marginEnd">4dp</item>
+        <item name="android:background">@drawable/bg_glass_chip</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+        <item name="android:foreground">?attr/selectableItemBackground</item>
+        <item name="android:gravity">center</item>
+        <item name="android:textColor">@color/text_secondary</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textDirection">rtl</item>
+    </style>
 </resources>
