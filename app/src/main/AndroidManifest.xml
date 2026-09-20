@@ -39,6 +39,7 @@
         <activity android:name=".PatientDetailActivity" android:exported="false" />
         <activity android:name=".TreatmentProgramsActivity" android:exported="false" />
         <activity android:name=".AddEditTreatmentProgramActivity" android:exported="false" />
+        <activity android:name=".TreatmentProgramDetailActivity" android:exported="false" />
         <activity android:name=".SettingsActivity" android:exported="false" />
         <activity android:name=".PrivacyPolicyActivity" android:exported="false" />
         <activity android:name=".AiAssistantActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
