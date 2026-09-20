@@ -188,6 +188,8 @@ public class MainActivity extends AppCompatActivity {
         } else if (searchField.getText() != null) {
             doSearch(searchField.getText().toString());
         }
+        // فحص صامت للتحديثات (كل 6 ساعات) وعرض نافذة التحديث لو وُجد إصدار أحدث
+        UpdateManager.autoCheck(this);
     }
 
     @Override

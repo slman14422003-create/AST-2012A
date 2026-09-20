@@ -47,6 +47,7 @@ public class SettingsActivity extends AppCompatActivity {
 
     private TextView themeValue;
     private TextView notifStatus;
+    private TextView updateStatus;
     private TextView instructionsStatus;
     private MaterialSwitch notifSwitch;
     private MaterialSwitch cloudAutoBackupSwitch;
@@ -110,6 +111,10 @@ public class SettingsActivity extends AppCompatActivity {
         findViewById(R.id.btn_cloud_restore).setOnClickListener(v -> confirmRestoreFromCloud());
 
         // عن التطبيق
+        updateStatus = findViewById(R.id.update_status);
+        updateStatus.setText(UpdateManager.statusText(this));
+        findViewById(R.id.btn_check_update).setOnClickListener(v ->
+                UpdateManager.checkInteractive(this, text -> updateStatus.setText(text)));
         findViewById(R.id.btn_about).setOnClickListener(v -> showAboutDialog());
         findViewById(R.id.btn_privacy_policy).setOnClickListener(v -> {
             startActivity(new Intent(this, PrivacyPolicyActivity.class));
@@ -440,9 +445,8 @@ public class SettingsActivity extends AppCompatActivity {
 
     private void showAboutDialog() {
         String message = "Phizyo Studio\nالإصدار " + getVersionLabel() + "\n\n" +
-                "تطبيق أندرويد أصلي مكتوب بالكامل بلغة Java - بدون WebView أو متصفح.\n" +
-                "130 حالة سريرية موثقة لجهاز AST-2012A + موسوعة أنماط الجهاز + مساعد ذكي (Phizyo AI).\n\n" +
-                "كل بياناتك (الحالات المخصصة، سجل المحادثة، الإعدادات) محفوظة محليًا على جهازك أولًا. النسخ الاحتياطي السحابي لملفات المرضى اختياري بالكامل، ولا يُرفع شيء إلا إذا فعّلته بنفسك من الإعدادات.\n\n" +
+                "دليلك السريري لجهاز AST-2012A: 130 حالة موثّقة، وموسوعة أنماط الجهاز، ومساعد ذكي (Phizyo AI).\n\n" +
+                "بياناتك محفوظة على جهازك أولًا، والنسخ السحابي اختياري ولا يعمل إلا بتفعيلك.\n\n" +
                 "تطوير ومحتوى سريري: المعالج الفيزيائي سلمان";
         new ClaudeDialog(this)
                 .setTitle("عن التطبيق")
