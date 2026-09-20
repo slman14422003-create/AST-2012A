@@ -83,6 +83,12 @@
         </LinearLayout>
     </com.google.android.material.appbar.MaterialToolbar>
 
+    <!-- خط فاصل رفيع بين الرأس ومنطقة المحادثة -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/glass_border_soft" />
+
     <!-- ============== منطقة المحادثة ============== -->
     <FrameLayout
         android:layout_width="match_parent"
@@ -225,7 +231,13 @@
         </LinearLayout>
     </FrameLayout>
 
-    <!-- ============== قاعدة الإدخال: مسطّحة، بدون ظل ============== -->
+    <!-- خط فاصل رفيع بين منطقة المحادثة وقاعدة الإدخال -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/glass_border_soft" />
+
+    <!-- ============== قاعدة الإدخال: مسطّحة، بنفس لون خلفية التطبيق ============== -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
