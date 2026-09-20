@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- إجراءات أسفل تفاصيل الحالة -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="8dp"
+    android:orientation="vertical">
+
+    <TextView
+        android:id="@+id/btn_log_session"
+        style="@style/Phizyo.Button.Primary"
+        android:text="تسجيل جلسة لمريض" />
+
+    <TextView
+        android:id="@+id/btn_ask_ai"
+        style="@style/Phizyo.Button.Secondary"
+        android:layout_marginTop="10dp"
+        android:text="🤖 اسأل Phizyo AI عن هذه الحالة" />
+
+    <LinearLayout
+        android:id="@+id/sources_box"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <TextView
+            style="@style/Phizyo.Caption"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:layout_marginBottom="8dp"
+            android:text="للتوسع في القراءة" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/btn_physio"
+                style="@style/Phizyo.Button.Secondary"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_marginEnd="5dp"
+                android:text="Physiopedia"
+                android:textDirection="ltr" />
+
+            <TextView
+                android:id="@+id/btn_pubmed"
+                style="@style/Phizyo.Button.Secondary"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_marginStart="5dp"
+                android:text="PubMed"
+                android:textDirection="ltr" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/custom_row"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="18dp"
+        android:orientation="horizontal"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/btn_edit_case"
+            style="@style/Phizyo.Button.Secondary"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_marginEnd="5dp"
+            android:text="✏️ تعديل" />
+
+        <TextView
+            android:id="@+id/btn_delete_case"
+            style="@style/Phizyo.Button.Secondary"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_marginStart="5dp"
+            android:text="🗑️ حذف"
+            android:textColor="@color/accent_red" />
+    </LinearLayout>
+</LinearLayout>

@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- ملف المريض: بياناته + الموعد القادم + الجلسات وتطور الألم + التاريخ العلاجي + الحساب المالي -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
@@ -9,93 +10,585 @@
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
-        android:layout_height="68dp"
-        android:background="@drawable/bg_top_bar_modern"
-        android:title="ملف المريض"
-        android:titleTextColor="@color/text_primary"
-        app:contentInsetStart="18dp"
-        app:contentInsetEnd="14dp"
-        app:navigationIcon="@drawable/ic_close" />
+        android:layout_height="?attr/actionBarSize"
+        android:background="@drawable/bg_header_container"
+        app:contentInsetStart="20dp"
+        app:navigationIcon="@drawable/ic_close">
+
+        <TextView
+            style="@style/Phizyo.HeaderTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="ملف المريض" />
+    </com.google.android.material.appbar.MaterialToolbar>
 
     <ScrollView
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="match_parent"
+        android:scrollbars="none">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="16dp">
+            android:paddingStart="16dp"
+            android:paddingTop="16dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="40dp">
 
-            <!-- بطاقة رأس المريض -->
+            <!-- بطاقة الهوية -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="20dp"
                 android:background="@drawable/bg_glass_card"
-                android:gravity="center"
                 android:orientation="vertical"
-                android:padding="20dp">
+                android:padding="16dp">
 
-                <View
-                    android:layout_width="64dp"
-                    android:layout_height="64dp"
-                    android:layout_marginBottom="12dp"
-                    android:background="@drawable/bg_avatar_circle" />
-
-                <TextView
-                    android:id="@+id/detail_patient_name"
+                <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:gravity="center"
-                    android:textColor="@color/text_primary"
-                    android:textDirection="rtl"
-                    android:textSize="17sp"
-                    android:textStyle="bold" />
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
 
-                <TextView
-                    android:id="@+id/detail_patient_phone"
+                    <TextView
+                        android:id="@+id/detail_avatar"
+                        android:layout_width="62dp"
+                        android:layout_height="62dp"
+                        android:background="@drawable/bg_avatar_circle"
+                        android:fontFamily="serif"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:textColor="@color/primary_cyan_dark"
+                        android:textSize="26sp"
+                        android:textStyle="bold" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="14dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/detail_name"
+                            style="@style/Phizyo.HeroTitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:textSize="21sp" />
+
+                        <TextView
+                            android:id="@+id/detail_meta"
+                            style="@style/Phizyo.Body.Secondary"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:visibility="gone" />
+
+                        <TextView
+                            android:id="@+id/detail_phone"
+                            style="@style/Phizyo.Body.Secondary"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:textDirection="ltr"
+                            android:visibility="gone" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/detail_diagnosis_box"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:gravity="center"
-                    android:textColor="@color/text_tertiary"
-                    android:textDirection="ltr"
-                    android:textSize="12.5sp" />
+                    android:layout_marginTop="14dp"
+                    android:background="@drawable/bg_glass_card_soft"
+                    android:orientation="vertical"
+                    android:padding="12dp"
+                    android:visibility="gone">
 
-                <TextView
-                    android:id="@+id/detail_patient_notes"
+                    <TextView
+                        style="@style/Phizyo.Label"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="الشكوى / التشخيص" />
+
+                    <TextView
+                        android:id="@+id/detail_diagnosis"
+                        style="@style/Phizyo.Body"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/contact_row"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
-                    android:gravity="end"
-                    android:textColor="@color/text_secondary"
-                    android:textDirection="rtl"
-                    android:textSize="13sp"
-                    android:visibility="gone" />
+                    android:layout_marginTop="14dp"
+                    android:orientation="horizontal"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:id="@+id/btn_call"
+                        style="@style/Phizyo.Chip"
+                        android:layout_marginEnd="8dp"
+                        android:text="📞 اتصال" />
+
+                    <TextView
+                        android:id="@+id/btn_sms"
+                        style="@style/Phizyo.Chip"
+                        android:layout_marginEnd="8dp"
+                        android:text="💬 رسالة" />
+
+                    <TextView
+                        android:id="@+id/btn_whatsapp"
+                        style="@style/Phizyo.Chip"
+                        android:text="🟢 واتساب" />
+                </LinearLayout>
             </LinearLayout>
 
-            <!-- أقسام قريبًا -->
-            <include layout="@layout/item_coming_soon_section"
-                android:id="@+id/section_sessions" />
-            <include layout="@layout/item_coming_soon_section"
-                android:id="@+id/section_history" />
-            <include layout="@layout/item_coming_soon_section"
-                android:id="@+id/section_billing" />
-
-            <Button
-                android:id="@+id/btn_edit_patient"
-                style="@style/GlassButton"
-                android:layout_marginTop="8dp"
-                android:layout_marginBottom="10dp"
-                android:text="✏️ تعديل بيانات المريض" />
-
-            <Button
-                android:id="@+id/btn_delete_patient"
-                style="@style/Widget.Material3.Button.TextButton"
+            <!-- ملخص سريع -->
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="24dp"
+                android:layout_marginTop="12dp"
+                android:orientation="horizontal">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="4dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_glass_card"
+                    android:orientation="vertical"
+                    android:padding="12dp">
+
+                    <TextView
+                        android:id="@+id/detail_stat_sessions"
+                        style="@style/Phizyo.StatValue"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content" />
+
+                    <TextView
+                        style="@style/Phizyo.Caption"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="جلسة" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:layout_marginEnd="4dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_glass_card"
+                    android:orientation="vertical"
+                    android:padding="12dp">
+
+                    <TextView
+                        android:id="@+id/detail_stat_pain"
+                        style="@style/Phizyo.StatValue"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content" />
+
+                    <TextView
+                        style="@style/Phizyo.Caption"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="متوسط انخفاض الألم" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_glass_card"
+                    android:orientation="vertical"
+                    android:padding="12dp">
+
+                    <TextView
+                        android:id="@+id/detail_stat_last"
+                        style="@style/Phizyo.HeroTitle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:maxLines="1"
+                        android:ellipsize="end"
+                        android:textSize="16sp" />
+
+                    <TextView
+                        style="@style/Phizyo.Caption"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="آخر جلسة" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- الموعد القادم -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_glass_card"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    style="@style/Phizyo.Label"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="الموعد القادم" />
+
+                <TextView
+                    android:id="@+id/appointment_text"
+                    style="@style/Phizyo.Body"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/btn_set_appointment"
+                        style="@style/Phizyo.Chip"
+                        android:layout_marginEnd="8dp"
+                        android:text="📅 تحديد موعد" />
+
+                    <TextView
+                        android:id="@+id/btn_add_to_calendar"
+                        style="@style/Phizyo.Chip"
+                        android:layout_marginEnd="8dp"
+                        android:text="إضافة للتقويم"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/btn_clear_appointment"
+                        style="@style/Phizyo.Chip"
+                        android:text="مسح"
+                        android:textColor="@color/accent_red"
+                        android:visibility="gone" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- الجلسات -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="22dp"
+                android:layout_marginBottom="10dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/sessions_title"
+                    style="@style/Phizyo.SectionTitle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="الجلسات" />
+
+                <TextView
+                    android:id="@+id/btn_add_session"
+                    style="@style/Phizyo.Chip"
+                    android:background="@drawable/bg_glass_chip_selected"
+                    android:minHeight="38dp"
+                    android:text="＋ جلسة"
+                    android:textColor="@color/white"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/pain_card"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:background="@drawable/bg_glass_card"
+                android:orientation="vertical"
+                android:padding="16dp"
+                android:visibility="gone">
+
+                <TextView
+                    style="@style/Phizyo.Label"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="تطور الألم عبر الجلسات (0–10)" />
+
+                <com.ast2012a.clinicalmaster.PainTrendView
+                    android:id="@+id/pain_trend"
+                    android:layout_width="match_parent"
+                    android:layout_height="150dp"
+                    android:layout_marginTop="10dp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        style="@style/Phizyo.Caption"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="16dp"
+                        android:text="● قبل الجلسة"
+                        android:textColor="@color/accent_red" />
+
+                    <TextView
+                        style="@style/Phizyo.Caption"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="● بعد الجلسة"
+                        android:textColor="@color/accent_green" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/sessions_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+
+            <TextView
+                android:id="@+id/sessions_empty"
+                style="@style/Phizyo.Body.Secondary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_glass_card_soft"
+                android:padding="16dp"
+                android:text="لا توجد جلسات مسجلة بعد. اضغط «＋ جلسة» لتسجيل أول جلسة." />
+
+            <TextView
+                android:id="@+id/btn_more_sessions"
+                style="@style/Phizyo.Button.Secondary"
+                android:layout_marginTop="4dp"
+                android:visibility="gone" />
+
+            <!-- البروتوكولات والبرامج -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="22dp"
+                android:layout_marginBottom="10dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    style="@style/Phizyo.SectionTitle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="البروتوكولات والبرامج" />
+
+                <TextView
+                    android:id="@+id/btn_add_assignment"
+                    style="@style/Phizyo.Chip"
+                    android:minHeight="38dp"
+                    android:text="ربط برنامج" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/history_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+
+            <TextView
+                android:id="@+id/history_empty"
+                style="@style/Phizyo.Body.Secondary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_glass_card_soft"
+                android:padding="16dp"
+                android:text="تظهر هنا البروتوكولات المستخدمة في الجلسات والبرامج التي تربطها بالمريض." />
+
+            <!-- الحساب المالي -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="22dp"
+                android:background="@drawable/bg_glass_card"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        style="@style/Phizyo.SectionTitle"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="الحساب المالي" />
+
+                    <TextView
+                        android:id="@+id/btn_add_payment"
+                        style="@style/Phizyo.Chip"
+                        android:background="@drawable/bg_glass_chip_selected"
+                        android:minHeight="38dp"
+                        android:text="＋ دفعة"
+                        android:textColor="@color/white"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/Phizyo.Caption"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="إجمالي الجلسات" />
+
+                        <TextView
+                            android:id="@+id/finance_charged"
+                            style="@style/Phizyo.Body"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:textDirection="ltr"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/Phizyo.Caption"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="المدفوع" />
+
+                        <TextView
+                            android:id="@+id/finance_paid"
+                            style="@style/Phizyo.Body"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:textDirection="ltr"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/finance_balance_label"
+                            style="@style/Phizyo.Caption"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="المتبقي" />
+
+                        <TextView
+                            android:id="@+id/finance_balance"
+                            style="@style/Phizyo.Body"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:textDirection="ltr"
+                            android:textSize="17sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginTop="14dp"
+                    android:background="@color/glass_border_soft" />
+
+                <TextView
+                    style="@style/Phizyo.Label"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="سجل الدفعات" />
+
+                <LinearLayout
+                    android:id="@+id/payments_container"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="vertical" />
+
+                <TextView
+                    android:id="@+id/payments_empty"
+                    style="@style/Phizyo.Caption"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="لا توجد دفعات مسجلة." />
+            </LinearLayout>
+
+            <!-- ملاحظات -->
+            <LinearLayout
+                android:id="@+id/notes_card"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_glass_card"
+                android:orientation="vertical"
+                android:padding="16dp"
+                android:visibility="gone">
+
+                <TextView
+                    style="@style/Phizyo.Label"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="ملاحظات" />
+
+                <TextView
+                    android:id="@+id/detail_notes"
+                    style="@style/Phizyo.Body"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp" />
+            </LinearLayout>
+
+            <!-- إجراءات -->
+            <TextView
+                android:id="@+id/btn_share_summary"
+                style="@style/Phizyo.Button.Primary"
+                android:layout_marginTop="24dp"
+                android:text="📤 مشاركة ملخص المريض" />
+
+            <TextView
+                android:id="@+id/btn_edit_patient"
+                style="@style/Phizyo.Button.Secondary"
+                android:layout_marginTop="10dp"
+                android:text="✏️ تعديل بيانات المريض" />
+
+            <TextView
+                android:id="@+id/btn_delete_patient"
+                style="@style/Phizyo.Button.Secondary"
+                android:layout_marginTop="10dp"
                 android:text="🗑️ حذف المريض"
                 android:textColor="@color/accent_red" />
         </LinearLayout>

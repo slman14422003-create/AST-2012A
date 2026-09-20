@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="12dp"
+    android:orientation="horizontal">
+
+    <LinearLayout
+        android:id="@+id/terminal_badges"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:minWidth="30dp"
+        android:orientation="horizontal" />
+
+    <TextView
+        android:id="@+id/terminal_text"
+        style="@style/Phizyo.Body"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_weight="1"
+        android:minHeight="30dp"
+        android:gravity="center_vertical" />
+</LinearLayout>

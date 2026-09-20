@@ -1,56 +1,85 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- بطاقة برنامج علاج في القائمة (تفتح شاشة التفاصيل عند الضغط) -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/program_root"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginBottom="12dp"
-    android:background="@drawable/bg_glass_card"
+    android:layout_marginBottom="10dp"
+    android:background="@drawable/bg_glass_card_pressed"
+    android:clickable="true"
+    android:focusable="true"
     android:orientation="vertical"
-    android:padding="16dp">
+    android:paddingStart="16dp"
+    android:paddingTop="16dp"
+    android:paddingEnd="8dp"
+    android:paddingBottom="4dp">
 
     <TextView
         android:id="@+id/program_title"
+        style="@style/Phizyo.Body"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:gravity="end"
-        android:textColor="@color/text_primary"
-        android:textDirection="rtl"
-        android:textSize="15sp"
+        android:layout_marginEnd="8dp"
+        android:ellipsize="end"
+        android:maxLines="3"
+        android:textSize="16sp"
         android:textStyle="bold" />
 
     <TextView
         android:id="@+id/program_diagnosis"
+        style="@style/Phizyo.Badge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/bg_source_chip"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp"
+        android:textColor="@color/m3_on_primary_container"
+        android:textDirection="rtl"
+        android:textSize="12sp"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/program_goals"
+        style="@style/Phizyo.Body.Secondary"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:gravity="end"
-        android:textColor="@color/text_secondary"
-        android:textDirection="rtl"
-        android:textSize="12.5sp" />
+        android:layout_marginTop="10dp"
+        android:layout_marginEnd="8dp"
+        android:ellipsize="end"
+        android:maxLines="2"
+        android:visibility="gone" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="12dp"
+        android:background="@color/glass_border_soft" />
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
+        android:gravity="center_vertical"
         android:orientation="horizontal">
 
-        <Button
+        <TextView
             android:id="@+id/program_btn_edit"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="✏️ تعديل"
-            android:textColor="@color/primary_cyan_dark"
-            android:textSize="12sp" />
+            style="@style/Phizyo.Button.Text"
+            android:text="✏️ تعديل" />
 
-        <Button
+        <TextView
             android:id="@+id/program_btn_delete"
-            style="@style/Widget.Material3.Button.TextButton"
+            style="@style/Phizyo.Button.Text"
+            android:text="🗑️ حذف"
+            android:textColor="@color/accent_red" />
+
+        <TextView
+            android:id="@+id/program_date"
+            style="@style/Phizyo.Caption"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_marginEnd="8dp"
             android:layout_weight="1"
-            android:text="🗑️ حذف"
-            android:textColor="@color/accent_red"
-            android:textSize="12sp" />
+            android:textAlignment="viewEnd" />
     </LinearLayout>
 </LinearLayout>

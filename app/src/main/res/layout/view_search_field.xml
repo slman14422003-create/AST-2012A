@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- حقل بحث موحّد (نفس مظهر بحث الشاشة الرئيسية) للشاشات المعاد تصميمها -->
+<com.google.android.material.textfield.TextInputLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/search_layout"
+    style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    app:boxBackgroundColor="@color/glass_fill_soft"
+    app:boxCornerRadiusBottomEnd="22dp"
+    app:boxCornerRadiusBottomStart="22dp"
+    app:boxCornerRadiusTopEnd="22dp"
+    app:boxCornerRadiusTopStart="22dp"
+    app:boxStrokeColor="@color/primary_cyan"
+    app:boxStrokeWidth="1dp"
+    app:boxStrokeWidthFocused="1.6dp"
+    app:endIconMode="clear_text"
+    app:endIconTint="@color/text_tertiary"
+    app:hintTextColor="@color/text_tertiary"
+    app:startIconDrawable="@drawable/ic_search"
+    app:startIconTint="@color/text_tertiary">
+
+    <com.google.android.material.textfield.TextInputEditText
+        android:id="@+id/search_field"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:imeOptions="actionSearch"
+        android:inputType="text"
+        android:textAlignment="viewStart"
+        android:textColor="@color/text_primary"
+        android:textDirection="rtl"
+        android:textSize="14sp" />
+</com.google.android.material.textfield.TextInputLayout>
