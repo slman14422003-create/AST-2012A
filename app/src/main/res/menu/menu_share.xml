@@ -6,9 +6,4 @@
         android:icon="@drawable/ic_share"
         android:title="مشاركة"
         app:showAsAction="always" />
-    <item
-        android:id="@+id/action_favorite"
-        android:icon="@drawable/ic_star_outline"
-        android:title="إضافة للمفضلة"
-        app:showAsAction="always" />
 </menu>
