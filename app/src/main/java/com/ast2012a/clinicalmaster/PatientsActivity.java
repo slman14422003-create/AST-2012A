@@ -258,6 +258,7 @@ public class PatientsActivity extends AppCompatActivity {
         Patient.Session last = p.lastSession();
         if (last != null) meta.append(" · آخر جلسة ").append(Fmt.relative(last.date, now));
         if (p.nextAppointment > now) meta.append(" · الموعد ").append(Fmt.dayDate(p.nextAppointment));
+        if (p.hasSchedule()) meta.append(" · ").append(p.scheduleLabel());
         ((TextView) row.findViewById(R.id.patient_meta)).setText(BidiText.fix(meta.toString()));
 
         TextView due = row.findViewById(R.id.patient_due_badge);

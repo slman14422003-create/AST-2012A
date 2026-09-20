@@ -34,6 +34,11 @@ public class Patient {
     /** موعد الجلسة القادمة بالميلي ثانية (0 = غير محدد) */
     public long nextAppointment;
 
+    /** أيام الجلسات الأسبوعية: bit (Calendar.DAY_OF_WEEK - 1) لكل يوم (0 = غير محدد). */
+    public int sessionDaysMask;
+    /** وقت الجلسة المعتاد بالدقائق منذ منتصف الليل (-1 = غير محدد). */
+    public int sessionTimeMin = -1;
+
     public List<Session> sessions = new ArrayList<>();
     public List<Payment> payments = new ArrayList<>();
     public List<Assignment> assignments = new ArrayList<>();
@@ -192,6 +197,8 @@ public class Patient {
         p.diagnosis = o.optString("diagnosis", "");
         p.sessionFee = o.optDouble("sessionFee", 0);
         p.nextAppointment = o.optLong("nextAppointment", 0);
+        p.sessionDaysMask = o.optInt("sessionDays", 0);
+        p.sessionTimeMin = o.optInt("sessionTime", -1);
 
         JSONArray sa = o.optJSONArray("sessions");
         if (sa != null) {
@@ -229,6 +236,8 @@ public class Patient {
         o.put("diagnosis", diagnosis);
         o.put("sessionFee", finite(sessionFee));
         o.put("nextAppointment", nextAppointment);
+        o.put("sessionDays", sessionDaysMask);
+        o.put("sessionTime", sessionTimeMin);
 
         JSONArray sa = new JSONArray();
         for (Session s : sessions) sa.put(s.toJson());
@@ -247,6 +256,85 @@ public class Patient {
     // =====================================================================
     // حسابات مشتقة
     // =====================================================================
+
+    // =====================================================================
+    // جدول الجلسات الأسبوعي (أيام + وقت)
+    // =====================================================================
+
+    /** ترتيب عرض الأيام (الأسبوع العربي): السبت أولًا ثم الجمعة آخرًا. */
+    public static final int[] WEEK_ORDER = {
+            java.util.Calendar.SATURDAY, java.util.Calendar.SUNDAY, java.util.Calendar.MONDAY,
+            java.util.Calendar.TUESDAY, java.util.Calendar.WEDNESDAY, java.util.Calendar.THURSDAY,
+            java.util.Calendar.FRIDAY
+    };
+
+    public boolean hasSessionDay(int calendarDayOfWeek) {
+        return (sessionDaysMask & (1 << (calendarDayOfWeek - 1))) != 0;
+    }
+
+    public void setSessionDay(int calendarDayOfWeek, boolean on) {
+        int bit = 1 << (calendarDayOfWeek - 1);
+        if (on) sessionDaysMask |= bit;
+        else sessionDaysMask &= ~bit;
+    }
+
+    public boolean hasSchedule() {
+        return sessionDaysMask != 0;
+    }
+
+    /** مثال: "السبت · الثلاثاء · 5:00 م" أو "" لو لا يوجد جدول. */
+    public String scheduleLabel() {
+        if (!hasSchedule()) return "";
+        StringBuilder sb = new StringBuilder();
+        for (int dow : WEEK_ORDER) {
+            if (!hasSessionDay(dow)) continue;
+            if (sb.length() > 0) sb.append(" · ");
+            sb.append(Fmt.dayName(dow));
+        }
+        if (sessionTimeMin >= 0) sb.append(" · ").append(Fmt.minutesToTime(sessionTimeMin));
+        return sb.toString();
+    }
+
+    /**
+     * أقرب جلسة قادمة حسب الجدول الأسبوعي (بالميلي ثانية)، أو 0 لو لا يوجد جدول.
+     * لو لم يُحدَّد وقت نعتبر اليوم كله صالحًا (تُرجَع بداية اليوم).
+     */
+    public long nextScheduledSession(long now) {
+        if (!hasSchedule()) return 0;
+        for (int d = 0; d <= 7; d++) {
+            java.util.Calendar c = java.util.Calendar.getInstance();
+            c.setTimeInMillis(now);
+            c.add(java.util.Calendar.DAY_OF_YEAR, d);
+            if (!hasSessionDay(c.get(java.util.Calendar.DAY_OF_WEEK))) continue;
+            c.set(java.util.Calendar.SECOND, 0);
+            c.set(java.util.Calendar.MILLISECOND, 0);
+            if (sessionTimeMin >= 0) {
+                c.set(java.util.Calendar.HOUR_OF_DAY, sessionTimeMin / 60);
+                c.set(java.util.Calendar.MINUTE, sessionTimeMin % 60);
+                if (c.getTimeInMillis() > now) return c.getTimeInMillis();
+            } else {
+                c.set(java.util.Calendar.HOUR_OF_DAY, 0);
+                c.set(java.util.Calendar.MINUTE, 0);
+                // اليوم نفسه ما زال صالحًا (لا وقت محدد)، والأيام التالية بديهيًا صالحة
+                return c.getTimeInMillis();
+            }
+        }
+        return 0;
+    }
+
+    /** نص "الجلسة القادمة": اليوم / غدًا / اسم اليوم مع التاريخ، مع الوقت لو محدد. */
+    public String nextScheduledLabel(long now) {
+        long next = nextScheduledSession(now);
+        if (next <= 0) return "";
+        long today = Fmt.startOfDay(now);
+        long nextDay = Fmt.startOfDay(next);
+        long days = Math.round((nextDay - today) / 86400000.0);
+        String day;
+        if (days == 0) day = "اليوم";
+        else if (days == 1) day = "غدًا";
+        else day = Fmt.dayDate(next);
+        return sessionTimeMin >= 0 ? day + " · " + Fmt.minutesToTime(sessionTimeMin) : day;
+    }
 
     public String displayName() {
         return name == null || name.trim().isEmpty() ? "(بدون اسم)" : name.trim();

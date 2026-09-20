@@ -1,7 +1,7 @@
 package com.ast2012a.clinicalmaster;
 
 import android.os.Bundle;
-import android.widget.Button;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -32,8 +32,8 @@ public class AddEditTreatmentProgramActivity extends AppCompatActivity {
         fPrecautions = findViewById(R.id.tp_precautions);
         fNotes = findViewById(R.id.tp_notes);
 
-        Button submitBtn = findViewById(R.id.btn_submit_program);
-        Button cancelBtn = findViewById(R.id.btn_cancel_program);
+        TextView submitBtn = findViewById(R.id.btn_submit_program);
+        TextView cancelBtn = findViewById(R.id.btn_cancel_program);
         cancelBtn.setOnClickListener(v -> finish());
 
         editingId = getIntent().getStringExtra("edit_program_id");

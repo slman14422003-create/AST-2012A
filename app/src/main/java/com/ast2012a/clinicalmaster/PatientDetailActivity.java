@@ -78,6 +78,11 @@ public class PatientDetailActivity extends AppCompatActivity {
         findViewById(R.id.btn_sms).setOnClickListener(v -> openPhone("smsto:"));
         findViewById(R.id.btn_whatsapp).setOnClickListener(v -> openWhatsApp());
         findViewById(R.id.btn_share_summary).setOnClickListener(v -> shareSummary());
+        findViewById(R.id.btn_edit_schedule).setOnClickListener(v -> {
+            Intent i = new Intent(this, AddEditPatientActivity.class);
+            i.putExtra("edit_patient_id", patientId);
+            startActivity(i);
+        });
         findViewById(R.id.btn_edit_patient).setOnClickListener(v -> {
             Intent i = new Intent(this, AddEditPatientActivity.class);
             i.putExtra("edit_patient_id", patientId);
@@ -105,6 +110,7 @@ public class PatientDetailActivity extends AppCompatActivity {
         currency = PatientManager.getCurrency(this);
         bindHeader();
         bindStats();
+        bindSchedule();
         bindAppointment();
         bindSessions();
         bindHistory();
@@ -168,6 +174,32 @@ public class PatientDetailActivity extends AppCompatActivity {
     // =====================================================================
     // الموعد القادم
     // =====================================================================
+
+    // =====================================================================
+    // جدول الجلسات الأسبوعي
+    // =====================================================================
+
+    private void bindSchedule() {
+        TextView text = findViewById(R.id.schedule_text);
+        TextView next = findViewById(R.id.schedule_next);
+        TextView editBtn = findViewById(R.id.btn_edit_schedule);
+
+        if (patient.hasSchedule()) {
+            text.setText(BidiText.fix(patient.scheduleLabel()));
+            String nextLabel = patient.nextScheduledLabel(System.currentTimeMillis());
+            if (nextLabel.isEmpty()) {
+                next.setVisibility(View.GONE);
+            } else {
+                next.setText(BidiText.fix("الجلسة القادمة حسب الجدول: " + nextLabel));
+                next.setVisibility(View.VISIBLE);
+            }
+            editBtn.setText("تعديل الجدول");
+        } else {
+            text.setText("غير محدد");
+            next.setVisibility(View.GONE);
+            editBtn.setText("تحديد الجدول");
+        }
+    }
 
     private void bindAppointment() {
         TextView text = findViewById(R.id.appointment_text);
@@ -629,6 +661,9 @@ public class PatientDetailActivity extends AppCompatActivity {
             double balance = patient.balance();
             if (balance > 0.004) sb.append("• المتبقي: ").append(Fmt.money(balance, currency)).append('\n');
             else if (balance < -0.004) sb.append("• رصيد للمريض: ").append(Fmt.money(-balance, currency)).append('\n');
+        }
+        if (patient.hasSchedule()) {
+            sb.append("\nجدول الجلسات: ").append(patient.scheduleLabel()).append('\n');
         }
         if (patient.nextAppointment > System.currentTimeMillis()) {
             sb.append("\nالموعد القادم: ").append(Fmt.dateTime(patient.nextAppointment)).append('\n');

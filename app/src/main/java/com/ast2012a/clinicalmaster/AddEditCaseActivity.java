@@ -1,7 +1,7 @@
 package com.ast2012a.clinicalmaster;
 
 import android.os.Bundle;
-import android.widget.Button;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -18,7 +18,7 @@ public class AddEditCaseActivity extends AppCompatActivity {
     private TextInputEditText fKeywords, fTitle, fMode, fFreq, fChannel, fDuration,
             fPolePos, fPoleNeg, fExplanation, fSymptoms, fSessionsPlan, fTip;
     private MaterialToolbar toolbar;
-    private Button submitBtn;
+    private TextView submitBtn;
 
     private String editingCaseId = null;
 
@@ -44,7 +44,7 @@ public class AddEditCaseActivity extends AppCompatActivity {
         fTip = findViewById(R.id.f_tip);
 
         submitBtn = findViewById(R.id.btn_submit);
-        Button cancelBtn = findViewById(R.id.btn_cancel);
+        TextView cancelBtn = findViewById(R.id.btn_cancel);
 
         submitBtn.setOnClickListener(v -> submit());
         cancelBtn.setOnClickListener(v -> finish());

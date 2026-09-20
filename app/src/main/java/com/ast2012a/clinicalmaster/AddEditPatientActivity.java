@@ -9,11 +9,14 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.textfield.TextInputEditText;
+import com.google.android.material.timepicker.MaterialTimePicker;
+import com.google.android.material.timepicker.TimeFormat;
 
 /**
  * نموذج إضافة/تعديل بيانات المريض الأساسية: الاسم، الهاتف، العمر، الجنس،
- * الشكوى/التشخيص، سعر الجلسة الافتراضي، الملاحظات. عند التعديل نحدّث حقول
- * المريض الحالي فقط فتبقى جلساته ودفعاته كما هي.
+ * الشكوى/التشخيص، سعر الجلسة الافتراضي، الملاحظات، وجدول الجلسات الأسبوعي
+ * (أيام + وقت). عند التعديل نحدّث حقول المريض الحالي فقط فتبقى جلساته
+ * ودفعاته كما هي.
  */
 public class AddEditPatientActivity extends AppCompatActivity {
 
@@ -31,6 +34,14 @@ public class AddEditPatientActivity extends AppCompatActivity {
     private TextInputEditText fieldNotes;
     private TextView genderMale;
     private TextView genderFemale;
+
+    // جدول الجلسات الأسبوعي: ترتيب المعرّفات = Patient.WEEK_ORDER (السبت ... الجمعة)
+    private final int[] dayIds = {R.id.day_sat, R.id.day_sun, R.id.day_mon, R.id.day_tue,
+            R.id.day_wed, R.id.day_thu, R.id.day_fri};
+    private int sessionDaysMask;
+    private int sessionTimeMin = -1;
+    private TextView sessionTimeText;
+    private View sessionTimeClear;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -56,6 +67,21 @@ public class AddEditPatientActivity extends AppCompatActivity {
         genderMale.setOnClickListener(v -> setGender(MALE.equals(gender) ? "" : MALE));
         genderFemale.setOnClickListener(v -> setGender(FEMALE.equals(gender) ? "" : FEMALE));
 
+        sessionTimeText = findViewById(R.id.session_time_text);
+        sessionTimeClear = findViewById(R.id.session_time_clear);
+        for (int i = 0; i < dayIds.length; i++) {
+            final int dow = Patient.WEEK_ORDER[i];
+            findViewById(dayIds[i]).setOnClickListener(v -> {
+                sessionDaysMask ^= (1 << (dow - 1));
+                updateDayChips();
+            });
+        }
+        findViewById(R.id.session_time_row).setOnClickListener(v -> pickSessionTime());
+        sessionTimeClear.setOnClickListener(v -> {
+            sessionTimeMin = -1;
+            updateTimeRow();
+        });
+
         if (editingId != null) {
             Patient p = PatientManager.getPatient(this, editingId);
             if (p == null) {
@@ -69,8 +95,12 @@ public class AddEditPatientActivity extends AppCompatActivity {
             if (p.sessionFee > 0) fieldFee.setText(numText(p.sessionFee));
             fieldNotes.setText(p.notes);
             gender = p.gender;
+            sessionDaysMask = p.sessionDaysMask;
+            sessionTimeMin = p.sessionTimeMin;
         }
         updateGenderChips();
+        updateDayChips();
+        updateTimeRow();
 
         findViewById(R.id.btn_save).setOnClickListener(v -> save());
         findViewById(R.id.btn_cancel).setOnClickListener(v -> finish());
@@ -84,6 +114,40 @@ public class AddEditPatientActivity extends AppCompatActivity {
     private void updateGenderChips() {
         styleChip(genderMale, MALE.equals(gender));
         styleChip(genderFemale, FEMALE.equals(gender));
+    }
+
+    private void updateDayChips() {
+        for (int i = 0; i < dayIds.length; i++) {
+            int dow = Patient.WEEK_ORDER[i];
+            styleChip(findViewById(dayIds[i]), (sessionDaysMask & (1 << (dow - 1))) != 0);
+        }
+    }
+
+    private void updateTimeRow() {
+        if (sessionTimeMin >= 0) {
+            sessionTimeText.setText(Fmt.minutesToTime(sessionTimeMin));
+            sessionTimeText.setTextColor(getColor(R.color.text_primary));
+            sessionTimeClear.setVisibility(View.VISIBLE);
+        } else {
+            sessionTimeText.setText("اختر الوقت");
+            sessionTimeText.setTextColor(getColor(R.color.text_tertiary));
+            sessionTimeClear.setVisibility(View.GONE);
+        }
+    }
+
+    private void pickSessionTime() {
+        int initial = sessionTimeMin >= 0 ? sessionTimeMin : 17 * 60;
+        final MaterialTimePicker picker = new MaterialTimePicker.Builder()
+                .setTimeFormat(TimeFormat.CLOCK_12H)
+                .setHour(initial / 60)
+                .setMinute(initial % 60)
+                .setTitleText("وقت الجلسة")
+                .build();
+        picker.addOnPositiveButtonClickListener(v -> {
+            sessionTimeMin = picker.getHour() * 60 + picker.getMinute();
+            updateTimeRow();
+        });
+        picker.show(getSupportFragmentManager(), "session_time");
     }
 
     private void styleChip(TextView chip, boolean selected) {
@@ -149,6 +213,8 @@ public class AddEditPatientActivity extends AppCompatActivity {
         p.diagnosis = textOf(fieldDiagnosis);
         p.sessionFee = Math.max(0, numberOf(fieldFee));
         p.notes = textOf(fieldNotes);
+        p.sessionDaysMask = sessionDaysMask;
+        p.sessionTimeMin = sessionTimeMin;
 
         if (editingId != null) {
             PatientManager.updatePatient(this, p);

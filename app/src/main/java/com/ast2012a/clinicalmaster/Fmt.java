@@ -16,6 +16,20 @@ public final class Fmt {
             "الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"
     };
 
+    /** اسم اليوم من Calendar.DAY_OF_WEEK (1 = الأحد ... 7 = السبت). */
+    public static String dayName(int calendarDayOfWeek) {
+        return DAYS[calendarDayOfWeek - 1];
+    }
+
+    /** وقت اليوم من عدد الدقائق منذ منتصف الليل: 5:30 م */
+    public static String minutesToTime(int minutesOfDay) {
+        int h24 = (minutesOfDay / 60) % 24;
+        int m = minutesOfDay % 60;
+        int h = h24 % 12;
+        if (h == 0) h = 12;
+        return String.format(Locale.US, "%d:%02d", h, m) + " " + (h24 < 12 ? "ص" : "م");
+    }
+
     private static Calendar cal(long millis) {
         Calendar c = Calendar.getInstance();
         c.setTimeInMillis(millis);
