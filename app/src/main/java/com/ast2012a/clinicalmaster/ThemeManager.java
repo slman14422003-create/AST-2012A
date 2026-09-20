@@ -53,9 +53,9 @@ public class ThemeManager {
 
     public static String labelFor(String mode) {
         switch (mode) {
-            case MODE_LIGHT: return "☀️ الوضع النهاري";
-            case MODE_DARK: return "🌙 الوضع الليلي";
-            default: return "🌓 حسب إعداد الجهاز";
+            case MODE_LIGHT: return "نهاري";
+            case MODE_DARK: return "ليلي";
+            default: return "حسب الجهاز";
         }
     }
 

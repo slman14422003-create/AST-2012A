@@ -15,7 +15,6 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputEditText;
-import com.google.android.material.textfield.TextInputLayout;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -56,9 +55,9 @@ public class TreatmentProgramsActivity extends AppCompatActivity {
         headerSubtitle = findViewById(R.id.header_subtitle);
         searchField = findViewById(R.id.search_field);
 
-        ((TextInputLayout) findViewById(R.id.search_layout)).setHint("ابحث في برامج العلاج");
+        searchField.setHint("ابحث في برامج العلاج");
 
-        ((TextView) emptyBox.findViewById(R.id.empty_icon)).setText("📋");
+        ((android.widget.ImageView) emptyBox.findViewById(R.id.empty_icon)).setImageResource(R.drawable.ic_clipboard);
         ((TextView) emptyBox.findViewById(R.id.empty_title)).setText("لا توجد برامج علاج بعد");
         ((TextView) emptyBox.findViewById(R.id.empty_body)).setText(
                 "اكتب خطة علاج متكاملة: التشخيص والأهداف والمراحل والتمارين، ثم أسندها لأي مريض.");
@@ -140,7 +139,7 @@ public class TreatmentProgramsActivity extends AppCompatActivity {
         if (t.diagnosis.trim().isEmpty()) {
             diagnosis.setVisibility(View.GONE);
         } else {
-            diagnosis.setText(BidiText.fix("🩺 " + t.diagnosis.trim().replace('\n', ' ')));
+            diagnosis.setText(BidiText.fix("" + t.diagnosis.trim().replace('\n', ' ')));
             diagnosis.setVisibility(View.VISIBLE);
         }
 

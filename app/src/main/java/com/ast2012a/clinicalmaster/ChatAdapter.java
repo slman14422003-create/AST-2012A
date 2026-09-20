@@ -6,13 +6,9 @@ import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
-import android.text.format.DateFormat;
-import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
-import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -82,33 +78,23 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ViewHolder> {
         boolean isUser = m.role == ChatMessage.ROLE_USER;
         Context ctx = holder.itemView.getContext();
 
-        holder.role.setText(isUser ? "أنت" : ctx.getString(R.string.ai_assistant_name));
-        // المستخدم: إيموجي بسيط داخل دائرة عادية. المساعد الذكي: أيقونة
-        // الروبوت الجديدة (ic_ai_bot) بدل إيموجي 🤖 القديم، فوق دائرة
-        // بلون التمييز الرئيسي بدل الدائرة الفاتحة العادية.
-        holder.avatarFrame.setBackgroundResource(isUser ? R.drawable.bg_avatar_circle : R.drawable.bg_avatar_circle_ai);
-        if (isUser) {
-            holder.avatar.setText("🧑");
-            holder.avatar.setVisibility(View.VISIBLE);
-            holder.avatarIcon.setVisibility(View.GONE);
-        } else {
-            holder.avatar.setVisibility(View.GONE);
-            holder.avatarIcon.setVisibility(View.VISIBLE);
-        }
-        holder.time.setText(DateFormat.format("hh:mm a", m.timestamp));
-        holder.text.setText(m.text);
-        holder.text.setBackgroundResource(isUser ? R.drawable.bg_bubble_user : R.drawable.bg_bubble_ai);
-        holder.text.setTextColor(ctx.getColor(R.color.text_primary));
+        // أسلوب Claude: رسالة المستخدم في فقاعة بيج، ورد المساعد نص مباشر
+        // بدون فقاعة ولا اسم ولا صورة رمزية ولا وقت.
+        holder.userText.setVisibility(isUser ? View.VISIBLE : View.GONE);
+        holder.aiBlock.setVisibility(isUser ? View.GONE : View.VISIBLE);
 
-        setChildGravity(holder.header, isUser ? Gravity.START : Gravity.END);
-        setChildGravity(holder.text, isUser ? Gravity.START : Gravity.END);
-        setChildGravity(holder.source, isUser ? Gravity.START : Gravity.END);
+        if (isUser) {
+            holder.userText.setText(m.text);
+            return;
+        }
+
+        holder.aiText.setText(m.text);
 
         // شارة المصدر: تظهر تحت رد المساعد لو الإجابة استندت لمصدر موثّق
         // (قاعدة بيانات الجهاز و/أو ويكيبيديا) - شفافية كاملة لأصل المعلومة.
-        if (!isUser && m.sourceLabel != null && !m.sourceLabel.isEmpty()) {
+        if (m.sourceLabel != null && !m.sourceLabel.isEmpty()) {
             holder.source.setVisibility(View.VISIBLE);
-            holder.source.setText("📖 المصدر: " + m.sourceLabel + (m.sourceUrl != null ? "  ↗" : ""));
+            holder.source.setText(m.sourceLabel + (m.sourceUrl != null ? "  ↗" : ""));
             holder.source.setOnClickListener(v -> {
                 if (m.sourceUrl == null) return;
                 try {
@@ -121,41 +107,29 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ViewHolder> {
             holder.source.setVisibility(View.GONE);
         }
 
-        if (!isUser && saveListener != null) {
+        if (saveListener != null) {
             holder.saveBtn.setVisibility(View.VISIBLE);
             holder.saveBtn.setOnClickListener(v -> saveListener.onSaveAsCase(m.text));
         } else {
             holder.saveBtn.setVisibility(View.GONE);
         }
 
-        if (!isUser) {
-            holder.copyBtn.setVisibility(View.VISIBLE);
-            holder.copyBtn.setOnClickListener(v -> {
-                ClipboardManager clipboard = (ClipboardManager) ctx.getSystemService(Context.CLIPBOARD_SERVICE);
-                if (clipboard != null) {
-                    clipboard.setPrimaryClip(ClipData.newPlainText("ai_answer", m.text));
-                    Toast.makeText(ctx, "تم نسخ الرد.", Toast.LENGTH_SHORT).show();
-                }
-            });
-        } else {
-            holder.copyBtn.setVisibility(View.GONE);
-        }
+        holder.copyBtn.setVisibility(View.VISIBLE);
+        holder.copyBtn.setOnClickListener(v -> {
+            ClipboardManager clipboard = (ClipboardManager) ctx.getSystemService(Context.CLIPBOARD_SERVICE);
+            if (clipboard != null) {
+                clipboard.setPrimaryClip(ClipData.newPlainText("ai_answer", m.text));
+                Toast.makeText(ctx, "تم نسخ الرد.", Toast.LENGTH_SHORT).show();
+            }
+        });
 
         // إعادة المحاولة: تعيد إرسال نفس سؤال المستخدم الأصلي للحصول على رد
         // جديد، مفيدة لو الرد الحالي غير مقنع أو غير مكتمل.
-        if (!isUser && regenerateListener != null && m.relatedQuery != null) {
+        if (regenerateListener != null && m.relatedQuery != null) {
             holder.regenerateBtn.setVisibility(View.VISIBLE);
             holder.regenerateBtn.setOnClickListener(v -> regenerateListener.onRegenerate(m.relatedQuery));
         } else {
             holder.regenerateBtn.setVisibility(View.GONE);
-        }
-    }
-
-    private void setChildGravity(View view, int gravity) {
-        ViewGroup.LayoutParams params = view.getLayoutParams();
-        if (params instanceof LinearLayout.LayoutParams) {
-            ((LinearLayout.LayoutParams) params).gravity = gravity;
-            view.setLayoutParams(params);
         }
     }
 
@@ -165,20 +139,19 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ViewHolder> {
     }
 
     static class ViewHolder extends RecyclerView.ViewHolder {
-        View header;
-        View avatarFrame;
-        android.widget.ImageView avatarIcon;
-        TextView role, avatar, text, time, source;
-        Button saveBtn, copyBtn, regenerateBtn;
+        final TextView userText;
+        final View aiBlock;
+        final TextView aiText;
+        final TextView source;
+        final TextView saveBtn;
+        final View copyBtn;
+        final View regenerateBtn;
+
         ViewHolder(View itemView) {
             super(itemView);
-            header = itemView.findViewById(R.id.bubble_header);
-            role = itemView.findViewById(R.id.bubble_role);
-            avatarFrame = itemView.findViewById(R.id.bubble_avatar_frame);
-            avatar = itemView.findViewById(R.id.bubble_avatar);
-            avatarIcon = itemView.findViewById(R.id.bubble_avatar_icon);
-            text = itemView.findViewById(R.id.bubble_text);
-            time = itemView.findViewById(R.id.bubble_time);
+            userText = itemView.findViewById(R.id.bubble_user_text);
+            aiBlock = itemView.findViewById(R.id.bubble_ai_block);
+            aiText = itemView.findViewById(R.id.bubble_ai_text);
             source = itemView.findViewById(R.id.bubble_source);
             saveBtn = itemView.findViewById(R.id.bubble_save_case);
             copyBtn = itemView.findViewById(R.id.bubble_copy);

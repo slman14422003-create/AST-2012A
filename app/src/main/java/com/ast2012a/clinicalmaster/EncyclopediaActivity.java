@@ -47,14 +47,14 @@ public class EncyclopediaActivity extends AppCompatActivity {
             Set<Integer> modeNumbers = DataManager.parseModeNumbers(modeRange);
             int caseCount = DataManager.countCasesForModeNumbers(this, modeNumbers);
 
-            badgeView.setText("📊 " + caseCount + " حالة موثقة");
+            badgeView.setText(caseCount + " حالة موثقة");
             nameView.setText(name);
             rangeView.setText("النمط: " + modeRange);
             descView.setText(desc);
 
             List<String> safetyNotes = DataManager.getGeneralSafetyNote(name);
             if (!safetyNotes.isEmpty()) {
-                StringBuilder sb = new StringBuilder("⚠️ ");
+                StringBuilder sb = new StringBuilder("تنبيه: ");
                 for (String n : safetyNotes) sb.append(n).append(" ");
                 safetyView.setText(sb.toString().trim());
                 safetyView.setVisibility(View.VISIBLE);
@@ -75,7 +75,7 @@ public class EncyclopediaActivity extends AppCompatActivity {
         container.scheduleLayoutAnimation();
 
         TextView aiHint = new TextView(this);
-        aiHint.setText("💡 اضغط مطولًا على أي نمط لسؤال Phizyo AI عنه");
+        aiHint.setText("اضغط مطولًا على أي نمط لسؤال Phizyo AI عنه");
         aiHint.setTextColor(getColor(R.color.text_secondary));
         aiHint.setTextSize(11);
         aiHint.setGravity(android.view.Gravity.CENTER);

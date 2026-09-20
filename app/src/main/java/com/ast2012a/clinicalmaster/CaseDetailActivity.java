@@ -128,7 +128,7 @@ public class CaseDetailActivity extends AppCompatActivity {
         }
         addTextCard("الأعراض المرتبطة", currentCase.symptoms, false);
         addTextCard("خطة الجلسات", currentCase.sessionsPlan, false);
-        addTextCard("💡 نصيحة عملية", currentCase.tip, true);
+        addTextCard("نصيحة عملية", currentCase.tip, true);
 
         addSafety();
         addActions();
@@ -424,7 +424,7 @@ public class CaseDetailActivity extends AppCompatActivity {
         View card = inflater.inflate(R.layout.item_list_card, container, false);
         card.setBackgroundResource(R.drawable.bg_glass_card_warning);
         TextView title = card.findViewById(R.id.list_title);
-        title.setText("⚠️ ملاحظات السلامة");
+        title.setText("ملاحظات السلامة");
         title.setTextColor(getColor(R.color.accent_red));
         LinearLayout list = card.findViewById(R.id.list_container);
         for (String n : notes) addBullet(list, n);

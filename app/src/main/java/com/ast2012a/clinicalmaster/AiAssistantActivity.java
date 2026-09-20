@@ -43,9 +43,7 @@ public class AiAssistantActivity extends AppCompatActivity {
     private TextInputEditText input;
     private View typingIndicator;
     private TextView typingText;
-    private TextView modeHintText;
-    private View quickPromptsScroll;
-    private View quickPromptsTitle;
+    private View emptyState;
     private LinearLayout quickPromptsRow;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
@@ -70,15 +68,11 @@ public class AiAssistantActivity extends AppCompatActivity {
         input = findViewById(R.id.chat_input);
         typingIndicator = findViewById(R.id.typing_indicator);
         typingText = findViewById(R.id.typing_text);
-        modeHintText = findViewById(R.id.mode_hint_text);
-        quickPromptsScroll = findViewById(R.id.quick_prompts_scroll);
-        quickPromptsTitle = findViewById(R.id.quick_prompts_title);
+        emptyState = findViewById(R.id.empty_state);
         quickPromptsRow = findViewById(R.id.quick_prompts_row);
         FloatingActionButton sendBtn = findViewById(R.id.btn_send);
 
-        startDotPulse(findViewById(R.id.typing_dot_1), 0);
-        startDotPulse(findViewById(R.id.typing_dot_2), 150);
-        startDotPulse(findViewById(R.id.typing_dot_3), 300);
+        startSparkleSpin(findViewById(R.id.typing_sparkle));
 
         adapter = new ChatAdapter(this::openSaveAsCase);
         adapter.setOnRegenerateListener(this::regenerateAnswer);
@@ -106,50 +100,45 @@ public class AiAssistantActivity extends AppCompatActivity {
         }
     }
 
-    /** نبضة تلاشي متكررة لنقطة واحدة من مؤشر الكتابة، بتأخير بداية مختلف
-     *  لكل نقطة عشان تدي إحساس حركة متتابعة (زي مؤشرات الدردشة الحديثة). */
-    private void startDotPulse(View dot, long startDelay) {
-        if (dot == null) return;
-        ObjectAnimator anim = ObjectAnimator.ofFloat(dot, "alpha", 1f, 0.25f);
-        anim.setDuration(500);
-        anim.setStartDelay(startDelay);
-        anim.setRepeatMode(ObjectAnimator.REVERSE);
+    /** دوران مستمر بطيء لنجمة مؤشر التفكير (مثل نجمة Claude وهي تفكر). */
+    private void startSparkleSpin(View sparkle) {
+        if (sparkle == null) return;
+        ObjectAnimator anim = ObjectAnimator.ofFloat(sparkle, "rotation", 0f, 360f);
+        anim.setDuration(2400);
+        anim.setInterpolator(new android.view.animation.LinearInterpolator());
         anim.setRepeatCount(ObjectAnimator.INFINITE);
         anim.start();
     }
 
-    /** شرائح اقتراحات سريعة تظهر فقط لما المحادثة تكون فاضية، عشان توجّه
-     *  المستخدم لأنواع الأسئلة اللي المساعد الذكي يقدر يساعد فيها. */
+    /** صفوف اقتراحات سريعة (كبسولات بعرض كامل) تظهر فقط لما المحادثة تكون فاضية،
+     *  عشان توجّه المستخدم لأنواع الأسئلة اللي المساعد الذكي يقدر يساعد فيها. */
     private void setupQuickPrompts() {
         quickPromptsRow.removeAllViews();
         for (String prompt : QUICK_PROMPTS) {
-            TextView chip = new TextView(this);
-            chip.setText(prompt);
-            chip.setTextColor(getColor(R.color.primary_cyan));
-            chip.setTextSize(12);
-            chip.setBackgroundResource(R.drawable.bg_glass_chip);
-            chip.setPadding(34, 22, 34, 22);
+            TextView row = new TextView(this);
+            row.setText(prompt);
+            row.setTextColor(getColor(R.color.text_primary));
+            row.setTextSize(14.5f);
+            row.setTextDirection(View.TEXT_DIRECTION_RTL);
+            row.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+            row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            row.setBackgroundResource(R.drawable.bg_suggestion_row);
+            row.setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_sparkle, 0, 0, 0);
+            row.setCompoundDrawableTintList(android.content.res.ColorStateList.valueOf(getColor(R.color.claude_orange)));
+            row.setCompoundDrawablePadding(Ui.dp(this, 12));
+            row.setMinHeight(Ui.dp(this, 52));
+            row.setPadding(Ui.dp(this, 18), Ui.dp(this, 10), Ui.dp(this, 18), Ui.dp(this, 10));
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            lp.setMarginEnd(8);
-            chip.setLayoutParams(lp);
-            chip.setOnClickListener(v -> sendQuery(prompt, true));
-            quickPromptsRow.addView(chip);
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            lp.bottomMargin = Ui.dp(this, 10);
+            row.setLayoutParams(lp);
+            row.setOnClickListener(v -> sendQuery(prompt, true));
+            quickPromptsRow.addView(row);
         }
     }
 
     private void refreshQuickPromptsVisibility() {
-        int visibility = adapter.getItemCount() == 0 ? View.VISIBLE : View.GONE;
-        quickPromptsScroll.setVisibility(visibility);
-        quickPromptsTitle.setVisibility(visibility);
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        if (modeHintText != null) {
-            modeHintText.setText("Phizyo AI بيقرر بنفسه إمتى يحتاج يبحث في قاعدة بيانات الجهاز أو Physiopedia - وتقدر كمان تتكلم معاه عادي زي أي مساعد ذكي.");
-        }
+        emptyState.setVisibility(adapter.getItemCount() == 0 ? View.VISIBLE : View.GONE);
     }
 
     private boolean onMenuItemClick(MenuItem item) {
@@ -250,13 +239,13 @@ public class AiAssistantActivity extends AppCompatActivity {
         String label;
         switch (stage) {
             case 1:
-                label = "🔎 يبحث في Physiopedia وقاعدة بيانات الجهاز...";
+                label = "يبحث في Physiopedia وقاعدة بيانات الجهاز...";
                 break;
             case 2:
-                label = "✨ يكتب الرد...";
+                label = "يكتب الرد...";
                 break;
             default:
-                label = "🤔 بيفهم قصدك...";
+                label = "بيفهم قصدك...";
         }
         typingText.setText(label);
     }

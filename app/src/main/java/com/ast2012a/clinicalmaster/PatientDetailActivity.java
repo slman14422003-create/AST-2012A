@@ -180,12 +180,12 @@ public class PatientDetailActivity extends AppCompatActivity {
             String value = Fmt.dateTime(patient.nextAppointment);
             if (patient.nextAppointment < System.currentTimeMillis()) value += "  (انقضى)";
             text.setText(BidiText.fix(value));
-            setBtn.setText("📅 تغيير الموعد");
+            setBtn.setText("تغيير الموعد");
             calBtn.setVisibility(View.VISIBLE);
             clearBtn.setVisibility(View.VISIBLE);
         } else {
             text.setText("غير محدد");
-            setBtn.setText("📅 تحديد موعد");
+            setBtn.setText("تحديد موعد");
             calBtn.setVisibility(View.GONE);
             clearBtn.setVisibility(View.GONE);
         }
@@ -368,7 +368,7 @@ public class PatientDetailActivity extends AppCompatActivity {
         for (final Patient.Assignment a : patient.assignments) {
             final TreatmentProgram program = findProgram(a.refId);
             View row = inflater.inflate(R.layout.item_history_row, historyContainer, false);
-            ((TextView) row.findViewById(R.id.history_icon)).setText("📋");
+            ((android.widget.ImageView) row.findViewById(R.id.history_icon)).setImageResource(R.drawable.ic_clipboard);
             String title = program != null ? program.title : a.title;
             if (title.trim().isEmpty()) title = "(برنامج بدون عنوان)";
             ((TextView) row.findViewById(R.id.history_title)).setText(BidiText.fix(title));
@@ -410,7 +410,7 @@ public class PatientDetailActivity extends AppCompatActivity {
             final String protocolTitle = e.getKey();
             ProtocolUse u = e.getValue();
             View row = inflater.inflate(R.layout.item_history_row, historyContainer, false);
-            ((TextView) row.findViewById(R.id.history_icon)).setText("⚡");
+            ((android.widget.ImageView) row.findViewById(R.id.history_icon)).setImageResource(R.drawable.ic_zap);
             ((TextView) row.findViewById(R.id.history_title)).setText(BidiText.fix(protocolTitle));
             ((TextView) row.findViewById(R.id.history_sub)).setText(BidiText.fix(
                     Fmt.sessionsLabel(u.count) + " · آخر استخدام " + Fmt.relative(u.lastDate, now)));

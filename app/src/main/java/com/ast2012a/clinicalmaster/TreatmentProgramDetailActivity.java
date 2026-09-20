@@ -78,7 +78,7 @@ public class TreatmentProgramDetailActivity extends AppCompatActivity {
 
         if (notEmpty(program.diagnosis)) {
             TextView chip = (TextView) inflater.inflate(R.layout.item_badge, badges, false);
-            chip.setText(BidiText.fix("🩺 " + program.diagnosis.trim().replace('\n', ' ')));
+            chip.setText(BidiText.fix("" + program.diagnosis.trim().replace('\n', ' ')));
             chip.setTextDirection(View.TEXT_DIRECTION_RTL);
             chip.setTextSize(12.5f);
             chip.setBackgroundResource(R.drawable.bg_source_chip);
@@ -98,7 +98,7 @@ public class TreatmentProgramDetailActivity extends AppCompatActivity {
         addSection("مراحل العلاج", program.phases, false);
         addSection("التمارين", program.exercises, false);
         addSection("خطة الجلسات", program.sessionsPlan, false);
-        addSection("⚠️ الاحتياطات", program.precautions, true);
+        addSection("الاحتياطات", program.precautions, true);
         addSection("ملاحظات", program.notes, false);
 
         View actions = inflater.inflate(R.layout.item_program_actions, container, false);

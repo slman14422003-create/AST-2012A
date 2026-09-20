@@ -14,7 +14,6 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputEditText;
-import com.google.android.material.textfield.TextInputLayout;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -56,9 +55,9 @@ public class MyCasesActivity extends AppCompatActivity implements CaseRowAdapter
         headerSubtitle = findViewById(R.id.header_subtitle);
         searchField = findViewById(R.id.search_field);
 
-        ((TextInputLayout) findViewById(R.id.search_layout)).setHint("ابحث في حالاتك");
+        searchField.setHint("ابحث في حالاتك");
 
-        ((TextView) emptyBox.findViewById(R.id.empty_icon)).setText("🗂️");
+        ((android.widget.ImageView) emptyBox.findViewById(R.id.empty_icon)).setImageResource(R.drawable.ic_folder);
         ((TextView) emptyBox.findViewById(R.id.empty_title)).setText("لا توجد حالات مخصصة بعد");
         ((TextView) emptyBox.findViewById(R.id.empty_body)).setText(
                 "أضف بروتوكولك الخاص لأي حالة، وسيظهر هنا وفي نتائج البحث الرئيسية.");

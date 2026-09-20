@@ -38,8 +38,8 @@ public class AddEditTreatmentProgramActivity extends AppCompatActivity {
 
         editingId = getIntent().getStringExtra("edit_program_id");
         if (editingId != null) {
-            toolbar.setTitle("✏️ تعديل برنامج العلاج");
-            submitBtn.setText("💾 حفظ التعديلات");
+            toolbar.setTitle("تعديل برنامج العلاج");
+            submitBtn.setText("حفظ التعديلات");
             loadForEdit(editingId);
         }
 
@@ -83,10 +83,10 @@ public class AddEditTreatmentProgramActivity extends AppCompatActivity {
         if (editingId != null) {
             t.id = editingId;
             TreatmentProgramManager.updateProgram(this, t);
-            Toast.makeText(this, "✅ تم حفظ التعديلات.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "تم حفظ التعديلات.", Toast.LENGTH_SHORT).show();
         } else {
             TreatmentProgramManager.addProgram(this, t);
-            Toast.makeText(this, "✅ تم حفظ برنامج العلاج.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "تم حفظ برنامج العلاج.", Toast.LENGTH_SHORT).show();
         }
         finish();
     }

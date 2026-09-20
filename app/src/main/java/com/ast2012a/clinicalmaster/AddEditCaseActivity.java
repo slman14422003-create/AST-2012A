@@ -53,8 +53,8 @@ public class AddEditCaseActivity extends AppCompatActivity {
         if (editingCaseId != null) {
             loadForEdit(editingCaseId);
         } else {
-            toolbar.setTitle("➕ إضافة حالة جديدة");
-            submitBtn.setText("💾 حفظ الحالة");
+            toolbar.setTitle("إضافة حالة جديدة");
+            submitBtn.setText("حفظ الحالة");
             applyPrefillFromAi();
         }
     }
@@ -83,8 +83,8 @@ public class AddEditCaseActivity extends AppCompatActivity {
             return;
         }
 
-        toolbar.setTitle("✏️ تعديل الحالة");
-        submitBtn.setText("💾 حفظ التعديلات");
+        toolbar.setTitle("تعديل الحالة");
+        submitBtn.setText("حفظ التعديلات");
 
         fKeywords.setText(String.join(", ", item.keywords));
         fTitle.setText(item.title);
@@ -140,10 +140,10 @@ public class AddEditCaseActivity extends AppCompatActivity {
 
         if (editingCaseId != null) {
             DataManager.updateCustomCase(this, editingCaseId, fields);
-            Toast.makeText(this, "✅ تم حفظ التعديلات وتحديث محرك البحث فوراً.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "تم حفظ التعديلات وتحديث محرك البحث فوراً.", Toast.LENGTH_SHORT).show();
         } else {
             DataManager.addCustomCase(this, fields);
-            Toast.makeText(this, "✅ تم حفظ الحالة وربطها بمحرك البحث فوراً.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "تم حفظ الحالة وربطها بمحرك البحث فوراً.", Toast.LENGTH_SHORT).show();
         }
         finish();
     }

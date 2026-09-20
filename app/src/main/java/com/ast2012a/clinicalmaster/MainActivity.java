@@ -7,7 +7,6 @@ import android.text.TextWatcher;
 import android.view.View;
 import android.view.animation.AnimationUtils;
 import android.view.animation.LayoutAnimationController;
-import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -17,7 +16,6 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
 import com.google.android.material.textfield.TextInputEditText;
 
 import java.util.ArrayList;
@@ -58,10 +56,10 @@ public class MainActivity extends AppCompatActivity {
         ImageButton settingsBtn = findViewById(R.id.btn_settings);
         settingsBtn.setOnClickListener(v -> navigateTo(SettingsActivity.class));
 
-        // عبارة ترحيب متغيّرة (صباح الخير/مساء الخير...) بدل النص الثابت
-        // القديم اللي كان بيوحي بربط التطبيق بجهاز باسم تقني غير مفهوم.
-        TextView headerSubtitle = findViewById(R.id.header_subtitle);
-        if (headerSubtitle != null) headerSubtitle.setText(GreetingProvider.randomGreeting());
+        // عبارة ترحيب متغيّرة (صباح الخير/مساء الخير...) تظهر كعنوان الشاشة
+        // الترحيبية (بأسلوب Claude) بدل النص الثابت القديم.
+        TextView heroTitle = findViewById(R.id.empty_hint_title);
+        if (heroTitle != null) heroTitle.setText(GreetingProvider.randomGreeting());
 
         searchField = findViewById(R.id.search_field);
         emptyHintContainer = findViewById(R.id.empty_hint_container);
@@ -122,7 +120,7 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        Button saveCaseBtn = findViewById(R.id.ai_inline_save_case);
+        View saveCaseBtn = findViewById(R.id.ai_inline_save_case);
         saveCaseBtn.setOnClickListener(v -> {
             Intent i = new Intent(this, AddEditCaseActivity.class);
             i.putExtra("prefill_explanation", lastAiAnswer);
@@ -130,7 +128,7 @@ public class MainActivity extends AppCompatActivity {
             overridePendingTransition(R.anim.slide_up_in, R.anim.fade_out);
         });
 
-        Button openChatBtn = findViewById(R.id.ai_inline_open_chat);
+        View openChatBtn = findViewById(R.id.ai_inline_open_chat);
         openChatBtn.setOnClickListener(v -> {
             Intent i = new Intent(this, AiAssistantActivity.class);
             i.putExtra("prefill_query", lastQuery);
@@ -143,7 +141,7 @@ public class MainActivity extends AppCompatActivity {
         setupSuggestionChip(R.id.chip_suggestion_3);
         setupSuggestionChip(R.id.chip_suggestion_4);
 
-        ExtendedFloatingActionButton fab = findViewById(R.id.fab_add);
+        View fab = findViewById(R.id.fab_add);
         fab.setOnClickListener(v -> showAddChooser());
         fab.setScaleX(0f);
         fab.setScaleY(0f);
@@ -195,7 +193,7 @@ public class MainActivity extends AppCompatActivity {
      *    معيّن - تشخيص، أهداف، مراحل، تمارين، احتياطات).
      */
     private void showAddChooser() {
-        String[] options = {"🩺 حالة جديدة (بروتوكول جهاز)", "📋 برنامج علاج فيزيائي كامل"};
+        String[] options = {"حالة جديدة (بروتوكول جهاز)", "برنامج علاج فيزيائي كامل"};
         new com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
                 .setTitle("ماذا تريد أن تضيف؟")
                 .setItems(options, (dialog, which) -> {
@@ -221,13 +219,11 @@ public class MainActivity extends AppCompatActivity {
 
         List<CaseItem> favorites = FavoritesManager.getFavoriteCases(this);
         if (favorites.isEmpty()) {
-            resultNote.setVisibility(View.VISIBLE);
-            resultNote.setText("⭐ لا توجد حالات مفضّلة بعد. اضغط على النجمة بجانب أي حالة لإضافتها هنا.");
-            resultNote.setTextColor(getColor(R.color.accent_gold));
+            showNote(R.drawable.ic_star_stroke, R.color.accent_gold,
+                    "لا توجد حالات مفضّلة بعد. اضغط على النجمة بجانب أي حالة لإضافتها هنا.");
         } else {
-            resultNote.setVisibility(View.VISIBLE);
-            resultNote.setText("⭐ حالاتك المفضّلة (" + favorites.size() + ")");
-            resultNote.setTextColor(getColor(R.color.accent_gold));
+            showNote(R.drawable.ic_star_stroke, R.color.accent_gold,
+                    "حالاتك المفضّلة (" + favorites.size() + ")");
         }
         setResults(favorites);
     }
@@ -254,14 +250,13 @@ public class MainActivity extends AppCompatActivity {
         DataManager.SearchResult result = DataManager.search(query, allCases, FavoritesManager.getFavoriteTitles(this));
 
         if (result.items.isEmpty()) {
-            resultNote.setVisibility(View.VISIBLE);
-            resultNote.setText("لم يتم العثور على نتيجة مطابقة. جرّب صياغة أخرى.");
-            resultNote.setTextColor(getColor(R.color.accent_red));
+            showNote(R.drawable.ic_alert, R.color.accent_red,
+                    "لم يتم العثور على نتيجة مطابقة. جرّب صياغة أخرى.");
             askAiFallback.setVisibility(View.VISIBLE);
             resultsList.setVisibility(View.VISIBLE);
             if (result.closestTitleSuggestion != null) {
                 suggestionNote.setVisibility(View.VISIBLE);
-                suggestionNote.setText("💡 هل تقصد: " + result.closestTitleSuggestion + "؟");
+                suggestionNote.setText("هل تقصد: " + result.closestTitleSuggestion + "؟");
                 suggestionNote.setTag(result.closestTitleSuggestion);
             }
             setResults(new ArrayList<>());
@@ -270,15 +265,25 @@ public class MainActivity extends AppCompatActivity {
 
         RecentSearchManager.addQuery(this, query);
         askAiFallback.setVisibility(View.GONE);
-        resultNote.setVisibility(View.VISIBLE);
         resultsList.setVisibility(View.VISIBLE);
         if (result.items.size() == 1) {
-            resultNote.setText("✅ تم العثور على البروتوكول الصحيح المطابق لبحثك.");
+            showNote(R.drawable.ic_check, R.color.accent_green,
+                    "تم العثور على البروتوكول الصحيح المطابق لبحثك.");
         } else {
-            resultNote.setText("⚠️ يوجد أكثر من بروتوكول بنفس درجة التطابق، حدد الحالة بدقة أكبر.");
+            showNote(R.drawable.ic_alert, R.color.accent_green,
+                    "يوجد أكثر من بروتوكول بنفس درجة التطابق، حدد الحالة بدقة أكبر.");
         }
-        resultNote.setTextColor(getColor(R.color.accent_green));
         setResults(result.items);
+    }
+
+    /** سطر ملاحظة صغير أعلى النتائج: أيقونة + نص بلون واحد (بدل الإيموجي القديمة). */
+    private void showNote(int iconRes, int colorRes, String text) {
+        int color = getColor(colorRes);
+        resultNote.setVisibility(View.VISIBLE);
+        resultNote.setText(text);
+        resultNote.setTextColor(color);
+        resultNote.setCompoundDrawablesRelativeWithIntrinsicBounds(iconRes, 0, 0, 0);
+        resultNote.setCompoundDrawableTintList(android.content.res.ColorStateList.valueOf(color));
     }
 
     private void populateRecentSearches() {
@@ -293,12 +298,16 @@ public class MainActivity extends AppCompatActivity {
             TextView chip = new TextView(this);
             chip.setText(q);
             chip.setTextColor(getColor(R.color.text_secondary));
-            chip.setTextSize(12);
+            chip.setTextSize(13.5f);
+            chip.setGravity(android.view.Gravity.CENTER_VERTICAL);
             chip.setBackgroundResource(R.drawable.bg_glass_chip);
-            chip.setPadding(36, 22, 36, 22);
+            chip.setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_history, 0, 0, 0);
+            chip.setCompoundDrawableTintList(android.content.res.ColorStateList.valueOf(getColor(R.color.text_tertiary)));
+            chip.setCompoundDrawablePadding(Ui.dp(this, 8));
+            chip.setPadding(Ui.dp(this, 14), Ui.dp(this, 9), Ui.dp(this, 16), Ui.dp(this, 9));
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            lp.setMarginEnd(10);
+            lp.setMarginEnd(Ui.dp(this, 8));
             chip.setLayoutParams(lp);
             chip.setOnClickListener(v -> {
                 searchField.setText(q);
@@ -325,13 +334,13 @@ public class MainActivity extends AppCompatActivity {
         resultsList.setVisibility(View.GONE);
         aiInlineAnswerScroll.setVisibility(View.GONE);
         aiInlineLoading.setVisibility(View.VISIBLE);
-        setAiInlineLoadingText("🤔 بيفهم قصدك...");
+        setAiInlineLoadingText("بيفهم قصدك...");
 
         executor.execute(() -> AiOrchestrator.answer(this, query,
                 new AiOrchestrator.StageListener() {
-                    @Override public void onClassifying() { runOnUiThread(() -> setAiInlineLoadingText("🤔 بيفهم قصدك...")); }
-                    @Override public void onSearching() { runOnUiThread(() -> setAiInlineLoadingText("🔎 يبحث في Physiopedia وقاعدة بيانات الجهاز...")); }
-                    @Override public void onThinking() { runOnUiThread(() -> setAiInlineLoadingText("✨ يفكر في الإجابة...")); }
+                    @Override public void onClassifying() { runOnUiThread(() -> setAiInlineLoadingText("بيفهم قصدك...")); }
+                    @Override public void onSearching() { runOnUiThread(() -> setAiInlineLoadingText("يبحث في Physiopedia وقاعدة بيانات الجهاز...")); }
+                    @Override public void onThinking() { runOnUiThread(() -> setAiInlineLoadingText("يفكر في الإجابة...")); }
                 },
                 new AiOrchestrator.ResultCallback() {
                     @Override
@@ -349,7 +358,7 @@ public class MainActivity extends AppCompatActivity {
                         runOnUiThread(() -> {
                             aiInlineLoading.setVisibility(View.GONE);
                             lastAiAnswer = reply;
-                            String sourceNote = sourceLabel != null ? "📖 المصدر: " + sourceLabel : null;
+                            String sourceNote = sourceLabel != null ? "المصدر: " + sourceLabel : null;
                             aiInlineAnswerText.setText(sourceNote != null ? reply + "\n\n" + sourceNote : reply);
                             aiInlineAnswerScroll.setVisibility(View.VISIBLE);
                         });

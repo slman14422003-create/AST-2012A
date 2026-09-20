@@ -146,10 +146,10 @@ public final class PatientDialogs {
 
         final TextView dateView = view.findViewById(R.id.dlg_date);
         final long[] when = {session.date};
-        dateView.setText("📅 " + Fmt.dateTime(when[0]));
+        dateView.setText("" + Fmt.dateTime(when[0]));
         dateView.setOnClickListener(v -> pickDateTime(activity, when[0], millis -> {
             when[0] = millis;
-            dateView.setText("📅 " + Fmt.dateTime(millis));
+            dateView.setText("" + Fmt.dateTime(millis));
         }));
 
         final MaterialAutoCompleteTextView protocolField = view.findViewById(R.id.dlg_protocol);
@@ -227,10 +227,10 @@ public final class PatientDialogs {
 
         final TextView dateView = view.findViewById(R.id.dlg_date);
         final long[] when = {System.currentTimeMillis()};
-        dateView.setText("📅 " + Fmt.date(when[0]));
+        dateView.setText("" + Fmt.date(when[0]));
         dateView.setOnClickListener(v -> pickDate(activity, when[0], millis -> {
             when[0] = millis;
-            dateView.setText("📅 " + Fmt.date(millis));
+            dateView.setText("" + Fmt.date(millis));
         }));
 
         final TextInputEditText amountField = view.findViewById(R.id.dlg_amount);

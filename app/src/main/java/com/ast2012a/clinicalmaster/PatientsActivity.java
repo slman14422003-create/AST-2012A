@@ -80,7 +80,7 @@ public class PatientsActivity extends AppCompatActivity {
         sortDues = findViewById(R.id.sort_dues);
         searchField = findViewById(R.id.search_field);
 
-        ((TextView) emptyBox.findViewById(R.id.empty_icon)).setText("🧑‍⚕️");
+        ((android.widget.ImageView) emptyBox.findViewById(R.id.empty_icon)).setImageResource(R.drawable.ic_users);
         ((TextView) emptyBox.findViewById(R.id.empty_title)).setText("لا يوجد مرضى بعد");
         ((TextView) emptyBox.findViewById(R.id.empty_body)).setText(
                 "أنشئ ملفًا لكل مريض لتسجّل جلساته، وتتابع تحسن الألم، وتضبط حسابه المالي.");
@@ -89,8 +89,7 @@ public class PatientsActivity extends AppCompatActivity {
         emptyAction.setOnClickListener(v -> openAddPatient());
 
         fab.setOnClickListener(v -> openAddPatient());
-        ((com.google.android.material.textfield.TextInputLayout) findViewById(R.id.search_layout))
-                .setHint("ابحث بالاسم أو الهاتف أو التشخيص");
+        searchField.setHint("ابحث بالاسم أو الهاتف أو التشخيص");
         searchField.addTextChangedListener(new TextWatcher() {
             @Override
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {

@@ -154,7 +154,7 @@ public final class AiOrchestrator {
             CaseItem top = direct.items.get(0);
             String reply = DataManager.buildLocalAnswer(top);
             if (direct.items.size() > 1) {
-                reply += "\n\nℹ️ توجد " + (direct.items.size() - 1) + " حالة أخرى مطابقة أيضًا في القاعدة يمكن مراجعتها من شاشة البحث الرئيسية.";
+                reply += "\n\nتوجد " + (direct.items.size() - 1) + " حالة أخرى مطابقة أيضًا في القاعدة يمكن مراجعتها من شاشة البحث الرئيسية.";
             }
             callback.onGroundedReply(reply, "قاعدة بيانات الجهاز الموثقة (إجابة فورية بدون إنترنت)", null);
             return;
@@ -198,15 +198,15 @@ public final class AiOrchestrator {
                 String externalUrl = physio != null ? physio.sourceUrl : (wiki != null ? wiki.sourceUrl : null);
                 String externalName = physio != null ? "Physiopedia" : "ويكيبيديا";
                 if (groundedCount > 0 && externalTitle != null) {
-                    sourceLabel = "⚠️ إجابة تكميلية عامة (لا يوجد تطابق مباشر) - بروتوكولات قريبة (" + groundedCount + ") + " + externalName + ": " + externalTitle;
+                    sourceLabel = "إجابة تكميلية عامة (لا يوجد تطابق مباشر) - بروتوكولات قريبة (" + groundedCount + ") + " + externalName + ": " + externalTitle;
                     sourceUrl = externalUrl;
                 } else if (groundedCount > 0) {
-                    sourceLabel = "⚠️ إجابة تكميلية عامة - أقرب بروتوكولات في القاعدة (" + groundedCount + ")، بدون تطابق مباشر مؤكد";
+                    sourceLabel = "إجابة تكميلية عامة - أقرب بروتوكولات في القاعدة (" + groundedCount + ")، بدون تطابق مباشر مؤكد";
                 } else if (externalTitle != null) {
-                    sourceLabel = "⚠️ إجابة عامة من " + externalName + " (خارج قاعدة بيانات الجهاز): " + externalTitle;
+                    sourceLabel = "إجابة عامة من " + externalName + " (خارج قاعدة بيانات الجهاز): " + externalTitle;
                     sourceUrl = externalUrl;
                 } else {
-                    sourceLabel = "⚠️ إجابة عامة من معرفة النموذج (بدون مصدر موثّق من الجهاز أو المصادر الخارجية)";
+                    sourceLabel = "إجابة عامة من معرفة النموذج (بدون مصدر موثّق من الجهاز أو المصادر الخارجية)";
                 }
                 callback.onGroundedReply(reply, sourceLabel, sourceUrl);
             }

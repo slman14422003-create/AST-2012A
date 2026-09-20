@@ -1,27 +1,28 @@
 package com.ast2012a.clinicalmaster;
 
 import android.Manifest;
-import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
-import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.widget.Button;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.FrameLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
-import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 
 import com.google.android.material.appbar.MaterialToolbar;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.materialswitch.MaterialSwitch;
 import com.google.android.material.textfield.TextInputEditText;
 
 import java.io.FileOutputStream;
@@ -30,12 +31,15 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * شاشة الإعدادات: إشعارات حقيقية عبر NotificationManager (منسوبة للتطبيق
- * نفسه على أندرويد، وليست منسوبة لأي متصفح أو WebView - لأن هذا تطبيق
- * أندرويد أصلي بالكامل).
+ * شاشة الإعدادات (بأسلوب تطبيق Claude): مجموعات صفوف، كل صف أيقونة + عنوان +
+ * وصف اختياري. الإشعارات الحقيقية تعمل عبر NotificationManager (منسوبة للتطبيق
+ * نفسه على أندرويد، وليست منسوبة لأي متصفح أو WebView).
  *
  * Phizyo AI ليس له سوى مزوّد واحد ثابت (AiClient.FIXED_WORKER_URL) مبني
  * داخل التطبيق نفسه - لا يوجد مفتاح API ولا رابط قابل للتعديل من هنا.
+ *
+ * ملحوظة: حُذفت من هذه الشاشة أوامر "مشاركة التطبيق" و"تقييم التطبيق" و"تواصل
+ * معنا" لأنها غير ضرورية.
  */
 public class SettingsActivity extends AppCompatActivity {
 
@@ -43,11 +47,10 @@ public class SettingsActivity extends AppCompatActivity {
     private static final String PREFS = "settings_prefs";
     private static final String KEY_NOTIF_ENABLED = "notif_enabled";
 
-    // ⚠️ غيّر هذا لبريدك الفعلي قبل النشر - يُستخدم فقط لفتح تطبيق البريد
-    // بمستلم مبدئي، المستخدم يقدر يغيّره قبل الإرسال براحته.
-    private static final String SUPPORT_EMAIL = "support@phizyostudio.app";
-
-    private Button notifBtn;
+    private TextView themeValue;
+    private TextView notifStatus;
+    private TextView instructionsStatus;
+    private MaterialSwitch notifSwitch;
     private ActivityResultLauncher<String> permissionLauncher;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
@@ -59,51 +62,15 @@ public class SettingsActivity extends AppCompatActivity {
         MaterialToolbar toolbar = findViewById(R.id.toolbar);
         toolbar.setNavigationOnClickListener(v -> finish());
 
-        TextView versionLabel = findViewById(R.id.settings_version_label);
-        if (versionLabel != null) {
-            versionLabel.setText("الإصدار " + getVersionLabel());
-        }
-
         createNotificationChannel();
 
-        Button themeBtn = findViewById(R.id.btn_theme_mode);
-        refreshThemeLabel(themeBtn);
-        themeBtn.setOnClickListener(v -> {
-            String newMode = ThemeManager.cycleMode(this);
-            Toast.makeText(this, ThemeManager.labelFor(newMode) + " مفعّل", Toast.LENGTH_SHORT).show();
-            recreate();
-        });
+        themeValue = findViewById(R.id.theme_value);
+        notifStatus = findViewById(R.id.notif_status);
+        instructionsStatus = findViewById(R.id.ai_instructions_status);
+        notifSwitch = findViewById(R.id.switch_notif);
 
-        notifBtn = findViewById(R.id.btn_notif);
-        Button testWorkerBtn = findViewById(R.id.btn_test_worker);
-        Button clearChatHistoryBtn = findViewById(R.id.btn_clear_chat_history);
-        Button exportBtn = findViewById(R.id.btn_export);
-        Button clearBtn = findViewById(R.id.btn_clear_all);
-        Button aboutBtn = findViewById(R.id.btn_about);
-        Button privacyPolicyBtn = findViewById(R.id.btn_privacy_policy);
-        Button shareBtn = findViewById(R.id.btn_share_app);
-        Button rateBtn = findViewById(R.id.btn_rate_app);
-        Button feedbackBtn = findViewById(R.id.btn_feedback);
-
-        TextView workerUrlLabel = findViewById(R.id.worker_url_fixed_label);
-        workerUrlLabel.setText(AiClient.FIXED_WORKER_URL);
-
-        testWorkerBtn.setOnClickListener(v -> testWorkerConnection());
-        clearChatHistoryBtn.setOnClickListener(v -> confirmClearChatHistory());
-        aboutBtn.setOnClickListener(v -> showAboutDialog());
-        privacyPolicyBtn.setOnClickListener(v -> startActivity(new Intent(this, PrivacyPolicyActivity.class)));
-        shareBtn.setOnClickListener(v -> shareApp());
-        rateBtn.setOnClickListener(v -> rateApp());
-        feedbackBtn.setOnClickListener(v -> sendFeedback());
-
-        TextInputEditText instructionsField = findViewById(R.id.ai_custom_instructions_field);
-        instructionsField.setText(AiPrompts.getCustomInstructions(this));
-        Button saveInstructionsBtn = findViewById(R.id.btn_save_instructions);
-        saveInstructionsBtn.setOnClickListener(v -> {
-            String text = instructionsField.getText() == null ? "" : instructionsField.getText().toString();
-            AiPrompts.setCustomInstructions(this, text);
-            Toast.makeText(this, "✅ تم حفظ تعليمات Phizyo AI.", Toast.LENGTH_SHORT).show();
-        });
+        TextView versionLabel = findViewById(R.id.settings_version_label);
+        versionLabel.setText("الإصدار " + getVersionLabel());
 
         permissionLauncher = registerForActivityResult(
                 new ActivityResultContracts.RequestPermission(),
@@ -114,19 +81,121 @@ public class SettingsActivity extends AppCompatActivity {
                     } else {
                         Toast.makeText(this, "لم يتم منح إذن الإشعارات.", Toast.LENGTH_SHORT).show();
                     }
-                    refreshNotifLabel();
+                    refreshNotifRow();
                 });
 
-        notifBtn.setOnClickListener(v -> toggleNotifications());
-        exportBtn.setOnClickListener(v -> exportBackup());
-        clearBtn.setOnClickListener(v -> confirmClearAll());
+        // Phizyo AI
+        findViewById(R.id.btn_test_worker).setOnClickListener(v -> testWorkerConnection());
+        findViewById(R.id.btn_ai_instructions).setOnClickListener(v -> showInstructionsDialog());
+        findViewById(R.id.btn_ai_how).setOnClickListener(v -> showHowItWorksDialog());
+        findViewById(R.id.btn_clear_chat_history).setOnClickListener(v -> confirmClearChatHistory());
 
-        refreshNotifLabel();
+        // عام
+        findViewById(R.id.btn_theme_mode).setOnClickListener(v -> showThemeDialog());
+        findViewById(R.id.btn_notif).setOnClickListener(v -> toggleNotifications());
+
+        // البيانات
+        findViewById(R.id.btn_export).setOnClickListener(v -> exportBackup());
+        findViewById(R.id.btn_clear_all).setOnClickListener(v -> confirmClearAll());
+
+        // عن التطبيق
+        findViewById(R.id.btn_about).setOnClickListener(v -> showAboutDialog());
+        findViewById(R.id.btn_privacy_policy).setOnClickListener(v ->
+                startActivity(new Intent(this, PrivacyPolicyActivity.class)));
+
+        refreshThemeRow();
+        refreshNotifRow();
+        refreshInstructionsRow();
+    }
+
+    // -----------------------------------------------------------------
+    // المظهر
+    // -----------------------------------------------------------------
+
+    private void refreshThemeRow() {
+        themeValue.setText(ThemeManager.labelFor(ThemeManager.getCurrentMode(this)));
+    }
+
+    private void showThemeDialog() {
+        final String[] modes = {ThemeManager.MODE_SYSTEM, ThemeManager.MODE_LIGHT, ThemeManager.MODE_DARK};
+        String[] labels = new String[modes.length];
+        int checked = 0;
+        String current = ThemeManager.getCurrentMode(this);
+        for (int i = 0; i < modes.length; i++) {
+            labels[i] = ThemeManager.labelFor(modes[i]);
+            if (modes[i].equals(current)) checked = i;
+        }
+        new MaterialAlertDialogBuilder(this)
+                .setTitle("المظهر")
+                .setSingleChoiceItems(labels, checked, (dialog, which) -> {
+                    dialog.dismiss();
+                    if (!modes[which].equals(current)) {
+                        ThemeManager.setMode(this, modes[which]);
+                        recreate();
+                    }
+                })
+                .setNegativeButton("إلغاء", null)
+                .show();
+    }
+
+    // -----------------------------------------------------------------
+    // Phizyo AI
+    // -----------------------------------------------------------------
+
+    private void refreshInstructionsRow() {
+        String saved = AiPrompts.getCustomInstructions(this);
+        boolean has = saved != null && !saved.trim().isEmpty();
+        instructionsStatus.setText(has ? "مفعّلة" : "غير مضبوطة");
+    }
+
+    /** تعليمات مخصّصة لـ Phizyo AI: تُضاف تلقائيًا لتعليمات النظام في كل محادثة. */
+    private void showInstructionsDialog() {
+        TextInputEditText input = new TextInputEditText(this);
+        input.setMinLines(4);
+        input.setMaxLines(8);
+        input.setGravity(Gravity.TOP | Gravity.START);
+        input.setTextDirection(View.TEXT_DIRECTION_RTL);
+        input.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+        input.setHint("مثال: ركّز دايمًا على التمارين المنزلية، أو اجعل الإجابات مختصرة جدًا بنقاط.");
+        input.setText(AiPrompts.getCustomInstructions(this));
+
+        FrameLayout box = new FrameLayout(this);
+        int side = Ui.dp(this, 22);
+        box.setPadding(side, Ui.dp(this, 8), side, 0);
+        box.addView(input);
+
+        new MaterialAlertDialogBuilder(this)
+                .setTitle("تعليمات مخصّصة")
+                .setMessage("تُضاف هذه التعليمات تلقائيًا لكل محادثة مع Phizyo AI.")
+                .setView(box)
+                .setPositiveButton("حفظ", (dialog, which) -> {
+                    String text = input.getText() == null ? "" : input.getText().toString();
+                    AiPrompts.setCustomInstructions(this, text);
+                    refreshInstructionsRow();
+                    Toast.makeText(this, "تم حفظ التعليمات.", Toast.LENGTH_SHORT).show();
+                })
+                .setNeutralButton("مسح", (dialog, which) -> {
+                    AiPrompts.setCustomInstructions(this, "");
+                    refreshInstructionsRow();
+                })
+                .setNegativeButton("إلغاء", null)
+                .show();
+    }
+
+    private void showHowItWorksDialog() {
+        String message = "1) Phizyo AI نفسه يقرر لكل رسالة هل يحتاج للبحث أم لا. إذا كانت الرسالة دردشة عادية يرد عليك مباشرة بدون أي بحث.\n\n" +
+                "2) إذا كانت الرسالة سؤالًا إكلينيكيًا يتحقق أولًا من قاعدة بيانات الجهاز (130 حالة موثقة)، والتطابق المباشر يُجاب فورًا بدون إنترنت.\n\n" +
+                "3) غير ذلك يُستخدم بحث Physiopedia أولًا (مرجع متخصص في العلاج الطبيعي)، ثم ويكيبيديا كخلفية عامة تكميلية إذا لم توجد نتيجة. الصياغة النهائية دائمًا عبر Phizyo AI وتلتزم بأي تعليمات مخصّصة تضيفها.";
+        new MaterialAlertDialogBuilder(this)
+                .setTitle("كيف يعمل Phizyo AI؟")
+                .setMessage(message)
+                .setPositiveButton("حسنًا", null)
+                .show();
     }
 
     private void confirmClearChatHistory() {
         new MaterialAlertDialogBuilder(this)
-                .setTitle("تأكيد")
+                .setTitle("مسح سجل المحادثة")
                 .setMessage("سيتم حذف سجل محادثة Phizyo AI بالكامل. متأكد؟")
                 .setPositiveButton("مسح", (dialog, which) -> {
                     AiChatStore.clear(this);
@@ -136,39 +205,15 @@ public class SettingsActivity extends AppCompatActivity {
                 .show();
     }
 
-    private void showAboutDialog() {
-        String message = "Phizyo Studio\nالإصدار " + getVersionLabel() + "\n\n" +
-                "تطبيق أندرويد أصلي مكتوب بالكامل بلغة Java - بدون WebView أو متصفح.\n" +
-                "130 حالة سريرية موثقة لجهاز AST-2012A + موسوعة أنماط الجهاز + مساعد ذكي (Phizyo AI).\n\n" +
-                "كل بياناتك (الحالات المخصصة، سجل المحادثة، الإعدادات) محفوظة محليًا على جهازك فقط، ولا تُرسل لأي سيرفر خاص بالتطبيق.\n\n" +
-                "🩺 تطوير ومحتوى سريري: المعالج الفيزيائي سلمان";
-        new MaterialAlertDialogBuilder(this)
-                .setTitle("عن التطبيق")
-                .setMessage(message)
-                .setPositiveButton("حسنًا", null)
-                .show();
-    }
-
-    /** اسم الإصدار الفعلي من معلومات الحزمة بدل رقم ثابت مكتوب باليد، حتى
-     *  يفضل دقيقًا تلقائيًا مع كل رفعة جديدة بدون تعديل يدوي في الكود. */
-    private String getVersionLabel() {
-        try {
-            PackageInfo info = getPackageManager().getPackageInfo(getPackageName(), 0);
-            return info.versionName != null ? info.versionName : "1.0";
-        } catch (PackageManager.NameNotFoundException e) {
-            return "1.0";
-        }
-    }
-
     /** اختبار اتصال فوري بالووركر الثابت (AiClient.FIXED_WORKER_URL). */
     private void testWorkerConnection() {
-        Toast.makeText(this, "🧪 جاري اختبار الاتصال بـ Phizyo AI...", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "جاري اختبار الاتصال بـ Phizyo AI...", Toast.LENGTH_SHORT).show();
         executor.execute(() -> AiClient.testWorker(new AiClient.Callback() {
             @Override
             public void onSuccess(String reply) {
                 runOnUiThread(() -> new MaterialAlertDialogBuilder(SettingsActivity.this)
-                        .setTitle("✅ Phizyo AI شغال")
-                        .setMessage("رد الووركر:\n\n" + reply)
+                        .setTitle("Phizyo AI يعمل")
+                        .setMessage("رد الخادم:\n\n" + reply)
                         .setPositiveButton("تمام", null)
                         .show());
             }
@@ -176,7 +221,7 @@ public class SettingsActivity extends AppCompatActivity {
             @Override
             public void onError(String message) {
                 runOnUiThread(() -> new MaterialAlertDialogBuilder(SettingsActivity.this)
-                        .setTitle("❌ تعذر الاتصال بـ Phizyo AI")
+                        .setTitle("تعذر الاتصال بـ Phizyo AI")
                         .setMessage("تفاصيل الخطأ:\n" + message +
                                 "\n\nلو الرسالة بتقول \"model deprecated\" أو حاجة شبهها، يبقى Cloudflare قفلوا الموديل المستخدم وتحتاج تحدّث اسم الموديل في worker.js. غير كده تأكد إن الووركر منشور (Deployed) وفعّال، وإن جهازك متصل بالإنترنت.")
                         .setPositiveButton("تمام", null)
@@ -186,45 +231,8 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     // -----------------------------------------------------------------
-    // ميزات إضافية بأسلوب أي تطبيق تاني: مشاركة، تقييم، تواصل
+    // الإشعارات
     // -----------------------------------------------------------------
-
-    private void shareApp() {
-        Intent shareIntent = new Intent(Intent.ACTION_SEND);
-        shareIntent.setType("text/plain");
-        shareIntent.putExtra(Intent.EXTRA_TEXT,
-                "🩺 جرّب تطبيق Phizyo Studio - دليل استخدام جهاز AST-2012A ومساعد العلاج الطبيعي الذكي Phizyo AI!");
-        try {
-            startActivity(Intent.createChooser(shareIntent, "مشاركة التطبيق"));
-        } catch (ActivityNotFoundException e) {
-            Toast.makeText(this, "تعذر فتح قائمة المشاركة.", Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    private void rateApp() {
-        String pkg = getPackageName();
-        try {
-            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=" + pkg)));
-        } catch (ActivityNotFoundException e) {
-            try {
-                startActivity(new Intent(Intent.ACTION_VIEW,
-                        Uri.parse("https://play.google.com/store/apps/details?id=" + pkg)));
-            } catch (ActivityNotFoundException e2) {
-                Toast.makeText(this, "تعذر فتح متجر التطبيقات.", Toast.LENGTH_SHORT).show();
-            }
-        }
-    }
-
-    private void sendFeedback() {
-        Intent intent = new Intent(Intent.ACTION_SENDTO);
-        intent.setData(Uri.parse("mailto:" + SUPPORT_EMAIL));
-        intent.putExtra(Intent.EXTRA_SUBJECT, "ملاحظات حول تطبيق Phizyo Studio");
-        try {
-            startActivity(intent);
-        } catch (ActivityNotFoundException e) {
-            Toast.makeText(this, "لا يوجد تطبيق بريد مثبّت على جهازك.", Toast.LENGTH_SHORT).show();
-        }
-    }
 
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -241,53 +249,62 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     private boolean isNotifEnabled() {
-        return prefs().getBoolean(KEY_NOTIF_ENABLED, false);
+        return prefs().getBoolean(KEY_NOTIF_ENABLED, false) && hasNotificationPermission();
     }
 
     private void setNotifEnabled(boolean value) {
         prefs().edit().putBoolean(KEY_NOTIF_ENABLED, value).apply();
     }
 
-    private void refreshThemeLabel(Button themeBtn) {
-        themeBtn.setText("المظهر  ·  " + ThemeManager.labelFor(ThemeManager.getCurrentMode(this)));
-    }
-
-    private void refreshNotifLabel() {
-        if (isNotifEnabled()) {
-            notifBtn.setText("🔔 الإشعارات مُفعّلة - اضغط لإرسال إشعار تجريبي");
-        } else {
-            notifBtn.setText("🔕 الإشعارات غير مفعّلة - اضغط للتفعيل");
-        }
-    }
-
-    private void toggleNotifications() {
+    private boolean hasNotificationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
-                    != PackageManager.PERMISSION_GRANTED) {
-                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS);
-                return;
-            }
+            return ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                    == PackageManager.PERMISSION_GRANTED;
+        }
+        return true;
+    }
+
+    private void refreshNotifRow() {
+        boolean enabled = isNotifEnabled();
+        notifSwitch.setChecked(enabled);
+        notifStatus.setText(enabled ? "مفعّلة" : "غير مفعّلة");
+    }
+
+    /** الصف كله يعمل كمفتاح: تشغيل (مع طلب الإذن لو لزم) أو إيقاف. */
+    private void toggleNotifications() {
+        if (isNotifEnabled()) {
+            setNotifEnabled(false);
+            refreshNotifRow();
+            return;
+        }
+        if (!hasNotificationPermission()) {
+            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS);
+            return;
         }
         setNotifEnabled(true);
         sendTestNotification();
-        refreshNotifLabel();
+        refreshNotifRow();
     }
 
     private void sendTestNotification() {
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.ic_popup_reminder)
                 .setContentTitle("Phizyo Studio")
-                .setContentText("✅ الإشعارات تعمل بنجاح - هذا إشعار حقيقي من التطبيق نفسه.")
+                .setContentText("الإشعارات تعمل بنجاح - هذا إشعار حقيقي من التطبيق نفسه.")
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                 .setAutoCancel(true);
 
         try {
             NotificationManagerCompat.from(this).notify(1001, builder.build());
-            Toast.makeText(this, "🔔 تم إرسال إشعار تجريبي.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "تم إرسال إشعار تجريبي.", Toast.LENGTH_SHORT).show();
         } catch (SecurityException e) {
             Toast.makeText(this, "تعذر إرسال الإشعار - الإذن غير ممنوح.", Toast.LENGTH_SHORT).show();
         }
     }
+
+    // -----------------------------------------------------------------
+    // البيانات
+    // -----------------------------------------------------------------
 
     private void exportBackup() {
         try {
@@ -308,7 +325,7 @@ public class SettingsActivity extends AppCompatActivity {
 
     private void confirmClearAll() {
         new MaterialAlertDialogBuilder(this)
-                .setTitle("تأكيد")
+                .setTitle("مسح كل الحالات المخصصة")
                 .setMessage("سيتم حذف كل الحالات المخصصة نهائيًا. متأكد؟")
                 .setPositiveButton("مسح الكل", (dialog, which) -> {
                     DataManager.clearAllCustomCases(this);
@@ -316,6 +333,34 @@ public class SettingsActivity extends AppCompatActivity {
                 })
                 .setNegativeButton("إلغاء", null)
                 .show();
+    }
+
+    // -----------------------------------------------------------------
+    // عن التطبيق
+    // -----------------------------------------------------------------
+
+    private void showAboutDialog() {
+        String message = "Phizyo Studio\nالإصدار " + getVersionLabel() + "\n\n" +
+                "تطبيق أندرويد أصلي مكتوب بالكامل بلغة Java - بدون WebView أو متصفح.\n" +
+                "130 حالة سريرية موثقة لجهاز AST-2012A + موسوعة أنماط الجهاز + مساعد ذكي (Phizyo AI).\n\n" +
+                "كل بياناتك (الحالات المخصصة، سجل المحادثة، الإعدادات) محفوظة محليًا على جهازك فقط، ولا تُرسل لأي سيرفر خاص بالتطبيق.\n\n" +
+                "تطوير ومحتوى سريري: المعالج الفيزيائي سلمان";
+        new MaterialAlertDialogBuilder(this)
+                .setTitle("عن التطبيق")
+                .setMessage(message)
+                .setPositiveButton("حسنًا", null)
+                .show();
+    }
+
+    /** اسم الإصدار الفعلي من معلومات الحزمة بدل رقم ثابت مكتوب باليد، حتى
+     *  يفضل دقيقًا تلقائيًا مع كل رفعة جديدة بدون تعديل يدوي في الكود. */
+    private String getVersionLabel() {
+        try {
+            PackageInfo info = getPackageManager().getPackageInfo(getPackageName(), 0);
+            return info.versionName != null ? info.versionName : "1.0";
+        } catch (PackageManager.NameNotFoundException e) {
+            return "1.0";
+        }
     }
 
     @Override

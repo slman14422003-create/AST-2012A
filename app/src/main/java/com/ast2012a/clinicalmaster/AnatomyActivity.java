@@ -39,11 +39,11 @@ public class AnatomyActivity extends AppCompatActivity {
             TextView landmarksView = card.findViewById(R.id.anatomy_landmarks);
             TextView notesView = card.findViewById(R.id.anatomy_notes);
 
-            regionView.setText("📍 " + a.optString("region", ""));
+            regionView.setText(a.optString("region", ""));
             nameView.setText(a.optString("name", ""));
             String nerve = a.optString("nerve", "");
             if (!nerve.isEmpty()) {
-                nerveView.setText("🧠 " + nerve);
+                nerveView.setText("العصب: " + nerve);
                 nerveView.setVisibility(View.VISIBLE);
             } else {
                 nerveView.setVisibility(View.GONE);
@@ -52,7 +52,7 @@ public class AnatomyActivity extends AppCompatActivity {
 
             String notes = a.optString("notes", "");
             if (!notes.isEmpty()) {
-                notesView.setText("⚠️ " + notes);
+                notesView.setText("تنبيه: " + notes);
                 notesView.setVisibility(View.VISIBLE);
             } else {
                 notesView.setVisibility(View.GONE);
