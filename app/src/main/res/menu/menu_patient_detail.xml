@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- قائمة شاشة ملف المريض: "اسأل Phizyo AI عن هذا المريض" + مشاركة الملخص.
+     نسخة موسّعة من menu_share.xml (اللي فضل مستخدم في شاشات تانية زي ملف
+     برنامج العلاج) - اتعمل ملف منفصل عشان إضافة زر AI هنا متأثرش على أي
+     شاشة تانية بتستخدم menu_share. -->
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <item
+        android:id="@+id/action_ask_ai"
+        android:icon="@drawable/ic_sparkle"
+        android:title="اسأل Phizyo AI عن هذا المريض"
+        app:showAsAction="always" />
+    <item
+        android:id="@+id/action_share"
+        android:icon="@drawable/ic_share"
+        android:title="مشاركة"
+        app:showAsAction="always" />
+</menu>
