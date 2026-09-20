@@ -1,23 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- حقل بحث موحّد (نفس مظهر بحث الشاشة الرئيسية) للشاشات المعاد تصميمها -->
+<!-- حقل بحث موحّد بأسلوب Claude: كبسولة كبيرة بحدّ رفيع وأيقونة بحث.
+     التلميح (hint) يوضع على الحقل نفسه: من الـ Java استخدم searchField.setHint(...) -->
 <com.google.android.material.textfield.TextInputLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/search_layout"
-    style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    app:boxBackgroundColor="@color/glass_fill_soft"
-    app:boxCornerRadiusBottomEnd="22dp"
-    app:boxCornerRadiusBottomStart="22dp"
-    app:boxCornerRadiusTopEnd="22dp"
-    app:boxCornerRadiusTopStart="22dp"
-    app:boxStrokeColor="@color/primary_cyan"
-    app:boxStrokeWidth="1dp"
-    app:boxStrokeWidthFocused="1.6dp"
+    android:background="@drawable/bg_composer"
+    app:boxBackgroundMode="none"
     app:endIconMode="clear_text"
     app:endIconTint="@color/text_tertiary"
-    app:hintTextColor="@color/text_tertiary"
+    app:hintEnabled="false"
     app:startIconDrawable="@drawable/ic_search"
     app:startIconTint="@color/text_tertiary">
 
@@ -25,10 +19,16 @@
         android:id="@+id/search_field"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:background="@android:color/transparent"
+        android:hint="ابحث..."
         android:imeOptions="actionSearch"
         android:inputType="text"
+        android:minHeight="52dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="12dp"
         android:textAlignment="viewStart"
         android:textColor="@color/text_primary"
+        android:textColorHint="@color/text_tertiary"
         android:textDirection="rtl"
-        android:textSize="14sp" />
+        android:textSize="15.5sp" />
 </com.google.android.material.textfield.TextInputLayout>

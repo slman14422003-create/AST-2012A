@@ -8,12 +8,11 @@
 
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/toolbar"
+        style="@style/Phizyo.Toolbar"
         android:layout_width="match_parent"
-        android:layout_height="?attr/actionBarSize"
-        android:background="@drawable/bg_header_container"
-        app:title="➕ إضافة حالة جديدة"
-        app:titleTextColor="@color/text_primary"
-        app:navigationIcon="@drawable/ic_close" />
+        android:layout_height="60dp"
+        app:navigationIcon="@drawable/ic_close"
+        app:title="إضافة حالة جديدة" />
 
     <ScrollView
         android:layout_width="match_parent"
@@ -193,7 +192,7 @@
                 android:id="@+id/btn_submit"
                 style="@style/PrimaryButton"
                 android:layout_marginBottom="8dp"
-                android:text="💾 حفظ الحالة" />
+                android:text="حفظ الحالة" />
 
             <Button
                 android:id="@+id/btn_cancel"

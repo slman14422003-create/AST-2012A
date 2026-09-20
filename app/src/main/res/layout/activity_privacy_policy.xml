@@ -8,14 +8,11 @@
 
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/toolbar"
+        style="@style/Phizyo.Toolbar"
         android:layout_width="match_parent"
-        android:layout_height="64dp"
-        android:background="@drawable/bg_top_bar_modern"
-        android:title="🔒 سياسة الخصوصية"
-        android:titleTextColor="@color/text_primary"
-        app:contentInsetStart="18dp"
-        app:contentInsetEnd="14dp"
-        app:navigationIcon="@drawable/ic_close" />
+        android:layout_height="60dp"
+        app:navigationIcon="@drawable/ic_arrow_back"
+        app:title="سياسة الخصوصية" />
 
     <ScrollView
         android:layout_width="match_parent"
@@ -31,7 +28,7 @@
                 android:id="@+id/privacy_policy_text"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:gravity="end"
+                android:textAlignment="viewStart"
                 android:lineSpacingExtra="5dp"
                 android:textColor="@color/text_secondary"
                 android:textDirection="rtl"

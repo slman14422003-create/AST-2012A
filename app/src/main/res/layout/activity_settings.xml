@@ -1,13 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- ============================================================================
-     شاشة الإعدادات — إعادة تصميم v3: نفس منطق v2 (عنوان serif + بطاقة هوية
-     + مجموعات أقسام) لكن بترتيب منطقي أوضح: عام (المظهر + الإشعارات) أولًا،
-     ثم Phizyo AI كقسم واحد متكامل (شرح + حالة الاتصال + التعليمات
-     المخصّصة + مسح السجل مجمّعين تحت نفس العنوان بدل التفرّق)، ثم البيانات،
-     ثم الدعم، وأخيرًا "عن التطبيق" كصف واحد فقط بدل التكرار القديم (كان
-     فيه عنوان قسم "ℹ️ عن التطبيق" + زر "نبذة عن التطبيق والإصدار" بداخله -
-     نفس المعنى مرتين. الآن سياسة الخصوصية انضمت لنفس البطاقة تحت عنوان
-     القسم مباشرة، بدون عنصر وسيط مكرر).
+     شاشة الإعدادات — إعادة تصميم بأسلوب تطبيق Claude:
+     * شريط علوي بسيط (سهم رجوع + عنوان في المنتصف)
+     * بطاقة Phizyo AI في الأعلى (مثل بطاقة "Want more Claude?") فيها زر
+       اختبار الاتصال
+     * مجموعات صفوف مدوّرة، كل صف: أيقونة + عنوان + وصف اختياري + سهم/قيمة
+     * حُذفت العناصر غير الضرورية: مشاركة التطبيق، تقييم التطبيق، التواصل،
+       رابط الووركر، بطاقة الشرح الطويلة (صارت صفًا يفتح نافذة).
      ============================================================================ -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -18,23 +17,11 @@
 
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/toolbar"
+        style="@style/Phizyo.Toolbar"
         android:layout_width="match_parent"
-        android:layout_height="68dp"
-        android:background="@drawable/bg_top_bar_modern"
-        android:elevation="0dp"
-        app:contentInsetStart="20dp"
-        app:navigationIcon="@drawable/ic_close">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:fontFamily="serif"
-            android:text="الإعدادات"
-            android:textColor="@color/text_primary"
-            android:textDirection="rtl"
-            android:textSize="21sp"
-            android:textStyle="bold" />
-    </com.google.android.material.appbar.MaterialToolbar>
+        android:layout_height="60dp"
+        app:navigationIcon="@drawable/ic_arrow_back"
+        app:title="الإعدادات" />
 
     <ScrollView
         android:layout_width="match_parent"
@@ -46,363 +33,418 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="16dp">
+            android:paddingStart="16dp"
+            android:paddingTop="6dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="28dp">
 
-            <!-- ============== بطاقة الهوية العلوية ============== -->
+            <!-- ============== بطاقة Phizyo AI ============== -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="24dp"
-                android:background="@drawable/bg_glass_card"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:padding="16dp">
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:gravity="end"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:fontFamily="serif"
-                        android:gravity="end"
-                        android:text="Phizyo Studio"
-                        android:textColor="@color/text_primary"
-                        android:textDirection="rtl"
-                        android:textSize="17sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:id="@+id/settings_version_label"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="3dp"
-                        android:gravity="end"
-                        android:textColor="@color/text_tertiary"
-                        android:textDirection="rtl"
-                        android:textSize="11.5sp" />
-                </LinearLayout>
-
-                <FrameLayout
-                    android:layout_width="52dp"
-                    android:layout_height="52dp"
-                    android:layout_marginStart="14dp"
-                    android:background="@drawable/bg_avatar_gradient">
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:gravity="center"
-                        android:text="🩺"
-                        android:textSize="22sp" />
-                </FrameLayout>
-            </LinearLayout>
-
-            <!-- ============== قسم: عام (المظهر + الإشعارات) ============== -->
-            <TextView
-                style="@style/SectionHeader"
-                android:layout_marginTop="4dp"
-                android:text="⚙️ عام" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="24dp"
-                android:background="@drawable/bg_glass_card"
+                android:layout_marginBottom="14dp"
+                android:background="@drawable/bg_card_outline"
                 android:orientation="vertical"
-                android:padding="4dp">
+                android:padding="22dp">
 
-                <Button
-                    android:id="@+id/btn_theme_mode"
-                    style="@style/SettingsRow"
-                    android:text="🌓 حسب إعداد الجهاز" />
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:layout_marginHorizontal="10dp"
-                    android:background="@color/glass_border_soft" />
-
-                <Button
-                    android:id="@+id/btn_notif"
-                    style="@style/SettingsRow"
-                    android:text="🔕 الإشعارات غير مفعّلة - اضغط للتفعيل" />
-            </LinearLayout>
-
-            <!-- ============== قسم: Phizyo AI (مجمّع بالكامل) ============== -->
-            <TextView
-                style="@style/SectionHeader"
-                android:text="✨ Phizyo AI" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                android:background="@drawable/bg_glass_card_soft"
-                android:orientation="vertical"
-                android:padding="16dp">
-
-                <LinearLayout
+                <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
+                    android:fontFamily="serif"
+                    android:text="Phizyo AI"
+                    android:textAlignment="viewStart"
+                    android:textColor="@color/text_primary"
+                    android:textDirection="ltr"
+                    android:textSize="22sp"
+                    android:textStyle="bold" />
 
-                    <TextView
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:lineSpacingExtra="3dp"
+                    android:text="مساعدك الذكي للعلاج الطبيعي. تأكد أنه متصل ويعمل بشكل صحيح."
+                    android:textAlignment="viewStart"
+                    android:textColor="@color/text_secondary"
+                    android:textDirection="rtl"
+                    android:textSize="15sp" />
+
+                <TextView
+                    android:id="@+id/btn_test_worker"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="18dp"
+                    android:background="@drawable/bg_pill_inverse"
+                    android:clickable="true"
+                    android:clipToOutline="true"
+                    android:focusable="true"
+                    android:foreground="?attr/selectableItemBackground"
+                    android:gravity="center"
+                    android:minHeight="48dp"
+                    android:paddingStart="26dp"
+                    android:paddingEnd="26dp"
+                    android:text="اختبار الاتصال"
+                    android:textColor="@color/bg_deep_1"
+                    android:textDirection="rtl"
+                    android:textSize="16sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                style="@style/Settings.Group"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+
+                <LinearLayout
+                    android:id="@+id/btn_ai_instructions"
+                    style="@style/Settings.Row"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                    <ImageView
+                        style="@style/Settings.RowIcon"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_sparkle" />
+
+                    <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:gravity="end"
-                        android:text="كيف يعمل Phizyo AI؟"
-                        android:textColor="@color/text_primary"
-                        android:textDirection="rtl"
-                        android:textSize="13.5sp"
-                        android:textStyle="bold" />
-
-                    <FrameLayout
-                        android:layout_width="30dp"
-                        android:layout_height="30dp"
-                        android:layout_marginStart="10dp"
-                        android:background="@drawable/bg_avatar_circle_ai_gradient">
+                        android:orientation="vertical">
 
                         <TextView
+                            style="@style/Settings.RowTitle"
                             android:layout_width="match_parent"
-                            android:layout_height="match_parent"
-                            android:gravity="center"
-                            android:text="✨"
-                            android:textSize="13sp" />
-                    </FrameLayout>
+                            android:layout_height="wrap_content"
+                            android:text="تعليمات مخصّصة" />
+
+                        <TextView
+                            android:id="@+id/ai_instructions_status"
+                            style="@style/Settings.RowSubtitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="غير مضبوطة" />
+                    </LinearLayout>
+
+                    <ImageView
+                        style="@style/Settings.RowChevron"
+                        android:layout_width="20dp"
+                        android:layout_height="20dp" />
                 </LinearLayout>
 
-                <TextView
+                <View
+                    style="@style/Settings.Divider"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
-                    android:gravity="end"
-                    android:lineSpacingExtra="3dp"
-                    android:text="1️⃣ Phizyo AI نفسه هو اللي بيقرر - لكل رسالة على حدة - هل محتاج يبحث ولا لأ. لو الرسالة دردشة عادية بيرد عليك طبيعي على طول بدون أي بحث.&#10;&#10;2️⃣ لو الرسالة سؤال إكلينيكي فعلي، بيتحقق الأول من قاعدة بيانات الجهاز (130 حالة موثقة) - تطابق مباشر منها يُجاب فورًا وبدقة 100% بدون إنترنت.&#10;&#10;3️⃣ غير كده، يُستخدم بحث Physiopedia أولًا (مرجع متخصص في العلاج الطبيعي)، ثم ويكيبيديا كخلفية معرفية عامة تكميلية لو مفيش نتيجة - والصياغة النهائية دائمًا عبر Phizyo AI، وتلتزم بأي تعليمات مخصّصة تضيفها تحت."
-                    android:textColor="@color/text_secondary"
-                    android:textDirection="rtl"
-                    android:textSize="12sp" />
-            </LinearLayout>
+                    android:layout_height="1dp" />
 
-            <!-- رابط الووركر ثابت داخل التطبيق (AiClient.FIXED_WORKER_URL) وغير
-                 قابل للتعديل من هنا - معروض هنا للشفافية فقط، مع زر اختبار
-                 اتصال فوري بنفس البطاقة. -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                android:background="@drawable/bg_glass_card_soft"
-                android:orientation="vertical"
-                android:padding="14dp">
-
-                <TextView
+                <LinearLayout
+                    android:id="@+id/btn_ai_how"
+                    style="@style/Settings.Row"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="end"
-                    android:text="☁️ المزوّد الثابت (Cloudflare Worker)"
-                    android:textColor="@color/text_primary"
-                    android:textDirection="rtl"
-                    android:textSize="13sp"
-                    android:textStyle="bold" />
+                    android:layout_height="wrap_content">
 
-                <TextView
-                    android:id="@+id/worker_url_fixed_label"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:layout_marginBottom="12dp"
-                    android:gravity="end"
-                    android:textColor="@color/text_secondary"
-                    android:textDirection="ltr"
-                    android:textIsSelectable="true"
-                    android:textSize="12sp" />
+                    <ImageView
+                        style="@style/Settings.RowIcon"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_help" />
 
-                <Button
-                    android:id="@+id/btn_test_worker"
-                    style="@style/PrimaryButton"
-                    android:layout_height="48dp"
-                    android:text="🧪 اختبار الاتصال" />
-            </LinearLayout>
-
-            <!-- تعليمات مخصّصة لـ Phizyo AI: المستخدم يقدر "يدرّبه" حسب طلبه
-                 (أسلوب الإجابة، تركيز معيّن، تفضيلات...) وتُضاف تلقائيًا
-                 لتعليمات النظام في كل محادثة (المحادثة الكاملة والرد السريع). -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                android:background="@drawable/bg_glass_card_soft"
-                android:orientation="vertical"
-                android:padding="14dp">
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="end"
-                    android:text="🎓 تعليمات مخصّصة (اختياري)"
-                    android:textColor="@color/text_primary"
-                    android:textDirection="rtl"
-                    android:textSize="13sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:layout_marginBottom="10dp"
-                    android:gravity="end"
-                    android:text="مثال: ركّز دايمًا على التمارين المنزلية، أو اجعل الإجابات مختصرة جدًا بنقاط."
-                    android:textColor="@color/text_tertiary"
-                    android:textDirection="rtl"
-                    android:textSize="11sp" />
-
-                <com.google.android.material.textfield.TextInputLayout
-                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="10dp"
-                    android:hint="تعليماتك لـ Phizyo AI"
-                    app:boxBackgroundColor="@color/glass_fill">
-
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/ai_custom_instructions_field"
-                        android:layout_width="match_parent"
+                    <LinearLayout
+                        android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:gravity="top"
-                        android:minLines="3"
-                        android:textDirection="rtl" />
-                </com.google.android.material.textfield.TextInputLayout>
+                        android:layout_weight="1"
+                        android:orientation="vertical">
 
-                <Button
-                    android:id="@+id/btn_save_instructions"
-                    style="@style/GlassButton"
-                    android:text="✅ حفظ التعليمات" />
-            </LinearLayout>
+                        <TextView
+                            style="@style/Settings.RowTitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="كيف يعمل Phizyo AI؟" />
+                    </LinearLayout>
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="24dp"
-                android:background="@drawable/bg_glass_card"
-                android:orientation="vertical"
-                android:padding="4dp">
+                    <ImageView
+                        style="@style/Settings.RowChevron"
+                        android:layout_width="20dp"
+                        android:layout_height="20dp" />
+                </LinearLayout>
 
-                <Button
+                <View
+                    style="@style/Settings.Divider"
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp" />
+
+                <LinearLayout
                     android:id="@+id/btn_clear_chat_history"
-                    style="@style/SettingsRow"
-                    android:text="🗑️ مسح سجل محادثة Phizyo AI"
-                    android:textColor="@color/accent_red" />
+                    style="@style/Settings.Row"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                    <ImageView
+                        style="@style/Settings.RowIcon"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_trash" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/Settings.RowTitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="مسح سجل المحادثة" />
+                    </LinearLayout>
+                </LinearLayout>
             </LinearLayout>
 
-            <!-- ============== قسم: الحالات المخصصة ============== -->
-            <TextView
-                style="@style/SectionHeader"
-                android:text="🗂️ الحالات المخصصة" />
+            <LinearLayout
+                style="@style/Settings.Group"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+
+                <LinearLayout
+                    android:id="@+id/btn_theme_mode"
+                    style="@style/Settings.Row"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                    <ImageView
+                        style="@style/Settings.RowIcon"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_moon" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/Settings.RowTitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="المظهر" />
+
+                        <TextView
+                            android:id="@+id/theme_value"
+                            style="@style/Settings.RowSubtitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="حسب الجهاز" />
+                    </LinearLayout>
+
+                    <ImageView
+                        style="@style/Settings.RowChevron"
+                        android:layout_width="20dp"
+                        android:layout_height="20dp" />
+                </LinearLayout>
+
+                <View
+                    style="@style/Settings.Divider"
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp" />
+
+                <LinearLayout
+                    android:id="@+id/btn_notif"
+                    style="@style/Settings.Row"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                    <ImageView
+                        style="@style/Settings.RowIcon"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_bell" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/Settings.RowTitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="الإشعارات" />
+
+                        <TextView
+                            android:id="@+id/notif_status"
+                            style="@style/Settings.RowSubtitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="غير مفعّلة" />
+                    </LinearLayout>
+
+                    <com.google.android.material.materialswitch.MaterialSwitch
+                        android:id="@+id/switch_notif"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:clickable="false"
+                        android:focusable="false" />
+                </LinearLayout>
+            </LinearLayout>
 
             <LinearLayout
+                style="@style/Settings.Group"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="24dp"
-                android:background="@drawable/bg_glass_card"
-                android:orientation="vertical"
-                android:padding="4dp">
+                android:layout_height="wrap_content">
 
-                <Button
+                <LinearLayout
                     android:id="@+id/btn_export"
-                    style="@style/SettingsRow"
-                    android:text="⬇️ تصدير نسخة احتياطية من حالاتي" />
+                    style="@style/Settings.Row"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                    <ImageView
+                        style="@style/Settings.RowIcon"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_download" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/Settings.RowTitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="تصدير نسخة احتياطية" />
+
+                        <TextView
+                            android:id="@+id/export_sub"
+                            style="@style/Settings.RowSubtitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="من حالاتي المخصصة" />
+                    </LinearLayout>
+
+                    <ImageView
+                        style="@style/Settings.RowChevron"
+                        android:layout_width="20dp"
+                        android:layout_height="20dp" />
+                </LinearLayout>
 
                 <View
+                    style="@style/Settings.Divider"
                     android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:layout_marginHorizontal="10dp"
-                    android:background="@color/glass_border_soft" />
+                    android:layout_height="1dp" />
 
-                <Button
+                <LinearLayout
                     android:id="@+id/btn_clear_all"
-                    style="@style/SettingsRow"
-                    android:text="🗑️ مسح كل الحالات المخصصة"
-                    android:textColor="@color/accent_red" />
+                    style="@style/Settings.Row"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                    <ImageView
+                        style="@style/Settings.RowIcon"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_trash"
+                        android:tint="@color/accent_red" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/Settings.RowTitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="مسح كل الحالات المخصصة"
+                            android:textColor="@color/accent_red" />
+                    </LinearLayout>
+                </LinearLayout>
             </LinearLayout>
 
-            <!-- ============== قسم: الدعم والمشاركة ============== -->
-            <TextView
-                style="@style/SectionHeader"
-                android:text="⭐ الدعم والمشاركة" />
-
             <LinearLayout
+                style="@style/Settings.Group"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="24dp"
-                android:background="@drawable/bg_glass_card"
-                android:orientation="vertical"
-                android:padding="4dp">
+                android:layout_height="wrap_content">
 
-                <Button
-                    android:id="@+id/btn_share_app"
-                    style="@style/SettingsRow"
-                    android:text="📤 مشاركة التطبيق" />
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:layout_marginHorizontal="10dp"
-                    android:background="@color/glass_border_soft" />
-
-                <Button
-                    android:id="@+id/btn_rate_app"
-                    style="@style/SettingsRow"
-                    android:text="⭐ قيّم التطبيق" />
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:layout_marginHorizontal="10dp"
-                    android:background="@color/glass_border_soft" />
-
-                <Button
-                    android:id="@+id/btn_feedback"
-                    style="@style/SettingsRow"
-                    android:text="✉️ تواصل معنا / أرسل ملاحظات" />
-            </LinearLayout>
-
-            <!-- ============== قسم: عن التطبيق ==============
-                 دُمج التكرار القديم (عنوان قسم "ℹ️ عن التطبيق" + زر بنفس
-                 المعنى "نبذة عن التطبيق والإصدار" بداخله) بحيث تبقى بطاقة
-                 واحدة فقط تحت عنوان القسم، بدون عنصر وسيط مكرر. -->
-            <TextView
-                style="@style/SectionHeader"
-                android:text="ℹ️ عن التطبيق" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="8dp"
-                android:background="@drawable/bg_glass_card"
-                android:orientation="vertical"
-                android:padding="4dp">
-
-                <Button
+                <LinearLayout
                     android:id="@+id/btn_about"
-                    style="@style/SettingsRow"
-                    android:text="نبذة عن التطبيق والإصدار" />
+                    style="@style/Settings.Row"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                    <ImageView
+                        style="@style/Settings.RowIcon"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_info" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/Settings.RowTitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="عن التطبيق" />
+
+                        <TextView
+                            android:id="@+id/settings_version_label"
+                            style="@style/Settings.RowSubtitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="" />
+                    </LinearLayout>
+
+                    <ImageView
+                        style="@style/Settings.RowChevron"
+                        android:layout_width="20dp"
+                        android:layout_height="20dp" />
+                </LinearLayout>
 
                 <View
+                    style="@style/Settings.Divider"
                     android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:layout_marginHorizontal="10dp"
-                    android:background="@color/glass_border_soft" />
+                    android:layout_height="1dp" />
 
-                <Button
+                <LinearLayout
                     android:id="@+id/btn_privacy_policy"
-                    style="@style/SettingsRow"
-                    android:text="🔒 سياسة الخصوصية" />
+                    style="@style/Settings.Row"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                    <ImageView
+                        style="@style/Settings.RowIcon"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_lock" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/Settings.RowTitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="سياسة الخصوصية" />
+                    </LinearLayout>
+
+                    <ImageView
+                        style="@style/Settings.RowChevron"
+                        android:layout_width="20dp"
+                        android:layout_height="20dp" />
+                </LinearLayout>
             </LinearLayout>
 
         </LinearLayout>

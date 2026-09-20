@@ -84,7 +84,7 @@
         </LinearLayout>
     </LinearLayout>
 
-    <TextView
+    <ImageView
         android:id="@+id/patient_call"
         android:layout_width="42dp"
         android:layout_height="42dp"
@@ -92,9 +92,8 @@
         android:clickable="true"
         android:contentDescription="اتصال"
         android:focusable="true"
-        android:gravity="center"
-        android:includeFontPadding="false"
-        android:text="📞"
-        android:textSize="19sp"
+        android:padding="11dp"
+        android:src="@drawable/ic_phone"
+        android:tint="@color/primary_cyan_dark"
         android:visibility="gone" />
 </LinearLayout>

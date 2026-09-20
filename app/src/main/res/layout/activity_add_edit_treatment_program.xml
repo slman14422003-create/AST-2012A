@@ -8,12 +8,11 @@
 
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/toolbar"
+        style="@style/Phizyo.Toolbar"
         android:layout_width="match_parent"
-        android:layout_height="?attr/actionBarSize"
-        android:background="@drawable/bg_header_container"
-        app:title="➕ برنامج علاج فيزيائي جديد"
-        app:titleTextColor="@color/text_primary"
-        app:navigationIcon="@drawable/ic_close" />
+        android:layout_height="60dp"
+        app:navigationIcon="@drawable/ic_close"
+        app:title="برنامج علاج فيزيائي جديد" />
 
     <ScrollView
         android:layout_width="match_parent"
@@ -29,7 +28,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="14dp"
-                android:gravity="end"
+                android:textAlignment="viewStart"
                 android:text="خطة علاج طبيعي متكاملة (مش مرتبطة بجهاز معيّن) — تقدر تستخدمها كمرجع أو تطبعها/تشاركها مع المريض."
                 android:textColor="@color/text_secondary"
                 android:textDirection="rtl"
@@ -140,7 +139,7 @@
                 android:id="@+id/btn_submit_program"
                 style="@style/PrimaryButton"
                 android:layout_marginBottom="8dp"
-                android:text="💾 حفظ البرنامج" />
+                android:text="حفظ البرنامج" />
 
             <Button
                 android:id="@+id/btn_cancel_program"

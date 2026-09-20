@@ -15,7 +15,10 @@
         android:id="@+id/btn_ask_ai"
         style="@style/Phizyo.Button.Secondary"
         android:layout_marginTop="10dp"
-        android:text="🤖 اسأل Phizyo AI عن هذه الحالة" />
+        android:drawableStart="@drawable/ic_sparkle"
+        android:drawablePadding="10dp"
+        android:drawableTint="@color/claude_orange"
+        android:text="اسأل Phizyo AI عن هذه الحالة" />
 
     <LinearLayout
         android:id="@+id/sources_box"
@@ -70,7 +73,10 @@
             android:layout_width="0dp"
             android:layout_weight="1"
             android:layout_marginEnd="5dp"
-            android:text="✏️ تعديل" />
+            android:drawableStart="@drawable/ic_edit"
+            android:drawablePadding="8dp"
+            android:drawableTint="@color/text_secondary"
+            android:text="تعديل" />
 
         <TextView
             android:id="@+id/btn_delete_case"
@@ -78,7 +84,10 @@
             android:layout_width="0dp"
             android:layout_weight="1"
             android:layout_marginStart="5dp"
-            android:text="🗑️ حذف"
+            android:drawableStart="@drawable/ic_trash"
+            android:drawablePadding="8dp"
+            android:drawableTint="@color/accent_red"
+            android:text="حذف"
             android:textColor="@color/accent_red" />
     </LinearLayout>
 </LinearLayout>

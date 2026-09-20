@@ -11,7 +11,7 @@
         android:id="@+id/field_label"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:gravity="end"
+        android:textAlignment="viewStart"
         android:textColor="@color/primary_cyan"
         android:textDirection="rtl"
         android:textStyle="bold"
@@ -22,7 +22,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:gravity="end"
+        android:textAlignment="viewStart"
         android:textColor="@color/text_primary"
         android:textDirection="rtl"
         android:textSize="14sp" />

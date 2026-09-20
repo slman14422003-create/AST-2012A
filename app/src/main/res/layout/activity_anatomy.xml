@@ -8,14 +8,11 @@
 
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/toolbar"
+        style="@style/Phizyo.Toolbar"
         android:layout_width="match_parent"
-        android:layout_height="68dp"
-        android:background="@drawable/bg_top_bar_modern"
-        android:title="🦴 دليل التشريح ومواضع الأقطاب"
-        android:titleTextColor="@color/text_primary"
-        app:contentInsetStart="18dp"
-        app:contentInsetEnd="14dp"
-        app:navigationIcon="@drawable/ic_close" />
+        android:layout_height="60dp"
+        app:navigationIcon="@drawable/ic_arrow_back"
+        app:title="دليل التشريح ومواضع الأقطاب" />
 
     <ScrollView
         android:layout_width="match_parent"
@@ -31,7 +28,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="12dp"
-                android:gravity="end"
+                android:textAlignment="viewStart"
                 android:lineSpacingExtra="3dp"
                 android:text="مرجع تشريحي سريع للمسارات العصبية والعضلية الشائعة، يساعدك في تحديد موضع الأقطاب بدقة أكبر قبل بدء الجلسة."
                 android:textColor="@color/text_secondary"

@@ -9,13 +9,13 @@
 
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/toolbar"
+        style="@style/Phizyo.Toolbar"
         android:layout_width="match_parent"
-        android:layout_height="?attr/actionBarSize"
-        android:background="@drawable/bg_header_container"
-        app:contentInsetStart="20dp"
-        app:navigationIcon="@drawable/ic_close">
+        android:layout_height="60dp"
+        app:navigationIcon="@drawable/ic_arrow_back">
 
         <TextView
+            android:layout_gravity="center"
             style="@style/Phizyo.HeaderTitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -131,18 +131,27 @@
                         android:id="@+id/btn_call"
                         style="@style/Phizyo.Chip"
                         android:layout_marginEnd="8dp"
-                        android:text="📞 اتصال" />
+                        android:drawableStart="@drawable/ic_phone"
+                        android:drawablePadding="8dp"
+                        android:drawableTint="@color/text_secondary"
+                        android:text="اتصال" />
 
                     <TextView
                         android:id="@+id/btn_sms"
                         style="@style/Phizyo.Chip"
                         android:layout_marginEnd="8dp"
-                        android:text="💬 رسالة" />
+                        android:drawableStart="@drawable/ic_message"
+                        android:drawablePadding="8dp"
+                        android:drawableTint="@color/text_secondary"
+                        android:text="رسالة" />
 
                     <TextView
                         android:id="@+id/btn_whatsapp"
                         style="@style/Phizyo.Chip"
-                        android:text="🟢 واتساب" />
+                        android:drawableStart="@drawable/ic_message_circle"
+                        android:drawablePadding="8dp"
+                        android:drawableTint="@color/text_secondary"
+                        android:text="واتساب" />
                 </LinearLayout>
             </LinearLayout>
 
@@ -260,7 +269,10 @@
                         android:id="@+id/btn_set_appointment"
                         style="@style/Phizyo.Chip"
                         android:layout_marginEnd="8dp"
-                        android:text="📅 تحديد موعد" />
+                        android:drawableStart="@drawable/ic_calendar"
+                        android:drawablePadding="8dp"
+                        android:drawableTint="@color/text_secondary"
+                        android:text="تحديد موعد" />
 
                     <TextView
                         android:id="@+id/btn_add_to_calendar"
@@ -577,19 +589,28 @@
                 android:id="@+id/btn_share_summary"
                 style="@style/Phizyo.Button.Primary"
                 android:layout_marginTop="24dp"
-                android:text="📤 مشاركة ملخص المريض" />
+                android:drawableStart="@drawable/ic_share_out"
+                android:drawablePadding="10dp"
+                android:drawableTint="@color/white"
+                android:text="مشاركة ملخص المريض" />
 
             <TextView
                 android:id="@+id/btn_edit_patient"
                 style="@style/Phizyo.Button.Secondary"
                 android:layout_marginTop="10dp"
-                android:text="✏️ تعديل بيانات المريض" />
+                android:drawableStart="@drawable/ic_edit"
+                android:drawablePadding="10dp"
+                android:drawableTint="@color/text_secondary"
+                android:text="تعديل بيانات المريض" />
 
             <TextView
                 android:id="@+id/btn_delete_patient"
                 style="@style/Phizyo.Button.Secondary"
                 android:layout_marginTop="10dp"
-                android:text="🗑️ حذف المريض"
+                android:drawableStart="@drawable/ic_trash"
+                android:drawablePadding="10dp"
+                android:drawableTint="@color/accent_red"
+                android:text="حذف المريض"
                 android:textColor="@color/accent_red" />
         </LinearLayout>
     </ScrollView>

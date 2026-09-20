@@ -8,14 +8,15 @@
     android:paddingStart="32dp"
     android:paddingEnd="32dp">
 
-    <TextView
+    <ImageView
         android:id="@+id/empty_icon"
         android:layout_width="84dp"
         android:layout_height="84dp"
-        android:background="@drawable/bg_avatar_circle"
-        android:gravity="center"
-        android:includeFontPadding="false"
-        android:textSize="34sp" />
+        android:background="@drawable/bg_settings_group"
+        android:importantForAccessibility="no"
+        android:padding="26dp"
+        android:src="@drawable/ic_folder"
+        android:tint="@color/text_secondary" />
 
     <TextView
         android:id="@+id/empty_title"

@@ -64,13 +64,16 @@
 
         <TextView
             android:id="@+id/program_btn_edit"
-            style="@style/Phizyo.Button.Text"
-            android:text="✏️ تعديل" />
+            style="@style/Phizyo.ActionText"
+            android:drawableStart="@drawable/ic_edit"
+            android:text="تعديل" />
 
         <TextView
             android:id="@+id/program_btn_delete"
-            style="@style/Phizyo.Button.Text"
-            android:text="🗑️ حذف"
+            style="@style/Phizyo.ActionText"
+            android:drawableStart="@drawable/ic_trash"
+            android:drawableTint="@color/accent_red"
+            android:text="حذف"
             android:textColor="@color/accent_red" />
 
         <TextView

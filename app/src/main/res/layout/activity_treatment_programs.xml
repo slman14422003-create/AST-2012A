@@ -9,15 +9,16 @@
 
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/toolbar"
+        style="@style/Phizyo.Toolbar"
         android:layout_width="match_parent"
-        android:layout_height="?attr/actionBarSize"
-        android:background="@drawable/bg_header_container"
-        app:contentInsetStart="20dp"
-        app:navigationIcon="@drawable/ic_close">
+        android:layout_height="60dp"
+        app:navigationIcon="@drawable/ic_arrow_back">
 
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:gravity="center_horizontal"
             android:orientation="vertical">
 
             <TextView
