@@ -50,16 +50,14 @@
         <item name="materialAlertDialogTheme">@style/ThemeOverlay.ClinicalMaster.Dialog</item>
     </style>
 
-    <!-- شاشة splash: خلفية برتقالية مصمتة ثابتة بنفس لون Claude تمامًا
-         (claude_orange)، بغض النظر عن الوضع الليلي/النهاري - نفس إحساس
-         splash تطبيق Claude الأصلي. لا تحتاج نسخة values-night لأنها لازم
-         تبقى نفس اللون دايمًا (لون علامة تجارية ثابت مش سطح متغيّر). -->
+    <!-- شاشة splash بأسلوب Claude: خلفية بلون خلفية التطبيق (كريمية في النهاري،
+         ومقابلها الداكن في values-night/themes.xml). شريطا الحالة والتنقل بنفس اللون. -->
     <style name="Theme.ClinicalMaster.Splash" parent="Theme.Material3.Light.NoActionBar">
-        <item name="android:windowBackground">@color/claude_orange</item>
-        <item name="android:statusBarColor">@color/claude_orange</item>
-        <item name="android:navigationBarColor">@color/claude_orange</item>
-        <item name="android:windowLightStatusBar" tools:targetApi="m">false</item>
-        <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">false</item>
+        <item name="android:windowBackground">@color/bg_deep_1</item>
+        <item name="android:statusBarColor">@color/bg_deep_1</item>
+        <item name="android:navigationBarColor">@color/bg_deep_1</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="m">true</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item>
         <item name="android:layoutDirection">rtl</item>
     </style>
 
