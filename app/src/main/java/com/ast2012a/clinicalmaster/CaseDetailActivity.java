@@ -17,7 +17,6 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.appbar.MaterialToolbar;
-import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import java.util.List;
 
@@ -474,7 +473,7 @@ public class CaseDetailActivity extends AppCompatActivity {
             String n = patients.get(i).name;
             names[i] = n.isEmpty() ? "(بدون اسم)" : n;
         }
-        new MaterialAlertDialogBuilder(this)
+        new ClaudeDialog(this)
                 .setTitle("لأي مريض؟")
                 .setItems(names, (dialog, which) -> {
                     Patient p = patients.get(which);
@@ -510,7 +509,7 @@ public class CaseDetailActivity extends AppCompatActivity {
     }
 
     private void confirmDelete() {
-        new MaterialAlertDialogBuilder(this)
+        new ClaudeDialog(this)
                 .setTitle("تأكيد الحذف")
                 .setMessage("هل تريد حذف \"" + currentCase.title + "\" نهائيًا؟")
                 .setPositiveButton("حذف", (dialog, which) -> {

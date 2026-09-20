@@ -13,7 +13,6 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.appbar.MaterialToolbar;
-import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputEditText;
 
 import java.util.ArrayList;
@@ -168,7 +167,7 @@ public class TreatmentProgramsActivity extends AppCompatActivity {
     }
 
     private void confirmDelete(final TreatmentProgram t) {
-        new MaterialAlertDialogBuilder(this)
+        new ClaudeDialog(this)
                 .setTitle("حذف برنامج العلاج")
                 .setMessage("هل تريد حذف \"" + t.title + "\" نهائيًا؟")
                 .setPositiveButton("حذف", (dialog, which) -> {

@@ -9,7 +9,6 @@ import android.os.Build;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
-import android.widget.FrameLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -21,7 +20,6 @@ import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 
 import com.google.android.material.appbar.MaterialToolbar;
-import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.materialswitch.MaterialSwitch;
 import com.google.android.material.textfield.TextInputEditText;
 
@@ -125,7 +123,7 @@ public class SettingsActivity extends AppCompatActivity {
             labels[i] = ThemeManager.labelFor(modes[i]);
             if (modes[i].equals(current)) checked = i;
         }
-        new MaterialAlertDialogBuilder(this)
+        new ClaudeDialog(this)
                 .setTitle("المظهر")
                 .setSingleChoiceItems(labels, checked, (dialog, which) -> {
                     dialog.dismiss();
@@ -151,34 +149,34 @@ public class SettingsActivity extends AppCompatActivity {
     /** تعليمات مخصّصة لـ Phizyo AI: تُضاف تلقائيًا لتعليمات النظام في كل محادثة. */
     private void showInstructionsDialog() {
         TextInputEditText input = new TextInputEditText(this);
-        input.setMinLines(4);
-        input.setMaxLines(8);
+        input.setBackgroundResource(R.drawable.bg_input_field);
+        input.setPadding(Ui.dp(this, 16), Ui.dp(this, 14), Ui.dp(this, 16), Ui.dp(this, 14));
+        input.setMinLines(5);
+        input.setMaxLines(9);
         input.setGravity(Gravity.TOP | Gravity.START);
         input.setTextDirection(View.TEXT_DIRECTION_RTL);
         input.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+        input.setTextSize(15.5f);
+        input.setTextColor(getColor(R.color.text_primary));
+        input.setHintTextColor(getColor(R.color.text_tertiary));
         input.setHint("مثال: ركّز دايمًا على التمارين المنزلية، أو اجعل الإجابات مختصرة جدًا بنقاط.");
         input.setText(AiPrompts.getCustomInstructions(this));
 
-        FrameLayout box = new FrameLayout(this);
-        int side = Ui.dp(this, 22);
-        box.setPadding(side, Ui.dp(this, 8), side, 0);
-        box.addView(input);
-
-        new MaterialAlertDialogBuilder(this)
+        new ClaudeDialog(this)
                 .setTitle("تعليمات مخصّصة")
                 .setMessage("تُضاف هذه التعليمات تلقائيًا لكل محادثة مع Phizyo AI.")
-                .setView(box)
+                .setView(input)
                 .setPositiveButton("حفظ", (dialog, which) -> {
                     String text = input.getText() == null ? "" : input.getText().toString();
                     AiPrompts.setCustomInstructions(this, text);
                     refreshInstructionsRow();
                     Toast.makeText(this, "تم حفظ التعليمات.", Toast.LENGTH_SHORT).show();
                 })
-                .setNeutralButton("مسح", (dialog, which) -> {
+                .setNegativeButton("إلغاء", null)
+                .setNeutralButton("مسح التعليمات", (dialog, which) -> {
                     AiPrompts.setCustomInstructions(this, "");
                     refreshInstructionsRow();
                 })
-                .setNegativeButton("إلغاء", null)
                 .show();
     }
 
@@ -186,7 +184,7 @@ public class SettingsActivity extends AppCompatActivity {
         String message = "1) Phizyo AI نفسه يقرر لكل رسالة هل يحتاج للبحث أم لا. إذا كانت الرسالة دردشة عادية يرد عليك مباشرة بدون أي بحث.\n\n" +
                 "2) إذا كانت الرسالة سؤالًا إكلينيكيًا يتحقق أولًا من قاعدة بيانات الجهاز (130 حالة موثقة)، والتطابق المباشر يُجاب فورًا بدون إنترنت.\n\n" +
                 "3) غير ذلك يُستخدم بحث Physiopedia أولًا (مرجع متخصص في العلاج الطبيعي)، ثم ويكيبيديا كخلفية عامة تكميلية إذا لم توجد نتيجة. الصياغة النهائية دائمًا عبر Phizyo AI وتلتزم بأي تعليمات مخصّصة تضيفها.";
-        new MaterialAlertDialogBuilder(this)
+        new ClaudeDialog(this)
                 .setTitle("كيف يعمل Phizyo AI؟")
                 .setMessage(message)
                 .setPositiveButton("حسنًا", null)
@@ -194,7 +192,7 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     private void confirmClearChatHistory() {
-        new MaterialAlertDialogBuilder(this)
+        new ClaudeDialog(this)
                 .setTitle("مسح سجل المحادثة")
                 .setMessage("سيتم حذف سجل محادثة Phizyo AI بالكامل. متأكد؟")
                 .setPositiveButton("مسح", (dialog, which) -> {
@@ -211,7 +209,7 @@ public class SettingsActivity extends AppCompatActivity {
         executor.execute(() -> AiClient.testWorker(new AiClient.Callback() {
             @Override
             public void onSuccess(String reply) {
-                runOnUiThread(() -> new MaterialAlertDialogBuilder(SettingsActivity.this)
+                runOnUiThread(() -> new ClaudeDialog(SettingsActivity.this)
                         .setTitle("Phizyo AI يعمل")
                         .setMessage("رد الخادم:\n\n" + reply)
                         .setPositiveButton("تمام", null)
@@ -220,7 +218,7 @@ public class SettingsActivity extends AppCompatActivity {
 
             @Override
             public void onError(String message) {
-                runOnUiThread(() -> new MaterialAlertDialogBuilder(SettingsActivity.this)
+                runOnUiThread(() -> new ClaudeDialog(SettingsActivity.this)
                         .setTitle("تعذر الاتصال بـ Phizyo AI")
                         .setMessage("تفاصيل الخطأ:\n" + message +
                                 "\n\nلو الرسالة بتقول \"model deprecated\" أو حاجة شبهها، يبقى Cloudflare قفلوا الموديل المستخدم وتحتاج تحدّث اسم الموديل في worker.js. غير كده تأكد إن الووركر منشور (Deployed) وفعّال، وإن جهازك متصل بالإنترنت.")
@@ -324,7 +322,7 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     private void confirmClearAll() {
-        new MaterialAlertDialogBuilder(this)
+        new ClaudeDialog(this)
                 .setTitle("مسح كل الحالات المخصصة")
                 .setMessage("سيتم حذف كل الحالات المخصصة نهائيًا. متأكد؟")
                 .setPositiveButton("مسح الكل", (dialog, which) -> {
@@ -345,7 +343,7 @@ public class SettingsActivity extends AppCompatActivity {
                 "130 حالة سريرية موثقة لجهاز AST-2012A + موسوعة أنماط الجهاز + مساعد ذكي (Phizyo AI).\n\n" +
                 "كل بياناتك (الحالات المخصصة، سجل المحادثة، الإعدادات) محفوظة محليًا على جهازك فقط، ولا تُرسل لأي سيرفر خاص بالتطبيق.\n\n" +
                 "تطوير ومحتوى سريري: المعالج الفيزيائي سلمان";
-        new MaterialAlertDialogBuilder(this)
+        new ClaudeDialog(this)
                 .setTitle("عن التطبيق")
                 .setMessage(message)
                 .setPositiveButton("حسنًا", null)

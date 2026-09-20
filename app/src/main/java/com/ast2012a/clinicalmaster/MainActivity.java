@@ -194,8 +194,9 @@ public class MainActivity extends AppCompatActivity {
      */
     private void showAddChooser() {
         String[] options = {"حالة جديدة (بروتوكول جهاز)", "برنامج علاج فيزيائي كامل"};
-        new com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+        new ClaudeDialog(this)
                 .setTitle("ماذا تريد أن تضيف؟")
+                .setItemIcons(R.drawable.ic_folder, R.drawable.ic_clipboard)
                 .setItems(options, (dialog, which) -> {
                     Intent i = which == 0
                             ? new Intent(this, AddEditCaseActivity.class)

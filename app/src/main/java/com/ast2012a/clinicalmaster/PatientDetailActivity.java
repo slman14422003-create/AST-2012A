@@ -14,7 +14,6 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.appbar.MaterialToolbar;
-import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -322,7 +321,7 @@ public class PatientDetailActivity extends AppCompatActivity {
         labels.add("حذف الجلسة");
         actions.add(2);
 
-        new MaterialAlertDialogBuilder(this)
+        new ClaudeDialog(this)
                 .setTitle(BidiText.fix(Fmt.dateTime(s.date)))
                 .setItems(labels.toArray(new String[0]), (dialog, which) -> {
                     int action = actions.get(which);
@@ -338,7 +337,7 @@ public class PatientDetailActivity extends AppCompatActivity {
     }
 
     private void confirmDeleteSession(final Patient.Session s) {
-        new MaterialAlertDialogBuilder(this)
+        new ClaudeDialog(this)
                 .setTitle("حذف الجلسة")
                 .setMessage("سيتم حذف هذه الجلسة ورسمها من الحساب. متابعة؟")
                 .setPositiveButton("حذف", (dialog, which) -> {
@@ -441,7 +440,7 @@ public class PatientDetailActivity extends AppCompatActivity {
             String t = programs.get(i).title;
             names[i] = t.trim().isEmpty() ? "(برنامج بدون عنوان)" : t;
         }
-        new MaterialAlertDialogBuilder(this)
+        new ClaudeDialog(this)
                 .setTitle("ربط برنامج علاج")
                 .setItems(names, (dialog, which) -> {
                     TreatmentProgram p = programs.get(which);
@@ -455,7 +454,7 @@ public class PatientDetailActivity extends AppCompatActivity {
     }
 
     private void confirmRemoveAssignment(final Patient.Assignment a) {
-        new MaterialAlertDialogBuilder(this)
+        new ClaudeDialog(this)
                 .setTitle("إزالة الربط")
                 .setMessage("إزالة هذا البرنامج من ملف المريض؟ (لن يُحذف البرنامج نفسه)")
                 .setPositiveButton("إزالة", (dialog, which) -> {
@@ -545,7 +544,7 @@ public class PatientDetailActivity extends AppCompatActivity {
     }
 
     private void confirmDeletePayment(final Patient.Payment p) {
-        new MaterialAlertDialogBuilder(this)
+        new ClaudeDialog(this)
                 .setTitle("حذف الدفعة")
                 .setMessage("حذف دفعة بمبلغ " + Fmt.money(p.amount, currency) + "؟")
                 .setPositiveButton("حذف", (dialog, which) -> {
@@ -643,7 +642,7 @@ public class PatientDetailActivity extends AppCompatActivity {
     }
 
     private void confirmDeletePatient() {
-        new MaterialAlertDialogBuilder(this)
+        new ClaudeDialog(this)
                 .setTitle("حذف المريض")
                 .setMessage("سيتم حذف ملف \"" + patient.displayName()
                         + "\" بكل جلساته ودفعاته نهائيًا. هل أنت متأكد؟")

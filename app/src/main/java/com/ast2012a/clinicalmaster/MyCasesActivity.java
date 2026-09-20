@@ -12,7 +12,6 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.appbar.MaterialToolbar;
-import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputEditText;
 
 import java.util.ArrayList;
@@ -158,7 +157,7 @@ public class MyCasesActivity extends AppCompatActivity implements CaseRowAdapter
 
     @Override
     public void onDelete(final CaseItem item) {
-        new MaterialAlertDialogBuilder(this)
+        new ClaudeDialog(this)
                 .setTitle("تأكيد")
                 .setMessage("هل تريد حذف \"" + item.title + "\" نهائيًا؟")
                 .setPositiveButton("حذف", (dialog, which) -> {

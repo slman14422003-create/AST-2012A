@@ -11,7 +11,6 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.appbar.MaterialToolbar;
-import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 /**
  * تفاصيل برنامج علاج فيزيائي: العنوان والتشخيص ثم الأهداف والمراحل والتمارين
@@ -185,7 +184,7 @@ public class TreatmentProgramDetailActivity extends AppCompatActivity {
     }
 
     private void confirmDelete() {
-        new MaterialAlertDialogBuilder(this)
+        new ClaudeDialog(this)
                 .setTitle("حذف برنامج العلاج")
                 .setMessage("هل تريد حذف \"" + program.title + "\" نهائيًا؟")
                 .setPositiveButton("حذف", (dialog, which) -> {

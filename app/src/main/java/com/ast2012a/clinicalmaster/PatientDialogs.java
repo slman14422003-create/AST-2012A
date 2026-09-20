@@ -86,7 +86,7 @@ public final class PatientDialogs {
         }
         String[] names = new String[patients.size()];
         for (int i = 0; i < names.length; i++) names[i] = patients.get(i).displayName();
-        new MaterialAlertDialogBuilder(activity)
+        new ClaudeDialog(activity)
                 .setTitle(title)
                 .setItems(names, (dialog, which) -> result.onPatient(patients.get(which)))
                 .show();

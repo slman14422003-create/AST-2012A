@@ -11,7 +11,6 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -151,7 +150,7 @@ public class AiAssistantActivity extends AppCompatActivity {
 
     private void confirmClearChat() {
         if (adapter.getItemCount() == 0) return;
-        new MaterialAlertDialogBuilder(this)
+        new ClaudeDialog(this)
                 .setTitle("مسح المحادثة")
                 .setMessage("هل تريد مسح كل سجل المحادثة مع Phizyo AI نهائيًا؟")
                 .setPositiveButton("مسح", (dialog, which) -> {
