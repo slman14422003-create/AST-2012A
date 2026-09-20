@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:458863728401:android:350553a90197000f1a1eb0",
+        "mobilesdk_app_id": "1:458863728401:android:ccb40e15786475c61a1eb0",
         "android_client_info": {
-          "package_name": "com.slman.app"
+          "package_name": "com.ast2012a.clinicalmaster"
         }
       },
       "oauth_client": [],
