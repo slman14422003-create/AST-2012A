@@ -156,7 +156,7 @@ jobs:
       - name: شهادة مصدر الملف (Build Provenance)
         if: github.event_name != 'pull_request'
         continue-on-error: true   # قد لا تكون متاحة في المستودعات الخاصة بالخطة المجانية
-        uses: actions/attest-build-provenance@v3
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: dist/*.apk
 
