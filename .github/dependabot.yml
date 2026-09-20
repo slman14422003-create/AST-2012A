@@ -1,0 +1,23 @@
+version: 2
+updates:
+  # تحديث مكتبات Gradle (يقترح الإصدارات المستقرة فقط ما دامت الحالية مستقرة)
+  - package-ecosystem: gradle
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      androidx:
+        patterns: [ 'androidx.*' ]
+      firebase:
+        patterns: [ 'com.google.firebase*', 'com.google.gms*' ]
+    labels: [ dependencies ]
+
+  # تحديث إصدارات الـ Actions نفسها
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    labels: [ dependencies, ci ]

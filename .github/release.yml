@@ -1,0 +1,15 @@
+changelog:
+  exclude:
+    labels: [ ignore-for-release ]
+    authors: [ dependabot ]
+  categories:
+    - title: ✨ ميزات جديدة
+      labels: [ enhancement, feature ]
+    - title: 🐞 إصلاحات
+      labels: [ bug, fix ]
+    - title: 🎨 التصميم والواجهة
+      labels: [ design, ui ]
+    - title: 📦 تحديث الاعتماديات
+      labels: [ dependencies ]
+    - title: 🔧 أخرى
+      labels: [ '*' ]
