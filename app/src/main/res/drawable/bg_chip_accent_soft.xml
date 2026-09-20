@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- شريحة تمييز خفيفة (تعبئة بلون التمييز بشفافية منخفضة + حدّ بنفس
-     اللون) تُستخدم لتبويب "Phizyo AI" في الرصيف السفلي بدل التعبئة
-     المصمتة الكاملة، حتى تبرز كعنصر مميز دون أن "تصرخ" بصريًا مقارنة
-     ببقية الاختصارات. -->
+<!-- شريحة تمييز خفيفة لتبويب "Phizyo AI" في الرصيف السفلي: تدرج خفيف
+     من لون الحاوية بدل تعبئة مسطحة واحدة، مع حد بلون التمييز. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android">
-    <solid android:color="@color/m3_primary_container" />
+    <gradient
+        android:type="linear"
+        android:angle="90"
+        android:startColor="@color/m3_primary_container"
+        android:endColor="@color/glass_fill_soft" />
     <corners android:radius="22dp" />
-    <stroke android:width="1dp" android:color="@color/primary_cyan" />
+    <stroke android:width="1.2dp" android:color="@color/primary_cyan" />
 </shape>

@@ -1,11 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- رسالة المستخدم: فقاعة بيج فاتحة مسطحة اللون بدون تدرج، بحدّ رفيع. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android">
-    <solid android:color="@color/glass_fill_soft" />
+    <gradient
+        android:type="linear"
+        android:angle="90"
+        android:startColor="@color/glass_fill_strong"
+        android:endColor="@color/glass_fill_soft" />
     <stroke android:width="1dp" android:color="@color/glass_border" />
     <corners
         android:bottomLeftRadius="4dp"
-        android:bottomRightRadius="16dp"
-        android:topLeftRadius="16dp"
-        android:topRightRadius="16dp" />
+        android:bottomRightRadius="18dp"
+        android:topLeftRadius="18dp"
+        android:topRightRadius="18dp" />
 </shape>

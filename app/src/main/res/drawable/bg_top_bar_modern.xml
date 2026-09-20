@@ -1,13 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- الشريط العلوي الجديد: بطاقة عائمة بزوايا سفلية دائرية أوسع + حدّ خفيف
-     محيط بالكامل (وليس فقط خط سفلي حاد) لإحساس "بطاقة معلّقة" حديثة بدل
-     الشريط المسطح القديم المقطوع بخط واحد. -->
-<shape xmlns:android="http://schemas.android.com/apk/res/android"
-    android:shape="rectangle">
-    <solid android:color="@color/glass_fill_strong" />
-    <corners
-        android:bottomLeftRadius="26dp"
-        android:bottomRightRadius="26dp"
-        android:topLeftRadius="0dp"
-        android:topRightRadius="0dp" />
-</shape>
+<!-- الشريط العلوي v4: طبقة ظل ممتدة أسفل البطاقة (تحاكي إسقاط ضوئي ناعم)
+     + سطح بتدرج علوي خفيف (لمعة) بدل التعبئة المسطحة الواحدة. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:top="4dp">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/shadow_soft" />
+            <corners
+                android:bottomLeftRadius="28dp"
+                android:bottomRightRadius="28dp" />
+        </shape>
+    </item>
+    <item android:bottom="4dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:type="linear"
+                android:angle="90"
+                android:startColor="@color/glass_fill_strong"
+                android:endColor="@color/glass_fill" />
+            <corners
+                android:bottomLeftRadius="28dp"
+                android:bottomRightRadius="28dp" />
+        </shape>
+    </item>
+</layer-list>
