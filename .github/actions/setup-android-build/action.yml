@@ -1,1 +1,58 @@
+name: تجهيز بيئة بناء أندرويد
+description: Java + Android SDK + Gradle (مع الكاش) + إعداد Firebase من سر GitHub عند توفره
 
+inputs:
+  google-services-json:
+    description: محتوى google-services.json (نص عادي أو Base64). اختياري.
+    required: false
+    default: ''
+  java-version:
+    description: إصدار Java
+    required: false
+    default: '17'
+  gradle-version:
+    description: إصدار Gradle المستقر
+    required: false
+    default: '8.14.3'
+
+runs:
+  using: composite
+  steps:
+    - name: تجهيز Java ${{ inputs.java-version }}
+      uses: actions/setup-java@v5
+      with:
+        distribution: temurin
+        java-version: ${{ inputs.java-version }}
+
+    - name: تجهيز Android SDK (وقبول التراخيص)
+      uses: android-actions/setup-android@v3
+      with:
+        packages: ''
+
+    - name: تجهيز Gradle ${{ inputs.gradle-version }} مع الكاش
+      uses: gradle/actions/setup-gradle@v5
+      with:
+        gradle-version: ${{ inputs.gradle-version }}
+        cache-read-only: ${{ github.ref_name != github.event.repository.default_branch }}
+
+    - name: إعداد ملف Firebase (google-services.json)
+      shell: bash
+      env:
+        GS_JSON: ${{ inputs.google-services-json }}
+      run: |
+        if [ -z "$GS_JSON" ]; then
+          if [ -f app/google-services.json ]; then
+            echo "تم العثور على app/google-services.json داخل المستودع."
+          else
+            echo "::warning title=Firebase::لا يوجد google-services.json ولا سر GOOGLE_SERVICES_JSON - سيُبنى التطبيق بدون النسخ السحابي."
+          fi
+          exit 0
+        fi
+        if printf '%s' "$GS_JSON" | head -c 1 | grep -q '{'; then
+          printf '%s' "$GS_JSON" > app/google-services.json
+        else
+          printf '%s' "$GS_JSON" | base64 -d > app/google-services.json
+        fi
+        python3 -c "import json; json.load(open('app/google-services.json'))" \
+          || { echo "::error title=Firebase::سر GOOGLE_SERVICES_JSON ليس JSON صالحًا"; exit 1; }
+        echo "تم إنشاء app/google-services.json من السر."
