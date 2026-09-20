@@ -1,5 +1,6 @@
 plugins {
     id("com.android.application")
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -39,4 +40,12 @@ dependencies {
     // وطلب الأذونات في وقت التشغيل (ActivityResultLauncher) في SettingsActivity
     implementation("androidx.core:core:1.13.1")
     implementation("androidx.activity:activity:1.9.1")
+
+    // النسخ الاحتياطي السحابي لملفات المرضى (Firebase Firestore + مصادقة
+    // مجهولة تلقائية لكل جهاز، بدون شاشة تسجيل دخول). الإصدارات تُدار عبر
+    // Firebase BOM حتى تبقى متوافقة مع بعضها دائمًا.
+    implementation(platform("com.google.firebase:firebase-bom:33.5.1"))
+    implementation("com.google.firebase:firebase-firestore")
+    implementation("com.google.firebase:firebase-auth")
+    implementation("com.google.firebase:firebase-analytics")
 }
