@@ -587,6 +587,7 @@
                 android:layout_marginStart="8dp"
                 android:layout_marginEnd="8dp"
                 android:contentDescription="إضافة حالة جديدة"
+                android:stateListAnimator="@null"
                 android:text="حالة جديدة"
                 android:textAllCaps="false"
                 android:textColor="@color/white"
@@ -595,9 +596,11 @@
                 app:backgroundTint="@color/primary_cyan"
                 app:cornerRadius="23dp"
                 app:elevation="0dp"
+                app:hoveredFocusedTranslationZ="0dp"
                 app:icon="@drawable/ic_add"
                 app:iconTint="@color/white"
-                app:pressedTranslationZ="0dp" />
+                app:pressedTranslationZ="0dp"
+                app:rippleColor="#30FFFFFF" />
 
             <com.google.android.material.textfield.TextInputLayout
                 style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
