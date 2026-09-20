@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- شعار/أفاتار بتدرج طوبي دافئ بدل التعبئة المسطحة الواحدة - يعطي عمق
+     بصري خفيف للهوية الرئيسية في الشريط العلوي وشاشة الذكاء الصناعي. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <gradient
+        android:type="linear"
+        android:angle="135"
+        android:startColor="@color/primary_cyan"
+        android:endColor="@color/primary_cyan_dark" />
+</shape>
