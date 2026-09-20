@@ -40,4 +40,14 @@
         <item name="shapeAppearanceCornerLarge">@style/ShapeAppearance.M3.Corner.Large</item>
         <item name="materialAlertDialogTheme">@style/ThemeOverlay.ClinicalMaster.Dialog</item>
     </style>
+
+    <!-- شاشة splash (الوضع الليلي): خلفية داكنة محايدة مثل splash تطبيق Claude -->
+    <style name="Theme.ClinicalMaster.Splash" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="android:windowBackground">@color/bg_deep_1</item>
+        <item name="android:statusBarColor">@color/bg_deep_1</item>
+        <item name="android:navigationBarColor">@color/bg_deep_1</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="m">false</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">false</item>
+        <item name="android:layoutDirection">rtl</item>
+    </style>
 </resources>
