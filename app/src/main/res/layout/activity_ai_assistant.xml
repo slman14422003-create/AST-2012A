@@ -49,6 +49,43 @@
         </LinearLayout>
     </com.google.android.material.appbar.MaterialToolbar>
 
+    <!-- بانر سياق المريض (ai_patient_context_banner): يظهر فقط لما الشاشة
+         تُفتح من زر "اسأل Phizyo AI عن هذا المريض" في ملف مريض محدد، تأكيدًا
+         للمستخدم إن ملف المريض (بدون اسم/هاتف) مرفق تلقائيًا مع كل سؤال هنا. -->
+    <LinearLayout
+        android:id="@+id/ai_patient_context_banner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="18dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="18dp"
+        android:background="@drawable/bg_chip_accent_soft"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="12dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="8dp"
+        android:visibility="gone">
+
+        <ImageView
+            android:layout_width="15dp"
+            android:layout_height="15dp"
+            android:layout_marginEnd="8dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/ic_users"
+            android:tint="@color/claude_orange" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="ملف المريض مرفق بهذه المحادثة (بدون الاسم أو رقم الهاتف)"
+            android:textColor="@color/text_secondary"
+            android:textDirection="rtl"
+            android:textSize="12sp" />
+    </LinearLayout>
+
     <!-- ============== منطقة المحادثة ============== -->
     <FrameLayout
         android:layout_width="match_parent"
