@@ -4,6 +4,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:name=".ClinicalMasterApp"
@@ -43,6 +44,16 @@
         <activity android:name=".SettingsActivity" android:exported="false" />
         <activity android:name=".PrivacyPolicyActivity" android:exported="false" />
         <activity android:name=".AiAssistantActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
+
+        <!-- تنبيه الصباح بمرضى جلسات اليوم: المنبّه اليومي + إعادة الجدولة بعد إعادة التشغيل/التحديث -->
+        <receiver android:name=".SessionReminderReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+        </receiver>
 
     </application>
 </manifest>
