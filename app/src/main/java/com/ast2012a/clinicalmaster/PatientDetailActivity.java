@@ -215,10 +215,20 @@ public class PatientDetailActivity extends AppCompatActivity {
         View calBtn = findViewById(R.id.btn_add_to_calendar);
         View clearBtn = findViewById(R.id.btn_clear_appointment);
 
-        if (patient.nextAppointment > 0) {
-            String value = Fmt.dateTime(patient.nextAppointment);
-            if (patient.nextAppointment < System.currentTimeMillis()) value += "  (انقضى)";
+        long now = System.currentTimeMillis();
+        long effective = patient.effectiveNextAppointment(now);
+        boolean manualFuture = patient.nextAppointment > now;
+
+        if (effective > 0) {
+            // تلقائي: موعد يدوي مستقبلي إن وُجد، وإلا أقرب جلسة حسب الجدول الأسبوعي
+            String value = patient.nextAppointmentLabel(now);
+            if (!manualFuture) value += "  (تلقائي حسب الجدول)";
             text.setText(BidiText.fix(value));
+            setBtn.setText(manualFuture ? "تغيير الموعد" : "تحديد موعد آخر");
+            calBtn.setVisibility(View.VISIBLE);
+            clearBtn.setVisibility(patient.nextAppointment > 0 ? View.VISIBLE : View.GONE);
+        } else if (patient.nextAppointment > 0) {
+            text.setText(BidiText.fix(Fmt.dateTime(patient.nextAppointment) + "  (انقضى)"));
             setBtn.setText("تغيير الموعد");
             calBtn.setVisibility(View.VISIBLE);
             clearBtn.setVisibility(View.VISIBLE);
@@ -231,9 +241,11 @@ public class PatientDetailActivity extends AppCompatActivity {
     }
 
     private void pickAppointment() {
+        long now = System.currentTimeMillis();
+        long auto = patient.effectiveNextAppointment(now);
         long initial = patient.nextAppointment > 0
                 ? patient.nextAppointment
-                : System.currentTimeMillis() + 24L * 60 * 60 * 1000;
+                : (auto > now ? auto : now + 24L * 60 * 60 * 1000);
         PatientDialogs.pickDateTime(this, initial, millis -> {
             PatientManager.setNextAppointment(this, patientId, millis);
             reload();
@@ -241,11 +253,19 @@ public class PatientDetailActivity extends AppCompatActivity {
     }
 
     private void addToCalendar() {
-        if (patient.nextAppointment <= 0) return;
+        long now = System.currentTimeMillis();
+        long begin = patient.effectiveNextAppointment(now);
+        boolean timed = patient.nextAppointmentHasTime(now);
+        if (begin <= 0 && patient.nextAppointment > 0) {
+            begin = patient.nextAppointment;
+            timed = true;
+        }
+        if (begin <= 0) return;
         Intent i = new Intent(Intent.ACTION_INSERT)
                 .setData(CalendarContract.Events.CONTENT_URI)
-                .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, patient.nextAppointment)
-                .putExtra(CalendarContract.EXTRA_EVENT_END_TIME, patient.nextAppointment + 45L * 60 * 1000)
+                .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, begin)
+                .putExtra(CalendarContract.EXTRA_EVENT_END_TIME, begin + 45L * 60 * 1000)
+                .putExtra(CalendarContract.EXTRA_EVENT_ALL_DAY, !timed)
                 .putExtra(CalendarContract.Events.TITLE, "جلسة علاج — " + patient.displayName());
         try {
             startActivity(i);
@@ -675,8 +695,9 @@ public class PatientDetailActivity extends AppCompatActivity {
         if (patient.hasSchedule()) {
             sb.append("\nجدول الجلسات: ").append(patient.scheduleLabel()).append('\n');
         }
-        if (patient.nextAppointment > System.currentTimeMillis()) {
-            sb.append("\nالموعد القادم: ").append(Fmt.dateTime(patient.nextAppointment)).append('\n');
+        String nextLabel = patient.nextAppointmentLabel(System.currentTimeMillis());
+        if (!nextLabel.isEmpty()) {
+            sb.append("\nالموعد القادم: ").append(nextLabel).append('\n');
         }
 
         Intent send = new Intent(Intent.ACTION_SEND);

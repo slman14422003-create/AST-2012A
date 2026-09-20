@@ -268,6 +268,9 @@ public class SettingsActivity extends AppCompatActivity {
 
     private void setNotifEnabled(boolean value) {
         prefs().edit().putBoolean(KEY_NOTIF_ENABLED, value).apply();
+        // تنبيه الصباح بجلسات اليوم: يُجدوَل عند التفعيل ويُلغى عند الإيقاف
+        if (value) SessionReminder.schedule(this);
+        else SessionReminder.cancel(this);
     }
 
     private boolean hasNotificationPermission() {
@@ -281,7 +284,7 @@ public class SettingsActivity extends AppCompatActivity {
     private void refreshNotifRow() {
         boolean enabled = isNotifEnabled();
         notifSwitch.setChecked(enabled);
-        notifStatus.setText(enabled ? "مفعّلة" : "غير مفعّلة");
+        notifStatus.setText(enabled ? "مفعّلة · تنبيه كل صباح 8:00 بمرضى جلسات اليوم" : "غير مفعّلة");
     }
 
     /** الصف كله يعمل كمفتاح: تشغيل (مع طلب الإذن لو لزم) أو إيقاف. */

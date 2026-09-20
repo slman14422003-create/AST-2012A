@@ -24,6 +24,12 @@ public class ClinicalMasterApp extends Application {
         super.onCreate();
         ThemeManager.applySavedTheme(this);
 
+        // إعادة ضبط منبّه "جلسات اليوم" مع كل تشغيل (يغطي إيقاف التطبيق بالقوة)
+        try {
+            SessionReminder.schedule(this);
+        } catch (Throwable ignored) {
+        }
+
         DynamicColorsOptions options = new DynamicColorsOptions.Builder()
                 .setPrecondition((activity, theme) -> DynamicColors.isDynamicColorAvailable()
                         // شاشة splash مستثناة عمدًا: لازم تفضل بنفس لون علامة

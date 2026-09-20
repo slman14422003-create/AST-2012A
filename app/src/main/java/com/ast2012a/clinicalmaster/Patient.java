@@ -336,6 +336,33 @@ public class Patient {
         return sessionTimeMin >= 0 ? day + " · " + Fmt.minutesToTime(sessionTimeMin) : day;
     }
 
+    /**
+     * الموعد القادم الفعلي (تلقائي): لو فيه موعد يدوي مستقبلي يُستخدم هو، وإلا أقرب جلسة
+     * حسب الجدول الأسبوعي (أيام + وقت). يرجع 0 لو لا يوجد أي منهما.
+     * لو الجدول بدون وقت تُرجَع بداية اليوم (انظر nextScheduledSession).
+     */
+    public long effectiveNextAppointment(long now) {
+        if (nextAppointment > now) return nextAppointment;
+        return nextScheduledSession(now);
+    }
+
+    /** هل الموعد القادم محسوب تلقائيًا من الجدول (لا موعد يدوي مستقبلي)؟ */
+    public boolean isNextAppointmentAuto(long now) {
+        return nextAppointment <= now && nextScheduledSession(now) > 0;
+    }
+
+    /** هل للموعد القادم وقت محدد (يدوي، أو جدول له وقت)؟ */
+    public boolean nextAppointmentHasTime(long now) {
+        return nextAppointment > now || sessionTimeMin >= 0;
+    }
+
+    /** نص الموعد القادم: "الثلاثاء 22/09/2026، 5:00 م" أو "الثلاثاء 22/09" لو بلا وقت. */
+    public String nextAppointmentLabel(long now) {
+        long t = effectiveNextAppointment(now);
+        if (t <= 0) return "";
+        return nextAppointmentHasTime(now) ? Fmt.dateTime(t) : Fmt.dayDate(t);
+    }
+
     public String displayName() {
         return name == null || name.trim().isEmpty() ? "(بدون اسم)" : name.trim();
     }
