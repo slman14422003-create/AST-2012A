@@ -1,18 +1,15 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- بطاقة ثانوية (soft): ظل أخف وأقرب - تُستخدم للبطاقات المتداخلة داخل
-     بطاقات أخرى (مثل أقسام شاشة الإعدادات) فلا تحتاج ارتفاعاً كاملاً. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:top="2dp">
         <shape android:shape="rectangle">
-            <solid android:color="@color/shadow_soft" />
-            <corners android:radius="16dp" />
+            <solid android:color="@color/shadow_soft"/>
+            <corners android:radius="16dp"/>
         </shape>
     </item>
     <item android:bottom="2dp">
         <shape android:shape="rectangle">
-            <solid android:color="@color/glass_fill_soft" />
-            <corners android:radius="16dp" />
-            <stroke android:width="1dp" android:color="@color/glass_border_soft" />
+            <solid android:color="@color/glass_fill_soft"/>
+            <corners android:radius="16dp"/>
+            <stroke android:width="1dp" android:color="@color/glass_border_soft"/>
         </shape>
     </item>
 </layer-list>

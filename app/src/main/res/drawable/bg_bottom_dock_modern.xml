@@ -1,26 +1,16 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- الرصيف السفلي v4: ظل ممتد للأعلى (بما إنه عنصر مرفوع من الأسفل)
-     + سطح بتدرج + حد رفيع علوي فقط لفصل بصري نظيف عن المحتوى. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:bottom="0dp" android:top="-6dp">
+    <item android:top="-6dp">
         <shape android:shape="rectangle">
-            <solid android:color="@color/shadow_strong" />
-            <corners
-                android:topLeftRadius="30dp"
-                android:topRightRadius="30dp" />
+            <solid android:color="@color/shadow_strong"/>
+            <corners android:topLeftRadius="28dp" android:topRightRadius="28dp"/>
         </shape>
     </item>
     <item>
         <shape android:shape="rectangle">
-            <gradient
-                android:type="linear"
-                android:angle="90"
-                android:startColor="@color/glass_fill"
-                android:endColor="@color/glass_fill_strong" />
-            <corners
-                android:topLeftRadius="30dp"
-                android:topRightRadius="30dp" />
-            <stroke android:width="1dp" android:color="@color/glass_border_soft" />
+            <gradient android:type="linear" android:angle="90"
+                android:startColor="@color/glass_fill" android:endColor="@color/glass_fill_strong"/>
+            <corners android:topLeftRadius="28dp" android:topRightRadius="28dp"/>
+            <stroke android:width="1dp" android:color="@color/glass_border_soft"/>
         </shape>
     </item>
 </layer-list>
