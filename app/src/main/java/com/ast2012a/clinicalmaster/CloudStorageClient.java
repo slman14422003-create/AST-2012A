@@ -93,8 +93,28 @@ final class CloudStorageClient {
         }
     }
 
-    /** رفع ملف جديد أو استبدال ملف موجود بنفس الاسم ("تعديل" الملف = رفع نسخة جديدة). */
+    /** مستمع تقدّم الرفع: onProgress يُستدعى من خيط الرفع (عدد البايتات المُرسلة فعليًا
+     *  للسيرفر)، وisCancelled يُفحص مع كل دفعة لإيقاف الرفع فورًا عند الإلغاء. */
+    interface UploadListener {
+        void onProgress(long sent, long total);
+        boolean isCancelled();
+    }
+
+    /** يُرمى لما يلغي المستخدم الرفع (ليس خطأ حقيقيًا). */
+    static final class UploadCancelledException extends IOException {
+        UploadCancelledException() {
+            super("أُلغي الرفع.");
+        }
+    }
+
     static void upload(Context ctx, String name, InputStream data, long length, String mimeType) throws IOException {
+        upload(ctx, name, data, length, mimeType, null);
+    }
+
+    /** رفع ملف جديد أو استبدال ملف موجود بنفس الاسم ("تعديل" الملف = رفع نسخة جديدة).
+     *  مع listener يُبلَّغ بالتقدّم الحقيقي (streaming بدون تخزين مؤقت للملف كله). */
+    static void upload(Context ctx, String name, InputStream data, long length, String mimeType,
+                       UploadListener listener) throws IOException {
         HttpURLConnection conn = open(ctx, "/files/" + encodeSegment(name), "PUT");
         conn.setDoOutput(true);
         conn.setReadTimeout(TRANSFER_READ_TIMEOUT);
@@ -106,9 +126,16 @@ final class CloudStorageClient {
         }
         try {
             OutputStream os = conn.getOutputStream();
-            byte[] buf = new byte[8192];
+            byte[] buf = new byte[16 * 1024];
+            long sent = 0;
             int n;
-            while ((n = data.read(buf)) != -1) os.write(buf, 0, n);
+            if (listener != null) listener.onProgress(0, length);
+            while ((n = data.read(buf)) != -1) {
+                if (listener != null && listener.isCancelled()) throw new UploadCancelledException();
+                os.write(buf, 0, n);
+                sent += n;
+                if (listener != null) listener.onProgress(sent, length);
+            }
             os.flush();
             checkResponse(conn);
         } finally {

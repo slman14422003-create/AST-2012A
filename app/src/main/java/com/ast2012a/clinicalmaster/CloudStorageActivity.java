@@ -1,22 +1,37 @@
 package com.ast2012a.clinicalmaster;
 
+import android.Manifest;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.ActivityNotFoundException;
 import android.content.ContentResolver;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.content.res.ColorStateList;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.provider.OpenableColumns;
+import android.text.format.Formatter;
 import android.view.Gravity;
 import android.view.View;
 import android.webkit.MimeTypeMap;
+import android.widget.ImageButton;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
+import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -51,6 +66,8 @@ public class CloudStorageActivity extends AppCompatActivity implements CloudFile
     };
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    // خيط منفصل للرفع: عشان تحميل/تحديث القائمة ما ينتظرش خلف رفع ملف كبير.
+    private final ExecutorService uploadExecutor = Executors.newSingleThreadExecutor();
 
     private RecyclerView list;
     private View content;
@@ -66,6 +83,25 @@ public class CloudStorageActivity extends AppCompatActivity implements CloudFile
     private String pendingReplaceTarget;
 
     private ActivityResultLauncher<String[]> pickDocumentLauncher;
+    private ActivityResultLauncher<String> notifPermissionLauncher;
+
+    // ---- بطاقة الرفع (شريط تقدّم حقيقي) + إشعار الانتهاء ----
+    private static final String UPLOAD_CHANNEL_ID = "cloud_uploads";
+    private static final int UPLOAD_NOTIFICATION_ID = 2002;
+    private static final String PREFS = "settings_prefs";
+    private static final String KEY_NOTIF_ASKED = "cloud_upload_notif_asked";
+    private static final long UPLOAD_CARD_AUTOHIDE_MS = 4000;
+
+    private View uploadCard;
+    private ImageView uploadIcon;
+    private TextView uploadName;
+    private TextView uploadStatus;
+    private ImageButton uploadCancel;
+    private ProgressBar uploadBar;
+    private volatile boolean uploading;
+    private volatile boolean uploadCancelled;
+    private boolean resumed;
+    private final Runnable hideUploadCardRunnable = this::hideUploadCard;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -96,6 +132,22 @@ public class CloudStorageActivity extends AppCompatActivity implements CloudFile
         fab = findViewById(R.id.fab_upload);
         headerSubtitle = findViewById(R.id.header_subtitle);
 
+        uploadCard = findViewById(R.id.upload_card);
+        uploadIcon = findViewById(R.id.upload_icon);
+        uploadName = findViewById(R.id.upload_name);
+        uploadStatus = findViewById(R.id.upload_status);
+        uploadCancel = findViewById(R.id.upload_cancel);
+        uploadBar = findViewById(R.id.upload_bar);
+        uploadCancel.setOnClickListener(v -> {
+            if (uploading) {
+                uploadCancelled = true;
+                uploadStatus.setText("جارٍ الإلغاء...");
+            } else {
+                hideUploadCard();
+            }
+        });
+        Ui.applyPressFeedback(uploadCancel);
+
         adapter = new CloudFileAdapter(this);
         list.setLayoutManager(new LinearLayoutManager(this));
         list.setAdapter(adapter);
@@ -109,12 +161,24 @@ public class CloudStorageActivity extends AppCompatActivity implements CloudFile
                 new ActivityResultContracts.OpenDocument(),
                 uri -> { if (uri != null) handlePickedFile(uri); });
 
+        // طلب إذن الإشعارات (أندرويد 13+) مرة واحدة فقط عند أول رفع، عشان يوصل إشعار
+        // الانتهاء لو خرج المستخدم من التطبيق أثناء الرفع. الرفع نفسه لا ينتظر القرار.
+        notifPermissionLauncher = registerForActivityResult(
+                new ActivityResultContracts.RequestPermission(), granted -> { });
+
         Ui.applyPressFeedback(fab);
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        resumed = false;
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+        resumed = true;
         if (!CloudStorageClient.isConfigured(this)) {
             showNotConfiguredState();
         } else {
@@ -131,7 +195,12 @@ public class CloudStorageActivity extends AppCompatActivity implements CloudFile
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        uploadCard.removeCallbacks(hideUploadCardRunnable);
         executor.shutdownNow();
+        // لو فيه رفع شغّال والمستخدم خرج من الشاشة نتركه يكمل (shutdown بدل
+        // shutdownNow) ويوصل إشعار الانتهاء، بدل ما ينقطع الرفع في المنتصف.
+        if (uploading) uploadExecutor.shutdown();
+        else uploadExecutor.shutdownNow();
     }
 
     private void launchPicker() {
@@ -245,6 +314,10 @@ public class CloudStorageActivity extends AppCompatActivity implements CloudFile
     // ------------------------------------------------------------------ رفع/استبدال
 
     private void handlePickedFile(Uri uri) {
+        if (uploading) {
+            Toast.makeText(this, "يوجد رفع جارٍ حاليًا، انتظر حتى ينتهي.", Toast.LENGTH_SHORT).show();
+            return;
+        }
         String displayName = queryDisplayName(uri);
         long size = queryFileSize(uri);
         String targetName = pendingReplaceTarget != null ? pendingReplaceTarget : displayName;
@@ -255,22 +328,173 @@ public class CloudStorageActivity extends AppCompatActivity implements CloudFile
         final String finalTarget = targetName;
         String mime = getContentResolver().getType(uri);
         if (mime == null) mime = guessMimeType(finalTarget);
-
-        progress.setVisibility(View.VISIBLE);
-        statusRow.setVisibility(View.GONE);
         final String finalMime = mime;
-        executor.execute(() -> {
+
+        askNotificationPermissionOnce();
+        statusRow.setVisibility(View.GONE);
+        uploading = true;
+        uploadCancelled = false;
+        showUploadCard(finalTarget, size);
+
+        final long[] lastUiUpdate = {0};
+        uploadExecutor.execute(() -> {
             try (InputStream in = getContentResolver().openInputStream(uri)) {
                 if (in == null) throw new java.io.IOException("تعذّر قراءة الملف المختار.");
-                CloudStorageClient.upload(this, finalTarget, in, size, finalMime);
-                runOnUiThread(() -> {
-                    Toast.makeText(this, "تم رفع \"" + finalTarget + "\" بنجاح.", Toast.LENGTH_SHORT).show();
-                    reload();
-                });
+                CloudStorageClient.upload(this, finalTarget, in, size, finalMime,
+                        new CloudStorageClient.UploadListener() {
+                            @Override
+                            public void onProgress(long sent, long total) {
+                                // نخفّف تحديثات الواجهة (~10 مرات في الثانية) بدل تحديث لكل دفعة
+                                long now = SystemClock.uptimeMillis();
+                                boolean done = total > 0 && sent >= total;
+                                if (!done && now - lastUiUpdate[0] < 100) return;
+                                lastUiUpdate[0] = now;
+                                runOnUiThread(() -> updateUploadProgress(sent, total));
+                            }
+
+                            @Override
+                            public boolean isCancelled() {
+                                return uploadCancelled;
+                            }
+                        });
+                runOnUiThread(() -> onUploadSucceeded(finalTarget, size));
+            } catch (CloudStorageClient.UploadCancelledException e) {
+                runOnUiThread(this::onUploadCancelled);
             } catch (Exception e) {
-                runOnUiThread(() -> showError("تعذّر رفع الملف.\n" + errorText(e)));
+                runOnUiThread(() -> onUploadFailed(finalTarget, errorText(e)));
             }
         });
+    }
+
+    // ------------------------------------------------------------------ بطاقة الرفع
+
+    private void showUploadCard(String name, long size) {
+        uploadCard.removeCallbacks(hideUploadCardRunnable);
+        uploadIcon.setImageResource(R.drawable.ic_folder);
+        uploadIcon.setImageTintList(ColorStateList.valueOf(getColor(R.color.primary_cyan)));
+        uploadBar.setProgressTintList(ColorStateList.valueOf(getColor(R.color.primary_cyan)));
+        uploadBar.setIndeterminate(size <= 0);
+        uploadBar.setProgress(0);
+        uploadCancel.setContentDescription("إلغاء الرفع");
+        uploadName.setText(name);
+        uploadStatus.setText("جارٍ الرفع... 0%");
+        uploadCard.setVisibility(View.VISIBLE);
+    }
+
+    private void updateUploadProgress(long sent, long total) {
+        if (isDestroyed() || !uploading || uploadCancelled) return;
+        if (total <= 0) {
+            // حجم الملف غير معروف: نعرض المرسل فقط بدون نسبة
+            uploadStatus.setText(BidiText.fix("جارٍ الرفع... " + Formatter.formatShortFileSize(this, sent)));
+            return;
+        }
+        int pct = (int) Math.min(100, (sent * 100) / total);
+        uploadBar.setIndeterminate(false);
+        uploadBar.setProgress(pct);
+        if (sent >= total) {
+            uploadStatus.setText("جارٍ إنهاء الرفع...");
+        } else {
+            uploadStatus.setText(BidiText.fix("جارٍ الرفع... " + pct + "%  ·  "
+                    + Formatter.formatShortFileSize(this, sent) + " من "
+                    + Formatter.formatShortFileSize(this, total)));
+        }
+    }
+
+    private void hideUploadCard() {
+        if (uploading || uploadCard == null) return;
+        uploadCard.removeCallbacks(hideUploadCardRunnable);
+        uploadCard.setVisibility(View.GONE);
+    }
+
+    private void onUploadSucceeded(String name, long size) {
+        uploading = false;
+        notifyUploadResult("تم رفع الملف", name);
+        if (isFinishing() || isDestroyed()) return;
+
+        int green = getColor(R.color.accent_green);
+        uploadBar.setIndeterminate(false);
+        uploadBar.setProgress(100);
+        uploadBar.setProgressTintList(ColorStateList.valueOf(green));
+        uploadIcon.setImageResource(R.drawable.ic_check);
+        uploadIcon.setImageTintList(ColorStateList.valueOf(green));
+        uploadName.setText(name);
+        uploadStatus.setText(size > 0
+                ? BidiText.fix("تم الرفع بنجاح  ·  " + Formatter.formatShortFileSize(this, size))
+                : "تم الرفع بنجاح");
+        uploadCancel.setContentDescription("إغلاق");
+        uploadCard.postDelayed(hideUploadCardRunnable, UPLOAD_CARD_AUTOHIDE_MS);
+        reload();
+    }
+
+    private void onUploadCancelled() {
+        uploading = false;
+        uploadCancelled = false;
+        if (isFinishing() || isDestroyed()) return;
+        uploadCard.setVisibility(View.GONE);
+        Toast.makeText(this, "أُلغي رفع الملف.", Toast.LENGTH_SHORT).show();
+    }
+
+    private void onUploadFailed(String name, String message) {
+        uploading = false;
+        notifyUploadResult("تعذّر رفع الملف", name);
+        if (isFinishing() || isDestroyed()) return;
+        uploadCard.setVisibility(View.GONE);
+        showError("تعذّر رفع الملف.\n" + message);
+    }
+
+    // ------------------------------------------------------------------ إشعار الانتهاء
+
+    private void askNotificationPermissionOnce() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return;
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                == PackageManager.PERMISSION_GRANTED) return;
+        android.content.SharedPreferences sp = getSharedPreferences(PREFS, MODE_PRIVATE);
+        if (sp.getBoolean(KEY_NOTIF_ASKED, false)) return;
+        sp.edit().putBoolean(KEY_NOTIF_ASKED, true).apply();
+        try {
+            notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS);
+        } catch (Exception ignored) {
+        }
+    }
+
+    /** إشعار نظام عند انتهاء الرفع (نجاح/فشل) — فقط لو المستخدم خارج هذه الشاشة، لأنه
+     *  لو كان يشوفها فبطاقة الرفع نفسها كافية ولا داعي لتكرار الإشعار. */
+    private void notifyUploadResult(String title, String fileName) {
+        if (resumed) return;
+        try {
+            android.content.Context app = getApplicationContext();
+            if (!NotificationManagerCompat.from(app).areNotificationsEnabled()) return;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                    && ContextCompat.checkSelfPermission(app, Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED) return;
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                NotificationManager nm = app.getSystemService(NotificationManager.class);
+                if (nm != null) {
+                    NotificationChannel ch = new NotificationChannel(
+                            UPLOAD_CHANNEL_ID, "رفع الملفات السحابية", NotificationManager.IMPORTANCE_DEFAULT);
+                    ch.setDescription("إشعار عند انتهاء رفع ملف إلى التخزين السحابي");
+                    nm.createNotificationChannel(ch);
+                }
+            }
+
+            Intent open = new Intent(app, CloudStorageActivity.class)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            PendingIntent content = PendingIntent.getActivity(app, 0, open,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+            NotificationCompat.Builder b = new NotificationCompat.Builder(app, UPLOAD_CHANNEL_ID)
+                    .setSmallIcon(R.drawable.ic_stat_pulse)
+                    .setContentTitle(title)
+                    .setContentText(BidiText.fix(fileName))
+                    .setCategory(NotificationCompat.CATEGORY_STATUS)
+                    .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                    .setContentIntent(content)
+                    .setAutoCancel(true)
+                    .setWhen(System.currentTimeMillis());
+            NotificationManagerCompat.from(app).notify(UPLOAD_NOTIFICATION_ID, b.build());
+        } catch (SecurityException ignored) {
+        }
     }
 
     private String queryDisplayName(Uri uri) {
