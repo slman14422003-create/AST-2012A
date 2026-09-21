@@ -545,6 +545,50 @@
                 </LinearLayout>
             </LinearLayout>
 
+            <!-- ============== الملفات السحابية (PDF/مستندات عبر Cloudflare Worker) ============== -->
+            <LinearLayout
+                style="@style/Settings.Group"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+
+                <LinearLayout
+                    android:id="@+id/btn_cloud_files"
+                    style="@style/Settings.Row"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                    <ImageView
+                        style="@style/Settings.RowIcon"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_cloud" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/Settings.RowTitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="الملفات السحابية" />
+
+                        <TextView
+                            style="@style/Settings.RowSubtitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="تخزين مجاني لملفات PDF والمستندات (رفع/تعديل/حذف)" />
+                    </LinearLayout>
+
+                    <ImageView
+                        style="@style/Settings.RowChevron"
+                        android:layout_width="20dp"
+                        android:layout_height="20dp" />
+                </LinearLayout>
+            </LinearLayout>
+
             <LinearLayout
                 style="@style/Settings.Group"
                 android:layout_width="match_parent"
