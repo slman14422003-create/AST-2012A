@@ -5,7 +5,11 @@ import android.content.Intent;
 import android.content.res.Configuration;
 import android.database.Cursor;
 import android.graphics.Bitmap;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.ColorMatrix;
+import android.graphics.ColorMatrixColorFilter;
+import android.graphics.Paint;
 import android.graphics.pdf.PdfRenderer;
 import android.net.Uri;
 import android.os.Bundle;
@@ -17,6 +21,7 @@ import android.text.InputType;
 import android.util.LruCache;
 import android.view.Gravity;
 import android.view.LayoutInflater;
+import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
@@ -29,6 +34,7 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.view.menu.MenuBuilder;
 import androidx.core.content.FileProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -87,6 +93,9 @@ public class PdfViewerActivity extends AppCompatActivity {
     private float[] ratios = new float[0];
     private File currentFile;
     private int zoomIndex = 0;
+    /** الوضع الليلي لصفحات الـ PDF: يُفعَّل تلقائياً حسب مظهر النظام، ويمكن للمستخدم تبديله يدوياً من القائمة. */
+    private boolean nightPagesEnabled;
+    private boolean nightPagesUserOverride = false;
     /** يزيد مع كل تغيير للتكبير؛ أي رسم قديم بجيل مختلف يُتجاهل. */
     private volatile int generation = 0;
     private LruCache<Long, Bitmap> cache;
@@ -106,9 +115,17 @@ public class PdfViewerActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_pdf_viewer);
 
+        // تفعيل الوضع الليلي للصفحات تلقائياً إذا كان النظام/التطبيق بالوضع الداكن.
+        nightPagesEnabled = isSystemNightMode();
+
         MaterialToolbar toolbar = findViewById(R.id.toolbar);
         toolbar.setNavigationOnClickListener(v -> finish());
         toolbar.inflateMenu(R.menu.menu_pdf_viewer);
+        // إظهار أيقونات القائمة الإضافية (مخفية افتراضياً في قوائم Toolbar/Popup).
+        Menu menu = toolbar.getMenu();
+        if (menu instanceof MenuBuilder) {
+            ((MenuBuilder) menu).setOptionalIconsVisible(true);
+        }
         toolbar.setOnMenuItemClickListener(this::onMenuItem);
 
         titleView = findViewById(R.id.pdf_title);
@@ -182,6 +199,27 @@ public class PdfViewerActivity extends AppCompatActivity {
         super.onConfigurationChanged(newConfig);
         // تدوير الشاشة: نعيد حساب عرض الصفحات حسب العرض الجديد
         if (ratios.length > 0) hScroll.post(this::applyZoom);
+        // إذا لم يتدخّل المستخدم يدوياً، نتابع تلقائياً أي تغيير بمظهر النظام (فاتح/داكن).
+        if (!nightPagesUserOverride) {
+            boolean night = isSystemNightMode();
+            if (night != nightPagesEnabled) {
+                nightPagesEnabled = night;
+                refreshRenderedPages();
+            }
+        }
+    }
+
+    private boolean isSystemNightMode() {
+        int mode = getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
+        return mode == Configuration.UI_MODE_NIGHT_YES;
+    }
+
+    /** يعيد رسم كل الصفحات الظاهرة بعد تبديل الوضع الليلي (يُبطل الذاكرة المؤقتة فقط، بدون تغيير التكبير). */
+    private void refreshRenderedPages() {
+        if (ratios.length == 0) return;
+        generation++;
+        cache.evictAll();
+        adapter.notifyDataSetChanged();
     }
 
     @Override
@@ -218,6 +256,13 @@ public class PdfViewerActivity extends AppCompatActivity {
             return true;
         } else if (id == R.id.action_pdf_pick_another) {
             launchPicker();
+            return true;
+        } else if (id == R.id.action_pdf_night_pages) {
+            nightPagesUserOverride = true;
+            nightPagesEnabled = !nightPagesEnabled;
+            refreshRenderedPages();
+            Toast.makeText(this, nightPagesEnabled ? "تم تفعيل الوضع الليلي للصفحات" : "تم إيقاف الوضع الليلي للصفحات",
+                    Toast.LENGTH_SHORT).show();
             return true;
         }
         return false;
@@ -389,7 +434,7 @@ public class PdfViewerActivity extends AppCompatActivity {
                 Bitmap bmp = Bitmap.createBitmap(bw, bh, Bitmap.Config.ARGB_8888);
                 bmp.eraseColor(Color.WHITE); // صفحات PDF شفافة افتراضيًا
                 p.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
-                return bmp;
+                return enhancePage(bmp, nightPagesEnabled);
             } catch (OutOfMemoryError oom) {
                 cache.evictAll();
                 return null;
@@ -399,6 +444,42 @@ public class PdfViewerActivity extends AppCompatActivity {
                 if (p != null) p.close();
             }
         }
+    }
+
+    /**
+     * تحسين تلقائي لجودة النص (تباين أوضح للحروف الرفيعة عند التصغير)، مع قلب الألوان
+     * اختيارياً لعرض الصفحة بالوضع الليلي (خلفية داكنة ونص فاتح) بدل الورقة البيضاء الأصلية.
+     */
+    private static Bitmap enhancePage(Bitmap src, boolean night) {
+        Bitmap out = Bitmap.createBitmap(src.getWidth(), src.getHeight(), Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(out);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+        paint.setColorFilter(new ColorMatrixColorFilter(buildEnhanceMatrix(night)));
+        canvas.drawBitmap(src, 0, 0, paint);
+        src.recycle();
+        return out;
+    }
+
+    private static ColorMatrix buildEnhanceMatrix(boolean night) {
+        // تباين أعلى قليلاً وتغميق نقطة الأسود: يبرز حروف النص الرفيعة بعد تصغير الصفحة لعرض الشاشة.
+        float c = 1.12f;
+        float t = -18f * c;
+        ColorMatrix matrix = new ColorMatrix(new float[]{
+                c, 0, 0, 0, t,
+                0, c, 0, 0, t,
+                0, 0, c, 0, t,
+                0, 0, 0, 1, 0
+        });
+        if (night) {
+            ColorMatrix invert = new ColorMatrix(new float[]{
+                    -1, 0, 0, 0, 255,
+                    0, -1, 0, 0, 255,
+                    0, 0, -1, 0, 255,
+                    0, 0, 0, 1, 0
+            });
+            matrix.postConcat(invert);
+        }
+        return matrix;
     }
 
     // ------------------------------------------------------------------ مؤشر الصفحة والانتقال
