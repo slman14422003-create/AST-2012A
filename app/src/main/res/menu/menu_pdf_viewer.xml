@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- قائمة قارئ PDF: تصغير/تكبير + (الانتقال لصفحة، فتح بتطبيق آخر، اختيار ملف آخر) في القائمة الإضافية -->
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <item
+        android:id="@+id/action_pdf_zoom_out"
+        android:icon="@drawable/ic_minus"
+        android:title="تصغير"
+        app:showAsAction="always" />
+    <item
+        android:id="@+id/action_pdf_zoom_in"
+        android:icon="@drawable/ic_plus"
+        android:title="تكبير"
+        app:showAsAction="always" />
+    <item
+        android:id="@+id/action_pdf_goto"
+        android:title="الانتقال إلى صفحة"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_pdf_open_external"
+        android:title="فتح بتطبيق آخر"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_pdf_pick_another"
+        android:title="فتح ملف PDF آخر"
+        app:showAsAction="never" />
+</menu>
