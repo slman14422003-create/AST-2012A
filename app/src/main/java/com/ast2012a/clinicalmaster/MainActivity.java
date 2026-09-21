@@ -40,6 +40,10 @@ public class MainActivity extends AppCompatActivity {
     private TextView aiInlineAnswerText;
     private RecyclerView resultsList;
     private CaseAdapter adapter;
+    // معاينة "مرضى اليوم" أعلى شاشة الترحيب - يُعبّئها loadTodayPatientsPreview()
+    private View todayPatientsCard;
+    private LinearLayout todayPatientsList;
+    private TextView todayPatientsTitle;
     private LayoutAnimationController listAnimation;
     private String lastQuery = "";
     private String lastAiAnswer = "";
@@ -79,6 +83,12 @@ public class MainActivity extends AppCompatActivity {
         settingsBtn.setOnClickListener(v -> navigateTo(SettingsActivity.class));
         Ui.applyPressFeedback(settingsBtn);
 
+        // وصول سريع لـ "الملفات السحابية" من الشاشة الرئيسية نفسها (مطلوب
+        // من المستخدم) - نفس شاشة الإعدادات ← الملفات السحابية بالظبط.
+        ImageButton cloudStorageBtn = findViewById(R.id.btn_cloud_storage);
+        cloudStorageBtn.setOnClickListener(v -> navigateTo(CloudStorageActivity.class));
+        Ui.applyPressFeedback(cloudStorageBtn);
+
         // عبارة ترحيب متغيّرة (صباح الخير/مساء الخير...) تظهر كعنوان الشاشة
         // الترحيبية (بأسلوب Claude) بدل النص الثابت القديم.
         TextView heroTitle = findViewById(R.id.empty_hint_title);
@@ -103,6 +113,12 @@ public class MainActivity extends AppCompatActivity {
         aiInlineAnswerScroll = findViewById(R.id.ai_inline_answer_scroll);
         aiInlineAnswerText = findViewById(R.id.ai_inline_answer_text);
         resultsList = findViewById(R.id.results_list);
+
+        todayPatientsCard = findViewById(R.id.today_patients_card);
+        todayPatientsList = findViewById(R.id.today_patients_list);
+        todayPatientsTitle = findViewById(R.id.today_patients_title);
+        todayPatientsCard.setOnClickListener(v -> navigateTo(PatientsActivity.class));
+        Ui.applyPressFeedback(todayPatientsCard);
 
         adapter = new CaseAdapter(this::openDetail);
         adapter.setOnFavoriteToggleListener((item, nowFavorite) -> {
@@ -195,6 +211,143 @@ public class MainActivity extends AppCompatActivity {
         });
 
         doSearch("");
+        loadTodayPatientsPreview();
+        handleReminderIntent(getIntent());
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleReminderIntent(intent);
+    }
+
+    /** لو النشاط اتفتح من إشعار "جلسات اليوم" (SessionReminder)، نعرض رسالة
+     *  فيها تفاصيل المرضى والساعات فورًا بدل ما نكتفي بفتح الشاشة فاضية. */
+    private void handleReminderIntent(Intent intent) {
+        if (intent == null || !intent.getBooleanExtra(SessionReminder.EXTRA_SHOW_TODAY, false)) return;
+        intent.removeExtra(SessionReminder.EXTRA_SHOW_TODAY); // منع إعادة العرض عند تدوير الشاشة مثلًا
+        showTodayPatientsDialog();
+    }
+
+    /** يجيب مرضى اليوم (نفس منطق SessionReminder بالضبط) على خيط خلفية،
+     *  ويعرضهم في رسالة (ClaudeDialog) بالاسم + الساعة لكل مريض. */
+    private void showTodayPatientsDialog() {
+        executor.execute(() -> {
+            List<SessionReminder.Entry> today = SessionReminder.patientsToday(this, System.currentTimeMillis());
+            runOnUiThread(() -> {
+                if (isFinishing()) return;
+                if (today.isEmpty()) {
+                    new ClaudeDialog(this)
+                            .setTitle("جلسات اليوم")
+                            .setMessage("لا توجد جلسات مسجلة لليوم حاليًا.")
+                            .setPositiveButton("حسنًا", null)
+                            .show();
+                    return;
+                }
+                StringBuilder msg = new StringBuilder();
+                for (SessionReminder.Entry e : today) {
+                    if (msg.length() > 0) msg.append('\n');
+                    msg.append("• ").append(e.name);
+                    if (e.minutes >= 0) msg.append("  —  ").append(Fmt.minutesToTime(e.minutes));
+                }
+                new ClaudeDialog(this)
+                        .setTitle(today.size() == 1 ? "جلسة اليوم" : "جلسات اليوم (" + today.size() + ")")
+                        .setMessage(msg.toString())
+                        .setPositiveButton("عرض المرضى", (d, w) -> navigateTo(PatientsActivity.class))
+                        .setNegativeButton("إغلاق", null)
+                        .show();
+            });
+        });
+    }
+
+    /** يعبّئ بطاقة "مرضى اليوم" الصغيرة أعلى شاشة الترحيب (أول 4 مرضى + عداد
+     *  الباقي)، ويخفيها تمامًا لو ملهاش داعي (لا يوجد جلسات اليوم). */
+    private void loadTodayPatientsPreview() {
+        executor.execute(() -> {
+            List<SessionReminder.Entry> today = SessionReminder.patientsToday(this, System.currentTimeMillis());
+            runOnUiThread(() -> applyTodayPatientsPreview(today));
+        });
+    }
+
+    private static final int TODAY_PREVIEW_MAX_ROWS = 4;
+
+    private void applyTodayPatientsPreview(List<SessionReminder.Entry> today) {
+        if (isFinishing()) return;
+        todayPatientsList.removeAllViews();
+        if (today.isEmpty()) {
+            todayPatientsCard.setVisibility(View.GONE);
+            return;
+        }
+        todayPatientsCard.setVisibility(View.VISIBLE);
+        todayPatientsTitle.setText(today.size() == 1 ? "مريض واحد لديه جلسة اليوم" : "مرضى اليوم (" + today.size() + ")");
+
+        int shown = Math.min(today.size(), TODAY_PREVIEW_MAX_ROWS);
+        for (int i = 0; i < shown; i++) {
+            addTodayPatientRow(today.get(i), i > 0);
+        }
+        if (today.size() > shown) {
+            TextView more = new TextView(this);
+            more.setText("+" + (today.size() - shown) + " آخرين");
+            more.setTextColor(getColor(R.color.text_tertiary));
+            more.setTextSize(13f);
+            more.setTextDirection(View.TEXT_DIRECTION_RTL);
+            more.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+            more.setPadding(0, Ui.dp(this, 8), 0, 0);
+            todayPatientsList.addView(more);
+        }
+    }
+
+    private void addTodayPatientRow(SessionReminder.Entry entry, boolean withDivider) {
+        if (withDivider) {
+            View divider = new View(this);
+            divider.setBackgroundColor(getColor(R.color.glass_border_soft));
+            LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 1));
+            todayPatientsList.addView(divider, dlp);
+        }
+
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        row.setPadding(0, Ui.dp(this, 9), 0, Ui.dp(this, 9));
+        row.setClickable(true);
+        row.setFocusable(true);
+        android.util.TypedValue tv = new android.util.TypedValue();
+        if (getTheme().resolveAttribute(android.R.attr.selectableItemBackground, tv, true)) {
+            row.setBackgroundResource(tv.resourceId);
+        }
+
+        TextView nameView = new TextView(this);
+        nameView.setText(entry.name);
+        nameView.setTextColor(getColor(R.color.text_primary));
+        nameView.setTextSize(14.5f);
+        nameView.setTextDirection(View.TEXT_DIRECTION_RTL);
+        nameView.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+        nameView.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        nameView.setMaxLines(1);
+        row.addView(nameView, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+        if (entry.minutes >= 0) {
+            TextView timeView = new TextView(this);
+            timeView.setText(Fmt.minutesToTime(entry.minutes));
+            timeView.setTextColor(getColor(R.color.text_tertiary));
+            timeView.setTextSize(13f);
+            timeView.setPadding(Ui.dp(this, 10), 0, 0, 0);
+            row.addView(timeView);
+        }
+
+        row.setOnClickListener(v -> {
+            if (entry.id == null) {
+                navigateTo(PatientsActivity.class);
+                return;
+            }
+            Intent i = new Intent(this, PatientDetailActivity.class);
+            i.putExtra("patient_id", entry.id);
+            startActivity(i);
+            overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
+        });
+        todayPatientsList.addView(row);
     }
 
     private void setupSuggestionChip(int viewId) {
@@ -211,6 +364,7 @@ public class MainActivity extends AppCompatActivity {
         } else if (searchField.getText() != null) {
             doSearch(searchField.getText().toString());
         }
+        loadTodayPatientsPreview();
         // فحص صامت للتحديثات (كل 6 ساعات) وعرض نافذة التحديث لو وُجد إصدار أحدث
         UpdateManager.autoCheck(this);
     }

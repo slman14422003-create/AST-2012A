@@ -37,6 +37,11 @@ final class SessionReminder {
     static final String ACTION_FIRE = "com.ast2012a.clinicalmaster.action.SESSION_REMINDER";
     static final String CHANNEL_ID = "session_reminders";
 
+    /** Extra على الـ Intent المفتوح من الإشعار: يطلب من MainActivity عرض
+     *  رسالة (ClaudeDialog) فيها تفاصيل مرضى اليوم والساعات، بدل ما يفتح
+     *  فقط شاشة المرضى مباشرة بدون أي تفاصيل واضحة. */
+    static final String EXTRA_SHOW_TODAY = "show_today_reminder";
+
     static final int REMINDER_HOUR = 8;
     static final int REMINDER_MINUTE = 0;
     private static final int LATE_CUTOFF_HOUR = 21;
@@ -106,11 +111,13 @@ final class SessionReminder {
     // ---------------------------------------------------------- مرضى اليوم
 
     static final class Entry {
+        final String id;
         final String name;
         /** دقائق منذ منتصف الليل، أو -1 لو بلا وقت. */
         final int minutes;
 
-        Entry(String name, int minutes) {
+        Entry(String id, String name, int minutes) {
+            this.id = id;
             this.name = name;
             this.minutes = minutes;
         }
@@ -147,7 +154,7 @@ final class SessionReminder {
             } else if (p.sessionTimeMin >= 0) {
                 minutes = p.sessionTimeMin;
             }
-            out.add(new Entry(p.displayName(), minutes));
+            out.add(new Entry(p.id, p.displayName(), minutes));
         }
         Collections.sort(out, new Comparator<Entry>() {
             @Override
@@ -220,8 +227,13 @@ final class SessionReminder {
             if (e.minutes >= 0) big.append(" — ").append(Fmt.minutesToTime(e.minutes));
         }
 
-        Intent open = new Intent(ctx, PatientsActivity.class)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        // ملحوظة إصلاح "الضغط على الإشعار ما بيوريش تفاصيل": كان بيفتح شاشة
+        // المرضى العامة مباشرة بدون أي تفاصيل واضحة عن مين لديه جلسة اليوم
+        // ولا في أي وقت. الحل: نفتح MainActivity مع Extra خاص، وهي بدورها
+        // تعرض رسالة (ClaudeDialog) فيها كل الأسماء + الساعات بشكل واضح.
+        Intent open = new Intent(ctx, MainActivity.class)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                .putExtra(EXTRA_SHOW_TODAY, true);
         PendingIntent content = PendingIntent.getActivity(ctx, 0, open,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
