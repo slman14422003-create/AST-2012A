@@ -16,8 +16,6 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
-import androidx.core.app.NotificationCompat;
-import androidx.core.app.NotificationManagerCompat;
 
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.materialswitch.MaterialSwitch;
@@ -30,8 +28,9 @@ import java.util.concurrent.Executors;
 
 /**
  * شاشة الإعدادات (بأسلوب تطبيق Claude): مجموعات صفوف، كل صف أيقونة + عنوان +
- * وصف اختياري. الإشعارات الحقيقية تعمل عبر NotificationManager (منسوبة للتطبيق
- * نفسه على أندرويد، وليست منسوبة لأي متصفح أو WebView).
+ * وصف اختياري. مفتاح الإشعارات هنا بيفعّل/يوقف فقط تذكير جلسات اليوم
+ * الحقيقي (SessionReminder، AlarmManager محلي بدون سيرفر) - بدون أي
+ * إشعار تجريبي وهمي عند التفعيل.
  *
  * Phizyo AI ليس له سوى مزوّد واحد ثابت (AiClient.FIXED_WORKER_URL) مبني
  * داخل التطبيق نفسه - لا يوجد مفتاح API ولا رابط قابل للتعديل من هنا.
@@ -41,7 +40,6 @@ import java.util.concurrent.Executors;
  */
 public class SettingsActivity extends AppCompatActivity {
 
-    private static final String CHANNEL_ID = "clinical_master_channel";
     private static final String PREFS = "settings_prefs";
     private static final String KEY_NOTIF_ENABLED = "notif_enabled";
 
@@ -66,8 +64,6 @@ public class SettingsActivity extends AppCompatActivity {
         MaterialToolbar toolbar = findViewById(R.id.toolbar);
         toolbar.setNavigationOnClickListener(v -> finish());
 
-        createNotificationChannel();
-
         themeValue = findViewById(R.id.theme_value);
         notifStatus = findViewById(R.id.notif_status);
         instructionsStatus = findViewById(R.id.ai_instructions_status);
@@ -81,7 +77,7 @@ public class SettingsActivity extends AppCompatActivity {
                 granted -> {
                     if (granted) {
                         setNotifEnabled(true);
-                        sendTestNotification();
+                        Toast.makeText(this, "تم تفعيل تذكير جلسات اليوم - إشعار حقيقي كل صباح الساعة 8:00.", Toast.LENGTH_SHORT).show();
                     } else {
                         Toast.makeText(this, "لم يتم منح إذن الإشعارات.", Toast.LENGTH_SHORT).show();
                     }
@@ -207,7 +203,8 @@ public class SettingsActivity extends AppCompatActivity {
     private void showHowItWorksDialog() {
         String message = "1) Phizyo AI نفسه يقرر لكل رسالة هل يحتاج للبحث أم لا. إذا كانت الرسالة دردشة عادية يرد عليك مباشرة بدون أي بحث.\n\n" +
                 "2) إذا كانت الرسالة سؤالًا إكلينيكيًا يتحقق أولًا من قاعدة بيانات الجهاز (130 حالة موثقة)، والتطابق المباشر يُجاب فورًا بدون إنترنت.\n\n" +
-                "3) غير ذلك يُستخدم بحث Physiopedia أولًا (مرجع متخصص في العلاج الطبيعي)، ثم ويكيبيديا كخلفية عامة تكميلية إذا لم توجد نتيجة. الصياغة النهائية دائمًا عبر Phizyo AI وتلتزم بأي تعليمات مخصّصة تضيفها.";
+                "3) غير ذلك يُستخدم بحث Physiopedia حصرًا (مرجع متخصص في العلاج الطبيعي فقط - بدون أي بحث عام آخر). الصياغة النهائية دائمًا عبر Phizyo AI وتلتزم بأي تعليمات مخصّصة تضيفها.\n\n" +
+                "4) المساعد يتذكر آخر رسائل نفس المحادثة (ذاكرة قصيرة المدى محلية على جهازك) عشان يفهم الإشارات المختصرة بالرجوع لما قلته قبل شوي، بدل ما يعامل كل رسالة كأنها منفصلة تمامًا.";
         new ClaudeDialog(this)
                 .setTitle("كيف يعمل Phizyo AI؟")
                 .setMessage(message)
@@ -256,16 +253,6 @@ public class SettingsActivity extends AppCompatActivity {
     // الإشعارات
     // -----------------------------------------------------------------
 
-    private void createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            android.app.NotificationChannel channel = new android.app.NotificationChannel(
-                    CHANNEL_ID, "تنبيهات Phizyo Studio", android.app.NotificationManager.IMPORTANCE_DEFAULT);
-            channel.setDescription("إشعارات عامة من تطبيق Phizyo Studio");
-            android.app.NotificationManager manager = getSystemService(android.app.NotificationManager.class);
-            if (manager != null) manager.createNotificationChannel(channel);
-        }
-    }
-
     private SharedPreferences prefs() {
         return getSharedPreferences(PREFS, MODE_PRIVATE);
     }
@@ -307,24 +294,8 @@ public class SettingsActivity extends AppCompatActivity {
             return;
         }
         setNotifEnabled(true);
-        sendTestNotification();
+        Toast.makeText(this, "تم تفعيل تذكير جلسات اليوم - إشعار حقيقي كل صباح الساعة 8:00.", Toast.LENGTH_SHORT).show();
         refreshNotifRow();
-    }
-
-    private void sendTestNotification() {
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.ic_popup_reminder)
-                .setContentTitle("Phizyo Studio")
-                .setContentText("الإشعارات تعمل بنجاح - هذا إشعار حقيقي من التطبيق نفسه.")
-                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-                .setAutoCancel(true);
-
-        try {
-            NotificationManagerCompat.from(this).notify(1001, builder.build());
-            Toast.makeText(this, "تم إرسال إشعار تجريبي.", Toast.LENGTH_SHORT).show();
-        } catch (SecurityException e) {
-            Toast.makeText(this, "تعذر إرسال الإشعار - الإذن غير ممنوح.", Toast.LENGTH_SHORT).show();
-        }
     }
 
     // -----------------------------------------------------------------

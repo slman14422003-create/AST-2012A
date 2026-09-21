@@ -51,7 +51,14 @@ public class AiClient {
      * ثابتة في الكود - فهو اللي "يقرر" فعلًا هل محتاج يبحث ولا لأ.
      * لازم يُستدعى من Thread خلفية (نفس شرط sendMessage). */
     public static void classifyIntent(String userMessage, Callback callback) {
-        sendViaWorker(FIXED_WORKER_URL, AiPrompts.buildRouterPrompt(), userMessage, callback);
+        classifyIntent(userMessage, null, callback);
+    }
+
+    /** نفس التصنيف أعلاه، مع إرفاق سياق المحادثة السابقة (ذاكرة قصيرة
+     *  المدى) لو موجود، عشان القرار يفهم إشارات مختصرة بترجع لسياق سابق
+     *  في نفس الجلسة بدل ما يحكم على الرسالة بمعزل تام عمّا قبلها. */
+    public static void classifyIntent(String userMessage, String historyContext, Callback callback) {
+        sendViaWorker(FIXED_WORKER_URL, AiPrompts.buildRouterPrompt(historyContext), userMessage, callback);
     }
 
     /**

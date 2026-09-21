@@ -91,7 +91,7 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ViewHolder> {
         holder.aiText.setText(m.text);
 
         // شارة المصدر: تظهر تحت رد المساعد لو الإجابة استندت لمصدر موثّق
-        // (قاعدة بيانات الجهاز و/أو ويكيبيديا) - شفافية كاملة لأصل المعلومة.
+        // (قاعدة بيانات الجهاز و/أو Physiopedia) - شفافية كاملة لأصل المعلومة.
         if (m.sourceLabel != null && !m.sourceLabel.isEmpty()) {
             holder.source.setVisibility(View.VISIBLE);
             holder.source.setText(m.sourceLabel + (m.sourceUrl != null ? "  ↗" : ""));

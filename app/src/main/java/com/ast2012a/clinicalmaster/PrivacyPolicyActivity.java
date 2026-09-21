@@ -10,7 +10,7 @@ import com.google.android.material.appbar.MaterialToolbar;
  * شاشة سياسة الخصوصية. النص وصفي وصادق بحسب سلوك التطبيق الفعلي فقط
  * (لا يوجد سيرفر خاص بالتطبيق، كل شيء محلي على الجهاز، والاستثناء
  * الوحيد هو استدعاءات شبكة مباشرة من جهاز المستخدم نفسه لرابط Cloudflare
- * Worker الثابت الخاص بـ Phizyo AI أو لـ Physiopedia/ويكيبيديا عند
+ * Worker الثابت الخاص بـ Phizyo AI أو لـ Physiopedia حصرًا عند
  * استخدام المساعد الذكي).
  *
  * النص نفسه صار داخل res/layout/activity_privacy_policy.xml (أقسام في

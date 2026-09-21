@@ -381,8 +381,8 @@ public class MainActivity extends AppCompatActivity {
 
     /** يسأل المساعد الذكي مباشرة من نفس شاشة البحث بدون الحاجة للانتقال
      *  لشاشة منفصلة. بيستخدم نفس مسار القرار الموحّد (AiOrchestrator):
-     *  النموذج نفسه يقرر هل محتاج يبحث في قاعدة الجهاز/Physiopedia/ويكيبيديا
-     *  ولا يرد مباشرة، بدل ما يشغّل البحث الثلاثي إجباريًا مع كل استعلام. */
+     *  النموذج نفسه يقرر هل محتاج يبحث في قاعدة الجهاز/Physiopedia
+     *  ولا يرد مباشرة، بدل ما يشغّل البحث الثنائي إجباريًا مع كل استعلام. */
     private void askAiInline(String query) {
         if (query == null || query.trim().isEmpty()) return;
 

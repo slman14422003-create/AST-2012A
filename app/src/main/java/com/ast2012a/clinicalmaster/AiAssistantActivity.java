@@ -19,6 +19,8 @@ import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.textfield.TextInputEditText;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -27,13 +29,18 @@ import java.util.concurrent.Executors;
  * المبني داخل التطبيق (AiClient.FIXED_WORKER_URL) - بدون أي إعداد أو
  * مفتاح مطلوب من المستخدم.
  *
- * كل سؤال يمر بمرحلتين تأريض (Grounding) قبل الوصول للنموذج، عشان تقل
- * الهلوسة والإجابات المخترعة قدر الإمكان:
+ * كل سؤال إكلينيكي يمر بمرحلتي تأريض (Grounding) قبل الوصول للنموذج، عشان
+ * تقل الهلوسة والإجابات المخترعة قدر الإمكان:
  * 1) قاعدة بيانات الجهاز المحلية (البروتوكولات الموثقة لأنماط AST-2012A).
- * 2) موسوعة ويكيبيديا (عربي ثم إنجليزي) - مصدر معرفة عام موثوق ومجاني
- *    بالكامل بدون مفتاح، يُستخدم كخلفية طبية/علمية عامة تكمّل قاعدة الجهاز.
+ * 2) Physiopedia حصرًا (مرجع علاج طبيعي متخصص فقط) - بدون أي بحث عام
+ *    احتياطي خارج نطاق العلاج الطبيعي.
  *
- * أي إجابة استندت لأحد المصدرين تُعرض ومعها شارة مصدر شفافة قابلة للفتح.
+ * ذاكرة المحادثة: كل رسالة بترسل ومعاها آخر رسائل نفس الجلسة كسياق قصير
+ * المدى (AiOrchestrator.answer(..., history, ...))، عشان لو المستخدم قال
+ * "بدي مريض" أو أي إشارة مختصرة، المساعد يفهمها بالرجوع للسياق اللي فات.
+ *
+ * أي إجابة استندت لمصدر (قاعدة الجهاز و/أو Physiopedia) تُعرض ومعها شارة
+ * مصدر شفافة قابلة للفتح.
  */
 public class AiAssistantActivity extends AppCompatActivity {
 
@@ -204,6 +211,11 @@ public class AiAssistantActivity extends AppCompatActivity {
     private void sendQuery(String text, boolean addUserBubble) {
         if (text == null || text.trim().isEmpty()) return;
 
+        // لقطة من سجل المحادثة الحالي (قبل إضافة رسالة المستخدم الجديدة)
+        // عشان تُستخدم كذاكرة قصيرة المدى - أي إشارة مختصرة بالرسالة
+        // الحالية (زي "بدي مريض") تُفهم بالرجوع لهذا السياق.
+        List<ChatMessage> historySnapshot = new ArrayList<>(adapter.getMessages());
+
         if (addUserBubble) {
             adapter.addMessage(new ChatMessage(ChatMessage.ROLE_USER, text));
             AiChatStore.save(this, adapter.getMessages());
@@ -214,7 +226,7 @@ public class AiAssistantActivity extends AppCompatActivity {
 
         setTypingStage(0);
 
-        executor.execute(() -> AiOrchestrator.answer(this, text, contextPatientId,
+        executor.execute(() -> AiOrchestrator.answer(this, text, contextPatientId, historySnapshot,
                 new AiOrchestrator.StageListener() {
                     @Override public void onClassifying() { runOnUiThread(() -> setTypingStage(0)); }
                     @Override public void onSearching() { runOnUiThread(() -> setTypingStage(1)); }
@@ -224,7 +236,7 @@ public class AiAssistantActivity extends AppCompatActivity {
                     @Override
                     public void onChatReply(String reply) {
                         runOnUiThread(() -> {
-                            typingIndicator.setVisibility(View.GONE);
+                            hideTypingIndicator();
                             adapter.addMessage(new ChatMessage(ChatMessage.ROLE_AI, reply, null, null, text));
                             AiChatStore.save(AiAssistantActivity.this, adapter.getMessages());
                             chatList.smoothScrollToPosition(adapter.getItemCount() - 1);
@@ -234,7 +246,7 @@ public class AiAssistantActivity extends AppCompatActivity {
                     @Override
                     public void onGroundedReply(String reply, String sourceLabel, String sourceUrl) {
                         runOnUiThread(() -> {
-                            typingIndicator.setVisibility(View.GONE);
+                            hideTypingIndicator();
                             adapter.addMessage(new ChatMessage(ChatMessage.ROLE_AI, reply, sourceLabel, sourceUrl, text));
                             AiChatStore.save(AiAssistantActivity.this, adapter.getMessages());
                             chatList.smoothScrollToPosition(adapter.getItemCount() - 1);
@@ -244,7 +256,7 @@ public class AiAssistantActivity extends AppCompatActivity {
                     @Override
                     public void onError(String message) {
                         runOnUiThread(() -> {
-                            typingIndicator.setVisibility(View.GONE);
+                            hideTypingIndicator();
                             Toast.makeText(AiAssistantActivity.this, message, Toast.LENGTH_LONG).show();
                         });
                     }
@@ -252,9 +264,15 @@ public class AiAssistantActivity extends AppCompatActivity {
     }
 
     /** ثلاث مراحل بس للمؤشر: 0) بيفهم قصدك (تصنيف خفيف) 1) بيبحث (لو
-     *  احتاج فعلًا) 2) بيكتب الرد النهائي. */
+     *  احتاج فعلًا) 2) بيكتب الرد النهائي. أول ظهور للمؤشر بيتدرّج بـfade
+     *  بدل ما يظهر فجأة (نفس فكرة hideTypingIndicator أسفل). */
     private void setTypingStage(int stage) {
-        typingIndicator.setVisibility(View.VISIBLE);
+        if (typingIndicator.getVisibility() != View.VISIBLE) {
+            typingIndicator.animate().cancel();
+            typingIndicator.setAlpha(0f);
+            typingIndicator.setVisibility(View.VISIBLE);
+            typingIndicator.animate().alpha(1f).setDuration(180).start();
+        }
         String label;
         switch (stage) {
             case 1:
@@ -267,6 +285,15 @@ public class AiAssistantActivity extends AppCompatActivity {
                 label = "بيفهم قصدك...";
         }
         typingText.setText(label);
+    }
+
+    /** إخفاء مؤشر الكتابة بتدرّج ناعم (fade-out) بدل الاختفاء المفاجئ -
+     *  نفس روح تدرّج الظهور في setTypingStage. */
+    private void hideTypingIndicator() {
+        typingIndicator.animate().cancel();
+        typingIndicator.animate().alpha(0f).setDuration(150)
+                .withEndAction(() -> typingIndicator.setVisibility(View.GONE))
+                .start();
     }
 
     private void openSaveAsCase(String aiText) {

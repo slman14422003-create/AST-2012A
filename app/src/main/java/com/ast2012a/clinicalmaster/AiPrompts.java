@@ -14,12 +14,21 @@ import android.content.SharedPreferences;
  * يبقى أحد الأدوات المتاحة له وليس كل نطاق معرفته.
  *
  * تحديث مهم (v2): المساعد بقى يفرّق بين نوعين من الرسائل بدل ما يعامل كل
- * رسالة كسؤال إكلينيكي لازم يبحث له في قاعدة الجهاز/Physiopedia/ويكيبيديا:
+ * رسالة كسؤال إكلينيكي لازم يبحث له في قاعدة الجهاز/Physiopedia:
  * 1) دردشة عادية (تحية، سؤال عن الهوية، شكر...) → BASE_CHAT_PROMPT، بدون
  *    أي بحث خارجي وبدون إجبار على سؤال توضيحي.
  * 2) سؤال إكلينيكي فعلي → BASE_SYSTEM_PROMPT الكامل + أي تأريض مُجهّز.
  * القرار بين الاثنين يتخذه النموذج نفسه (AiOrchestrator + ROUTER_PROMPT)،
  * مش قاعدة كلمات مفتاحية ثابتة في الكود.
+ *
+ * تحديث v3: البحث الخارجي بقى مقصور حصرًا على Physiopedia (مرجع متخصص
+ * في العلاج الطبيعي فقط) - اتشالت ويكيبيديا نهائيًا من مسار التأريض، فمفيش
+ * أي بحث عام خارج نطاق العلاج الطبيعي مهما كان السؤال.
+ *
+ * تحديث v4 (ذاكرة المحادثة): كل استدعاء بقى ممكن ياخد "سياق المحادثة
+ * السابقة" (buildHistoryContext) عشان النموذج يفهم إشارات مختصرة زي "بدي
+ * مريض" أو "زي ما قلنا" بالرجوع لآخر رسائل نفس الجلسة، بدل ما يعامل كل
+ * رسالة كأنها معزولة تمامًا عمّا قبلها.
  */
 public class AiPrompts {
 
@@ -43,8 +52,9 @@ public class AiPrompts {
             "2) موسوعة أنماط الجهاز ودليل التشريح (مواضع الأقطاب والمسارات العصبية " +
             "والعضلية) - مرجعان موثقان داخل التطبيق نفسه، 3) ملفات مرضى المستخدم " +
             "الفعليين (تشخيص، سجل جلسات، تطور الألم، ملاحظات إكلينيكية، برامج علاج " +
-            "مرتبطة) عندما تُرفَق لك، 4) Physiopedia وويكيبيديا كمصادر خارجية موثوقة " +
-            "للبحث عند الحاجة لمعلومة عامة غير متوفرة محليًا.\n\n" +
+            "مرتبطة) عندما تُرفَق لك، 4) Physiopedia حصرًا كمصدر خارجي موثوق ومتخصص " +
+            "في العلاج الطبيعي فقط عند الحاجة لمعلومة عامة غير متوفرة محليًا - بدون " +
+            "أي بحث عام خارج نطاق العلاج الطبيعي.\n\n" +
             "قاعدة خصوصية صارمة لا استثناء فيها: أي بيانات مريض تُرفَق لك جاءتك مسبقًا " +
             "بدون اسم المريض أو رقم هاتفه عمدًا لحماية خصوصيته - لا تطلب هذين الحقلين " +
             "أبدًا، ولا تفترضهما، ولا تخترعهما، وأشر لأي مريض بصفته (\"المريض\") أو " +
@@ -63,7 +73,7 @@ public class AiPrompts {
             "أجب بإيجاز ووضوح وبدقة سريرية باللغة العربية، واذكر تحذيرات السلامة المهمة " +
             "عند الحاجة (مثل منظمات ضربات القلب والحمل والجروح المفتوحة والأورام " +
             "والجلطات). إذا زُوّدت ببروتوكولات موثقة من قاعدة بيانات الجهاز و/أو خلفية " +
-            "معرفية من الموسوعة/التشريح/Physiopedia/ويكيبيديا، اجعلها مرجعك الأساسي عند " +
+            "معرفية من الموسوعة/التشريح/Physiopedia، اجعلها مرجعك الأساسي عند " +
             "الصلة، ووازن بينها وبين معرفتك العامة الأوسع بوضوح (اتفاق أو اختلاف)، ونبّه " +
             "لو المصدر الخارجي عام ومش متخصص طبيًا بدقة. اقترح خطة علاج مستقرة ومتماسكة " +
             "بناءً على أفضل مصدر متاح، ونظّم إجاباتك الطويلة في نقاط قصيرة وواضحة بدل " +
@@ -92,8 +102,8 @@ public class AiPrompts {
 
     /** تعليمات مصنّف النية (Router): استدعاء منفصل وخفيف قبل أي رد فعلي،
      *  هدفه الوحيد إن النموذج نفسه - مش قاعدة كلمات مفتاحية جامدة في الكود -
-     *  يقرر هل الرسالة محتاجة بحث/تأريض (قاعدة بيانات الجهاز، Physiopedia،
-     *  ويكيبيديا) ولا لأ. الرد المتوقع: كلمة واحدة فقط بدون أي شرح. */
+     *  يقرر هل الرسالة محتاجة بحث/تأريض (قاعدة بيانات الجهاز، Physiopedia)
+     *  ولا لأ. الرد المتوقع: كلمة واحدة فقط بدون أي شرح. */
     private static final String ROUTER_PROMPT =
             "مهمتك الوحيدة الآن: تصنيف رسالة مستخدم في تطبيق مساعد علاج طبيعي (Phizyo AI) " +
             "بالضبط - لا تجب على الرسالة نفسها إطلاقًا ولا تشرح تصنيفك ولا تضيف أي كلمة " +
@@ -104,12 +114,54 @@ public class AiPrompts {
             "أنماطه أو موسوعة الأنماط أو دليل التشريح، ويحتاج معلومة موثقة أو دقيقة.\n" +
             "CHAT → لو الرسالة تحية أو دردشة عامة أو سؤال عن هوية المساعد أو شكر أو " +
             "كلام عادي لا يحتاج بحثًا طبيًا على الإطلاق.\n" +
-            "أعد الكلمة فقط (SEARCH أو CHAT) بدون علامات ترقيم أو تنسيق أو أي نص إضافي.";
+            "أعد الكلمة فقط (SEARCH أو CHAT) بدون علامات ترقيم أو تنسيق أو أي نص إضافي. " +
+            "لو مرفق لك أسفل \"سياق محادثة سابقة\"، استخدمه فقط لفهم مقصود الرسالة " +
+            "الحالية (زي كلمة مختصرة بترجع لموضوع سابق)، لكن صنّف الرسالة الحالية نفسها بس.";
+
+    // ================================================================
+    // ذاكرة المحادثة (سياق قصير المدى): بدل ما كل رسالة تتبعت للنموذج
+    // معزولة تمامًا عن اللي قبلها، بنرفق آخر عدد محدود من الرسائل نفس
+    // الجلسة كخلفية - عشان لو المستخدم قال مثلًا "بدي مريض" أو "زي ما
+    // قلنا" في نص الدردشة، النموذج يقدر يربطها بالسياق اللي فات بدل ما
+    // يتعامل معاها كجملة غامضة منفصلة. الذاكرة دي محلية بالكامل (نفس
+    // سجل AiChatStore على الجهاز) ومش تخزين إضافي ولا سيرفر جديد.
+    // ================================================================
+    private static final int MAX_HISTORY_MESSAGES = 12; // ~6 أزواج سؤال/رد
+    private static final int MAX_HISTORY_CHARS_PER_MSG = 500;
+
+    /** يحوّل آخر رسائل المحادثة (List&lt;ChatMessage&gt;) لنص متسلسل بسيط
+     *  "المستخدم: ..." / "أنت (Phizyo AI): ..." يصلح كخلفية سياقية. يرجع
+     *  null لو مفيش سجل (محادثة جديدة) عشان ما نضيفش نص فاضي للتعليمات. */
+    public static String buildHistoryContext(java.util.List<ChatMessage> history) {
+        if (history == null || history.isEmpty()) return null;
+        int start = Math.max(0, history.size() - MAX_HISTORY_MESSAGES);
+        StringBuilder sb = new StringBuilder();
+        for (int i = start; i < history.size(); i++) {
+            ChatMessage m = history.get(i);
+            if (m == null || m.text == null || m.text.trim().isEmpty()) continue;
+            String who = m.role == ChatMessage.ROLE_USER ? "المستخدم" : "أنت (Phizyo AI)";
+            String body = m.text.trim();
+            if (body.length() > MAX_HISTORY_CHARS_PER_MSG) {
+                body = body.substring(0, MAX_HISTORY_CHARS_PER_MSG) + "…";
+            }
+            if (sb.length() > 0) sb.append('\n');
+            sb.append(who).append(": ").append(body);
+        }
+        return sb.length() == 0 ? null : sb.toString();
+    }
+
+    private static String historyBlock(String historyContext) {
+        if (historyContext == null || historyContext.trim().isEmpty()) return null;
+        return "سياق محادثة سابقة في نفس الجلسة (ذاكرة قصيرة المدى - استخدمها فقط لفهم " +
+                "أي إشارة أو كلام مختصر بالرسالة الحالية بالرجوع لِما قيل هنا، لكن ردّك " +
+                "يبقى دايمًا على الرسالة الحالية بالتحديد):\n" + historyContext;
+    }
 
     /** يبني تعليمات النظام النهائية للمسار الإكلينيكي (مع تأريض/بحث):
-     *  النص الأساسي + خلفية سياقية (تأريض محلي/خارجي لو وُجد) + أي تعليمات
-     *  مخصّصة أضافها المستخدم من شاشة الإعدادات ("علّم" المساعد الذكي حسب طلبه). */
-    public static String buildSystemPrompt(Context ctx, String extraContext) {
+     *  النص الأساسي + سياق المحادثة السابقة (لو موجود) + خلفية سياقية
+     *  (تأريض محلي/خارجي لو وُجد) + أي تعليمات مخصّصة أضافها المستخدم من
+     *  شاشة الإعدادات ("علّم" المساعد الذكي حسب طلبه). */
+    public static String buildSystemPrompt(Context ctx, String extraContext, String historyContext) {
         StringBuilder sb = new StringBuilder(BASE_SYSTEM_PROMPT);
 
         String customInstructions = getCustomInstructions(ctx);
@@ -119,6 +171,11 @@ public class AiPrompts {
               .append(customInstructions);
         }
 
+        String history = historyBlock(historyContext);
+        if (history != null) {
+            sb.append("\n\n").append(history);
+        }
+
         if (extraContext != null && !extraContext.trim().isEmpty()) {
             sb.append("\n\n").append(extraContext);
         }
@@ -126,20 +183,32 @@ public class AiPrompts {
     }
 
     /** يبني تعليمات النظام لمسار الدردشة الطبيعية (بدون بحث ولا تأريض) -
-     *  بيفضل يلتزم بأي تعليمات مخصّصة من المستخدم برضو (لو موجودة). */
-    public static String buildChatSystemPrompt(Context ctx) {
+     *  بيفضل يلتزم بأي تعليمات مخصّصة من المستخدم وبسياق المحادثة السابقة برضو. */
+    public static String buildChatSystemPrompt(Context ctx, String historyContext) {
         StringBuilder sb = new StringBuilder(BASE_CHAT_PROMPT);
         String customInstructions = getCustomInstructions(ctx);
         if (!customInstructions.isEmpty()) {
             sb.append("\n\nتعليمات إضافية مخصّصة أضافها مستخدم التطبيق:\n")
               .append(customInstructions);
         }
+        String history = historyBlock(historyContext);
+        if (history != null) {
+            sb.append("\n\n").append(history);
+        }
         return sb.toString();
     }
 
-    /** تعليمات ثابتة لاستدعاء التصنيف (Router) - لا تحتاج تأريض ولا تعليمات مخصّصة. */
+    /** تعليمات ثابتة لاستدعاء التصنيف (Router) - بدون سياق محادثة سابقة. */
     public static String buildRouterPrompt() {
-        return ROUTER_PROMPT;
+        return buildRouterPrompt(null);
+    }
+
+    /** نفس تعليمات التصنيف، مع إرفاق سياق المحادثة السابقة (لو موجود) عشان
+     *  قرار SEARCH/CHAT نفسه يفهم إشارات مختصرة بترجع لسياق سابق بدل ما
+     *  يحكم على الرسالة الحالية بمعزل تام عمّا قبلها. */
+    public static String buildRouterPrompt(String historyContext) {
+        String history = historyBlock(historyContext);
+        return history == null ? ROUTER_PROMPT : ROUTER_PROMPT + "\n\n" + history;
     }
 
     public static String getCustomInstructions(Context ctx) {

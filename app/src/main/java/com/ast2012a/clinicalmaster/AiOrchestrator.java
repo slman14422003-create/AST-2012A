@@ -17,7 +17,17 @@ import java.util.Locale;
  * مفتاحية ثابتة بالكود - هل الرسالة محتاجة بحث/تأريض فعلًا ولا لأ:
  * - لو قرر "CHAT": يرد مباشرة بأسلوب طبيعي بدون أي بحث ولا شارة مصدر.
  * - لو قرر "SEARCH" (أو فشل التصنيف نفسه): يكمل بنفس خطوات التأريض
- *   الأصلية (قاعدة بيانات الجهاز أولًا، ثم Physiopedia/ويكيبيديا كخلفية).
+ *   الأصلية (قاعدة بيانات الجهاز أولًا، ثم Physiopedia كخلفية).
+ *
+ * تحديث v3: اتشالت ويكيبيديا نهائيًا من مسار البحث - المصدر الخارجي
+ * الوحيد المسموح بيه دلوقتي هو Physiopedia (مرجع علاج طبيعي متخصص فقط)،
+ * وبدون أي بحث احتياطي عام خارج نطاق العلاج الطبيعي لو مفيش نتيجة منه.
+ *
+ * تحديث v4 (ذاكرة المحادثة): answer() بقى بياخد كمان سجل آخر رسائل نفس
+ * الجلسة (List&lt;ChatMessage&gt;)، بيتحول لسياق نصي (AiPrompts.
+ * buildHistoryContext) ويترفق مع كل استدعاء (تصنيف، دردشة، أو تأريض)
+ * عشان النموذج يفهم إشارات مختصرة زي "بدي مريض" بالرجوع لآخر ما قيل في
+ * نفس المحادثة، بدل ما يعامل كل رسالة كأنها معزولة تمامًا.
  */
 public final class AiOrchestrator {
 
@@ -27,7 +37,7 @@ public final class AiOrchestrator {
     public interface ResultCallback {
         /** رد دردشة طبيعية - بدون مصدر، بدون بحث. */
         void onChatReply(String reply);
-        /** رد مبني على تأريض (قاعدة الجهاز و/أو Physiopedia/ويكيبيديا). */
+        /** رد مبني على تأريض (قاعدة الجهاز و/أو Physiopedia). */
         void onGroundedReply(String reply, String sourceLabel, String sourceUrl);
         void onError(String message);
     }
@@ -36,16 +46,22 @@ public final class AiOrchestrator {
     public interface StageListener {
         /** بيفهم قصد الرسالة (تصنيف خفيف قبل أي رد). */
         void onClassifying();
-        /** بيبحث في قاعدة بيانات الجهاز/Physiopedia/ويكيبيديا. */
+        /** بيبحث في قاعدة بيانات الجهاز/Physiopedia. */
         void onSearching();
         /** بيصيغ الرد النهائي. */
         void onThinking();
     }
 
-    /** توافقًا مع النداءات القديمة اللي مالهاش سياق مريض محدد (بحث الشاشة
-     *  الرئيسية، أو محادثة عامة مش منطلقة من ملف مريض). */
+    /** توافقًا مع النداءات القديمة اللي مالهاش سياق مريض محدد ولا سجل
+     *  محادثة (بحث الشاشة الرئيسية، أو محادثة عامة مش منطلقة من ملف مريض). */
     public static void answer(Context ctx, String text, StageListener stages, ResultCallback callback) {
-        answer(ctx, text, null, stages, callback);
+        answer(ctx, text, null, null, stages, callback);
+    }
+
+    /** توافقًا مع النداءات اللي فيها مريض محدد بس بدون سجل محادثة سابق. */
+    public static void answer(Context ctx, String text, String patientId,
+            StageListener stages, ResultCallback callback) {
+        answer(ctx, text, patientId, null, stages, callback);
     }
 
     /**
@@ -55,18 +71,23 @@ public final class AiOrchestrator {
      *                  بدل ما يعتمد المساعد على تخمين أو سؤال المستخدم عن
      *                  تفاصيل موجودة بالفعل في ملف المريض. مرّر null لو
      *                  السؤال عام (غير مرتبط بمريض بعينه).
+     * @param history   آخر رسائل نفس جلسة المحادثة (بترتيبها الزمني، قبل
+     *                  الرسالة الحالية) عشان تُستخدم كذاكرة قصيرة المدى -
+     *                  مرّر null أو قائمة فاضية لو مفيش سجل سابق (محادثة
+     *                  جديدة أو مسار بلا ذاكرة زي البحث السريع).
      */
     public static void answer(Context ctx, String text, String patientId,
-            StageListener stages, ResultCallback callback) {
+            java.util.List<ChatMessage> history, StageListener stages, ResultCallback callback) {
         if (stages != null) stages.onClassifying();
+        final String historyContext = AiPrompts.buildHistoryContext(history);
 
-        AiClient.classifyIntent(text, new AiClient.Callback() {
+        AiClient.classifyIntent(text, historyContext, new AiClient.Callback() {
             @Override
             public void onSuccess(String decision) {
                 if (needsSearch(decision)) {
-                    runGrounded(ctx, text, patientId, stages, callback);
+                    runGrounded(ctx, text, patientId, historyContext, stages, callback);
                 } else {
-                    runChat(ctx, text, stages, callback);
+                    runChat(ctx, text, historyContext, stages, callback);
                 }
             }
 
@@ -74,7 +95,7 @@ public final class AiOrchestrator {
             public void onError(String message) {
                 // فشل التصنيف نفسه (مشكلة شبكة مثلًا) - نرجع للسلوك الآمن
                 // الأصلي (تأريض كامل) بدل ما نوقف الرد على المستخدم.
-                runGrounded(ctx, text, patientId, stages, callback);
+                runGrounded(ctx, text, patientId, historyContext, stages, callback);
             }
         });
     }
@@ -86,9 +107,10 @@ public final class AiOrchestrator {
         return true;
     }
 
-    private static void runChat(Context ctx, String text, StageListener stages, ResultCallback callback) {
+    private static void runChat(Context ctx, String text, String historyContext,
+            StageListener stages, ResultCallback callback) {
         if (stages != null) stages.onThinking();
-        sendWithAutoContinue(AiPrompts.buildChatSystemPrompt(ctx), text, text, "",
+        sendWithAutoContinue(AiPrompts.buildChatSystemPrompt(ctx, historyContext), text, text, "",
                 0, new AiClient.Callback() {
             @Override public void onSuccess(String reply) { callback.onChatReply(reply); }
             @Override public void onError(String message) { callback.onError(message); }
@@ -176,7 +198,7 @@ public final class AiOrchestrator {
     }
 
     private static void runGrounded(Context ctx, String text, String patientId,
-            StageListener stages, ResultCallback callback) {
+            String historyContext, StageListener stages, ResultCallback callback) {
         if (stages != null) stages.onSearching();
 
         // المرحلة صفر: هل يوجد تطابق مباشر وواثق في قاعدة بيانات الجهاز؟
@@ -197,11 +219,11 @@ public final class AiOrchestrator {
         // موثقة من قاعدة بيانات الجهاز تُستخدم كخلفية للنموذج بدل إجابة مباشرة.
         DataManager.GroundingResult grounding = DataManager.buildGroundingContext(ctx, text, 3);
 
-        // المرحلة الثانية: تأريض خارجي من مصادر موثوقة - نجرّب أولًا
-        // Physiopedia (مرجع متخصص في العلاج الطبيعي، مراجَع من أخصائيين)،
-        // ولو مفيش نتيجة نرجع تلقائيًا لموسوعة ويكيبيديا العامة كبديل.
+        // المرحلة الثانية: تأريض خارجي - Physiopedia حصرًا (مرجع متخصص في
+        // العلاج الطبيعي فقط، مراجَع من أخصائيين). لا يوجد أي بحث احتياطي
+        // عام (زي ويكيبيديا أو أي محرك بحث آخر) لو مفيش نتيجة منه - بدل
+        // كده بيكمل بمعرفة النموذج العامة فقط، موضّح صراحة في شارة المصدر.
         PhysiopediaClient.Result physio = PhysiopediaClient.search(text);
-        WikipediaClient.Result wiki = physio == null ? WikipediaClient.search(text) : null;
 
         StringBuilder extraContext = new StringBuilder();
         if (grounding != null) {
@@ -235,13 +257,10 @@ public final class AiOrchestrator {
         if (physio != null) {
             extraContext.append("خلفية معرفية متخصصة من Physiopedia (مرجع علاج طبيعي، مقالة: ")
                     .append(physio.title).append("):\n").append(physio.extract);
-        } else if (wiki != null) {
-            extraContext.append("خلفية معرفية عامة من ويكيبيديا (مقالة: ").append(wiki.title).append("):\n")
-                    .append(wiki.extract);
         }
 
         final String systemPromptToUse = AiPrompts.buildSystemPrompt(ctx,
-                extraContext.length() > 0 ? extraContext.toString() : null);
+                extraContext.length() > 0 ? extraContext.toString() : null, historyContext);
         final int groundedCount = grounding != null ? grounding.caseCount : 0;
 
         if (stages != null) stages.onThinking();
@@ -251,9 +270,9 @@ public final class AiOrchestrator {
             public void onSuccess(String reply) {
                 String sourceLabel;
                 String sourceUrl = null;
-                String externalTitle = physio != null ? physio.title : (wiki != null ? wiki.title : null);
-                String externalUrl = physio != null ? physio.sourceUrl : (wiki != null ? wiki.sourceUrl : null);
-                String externalName = physio != null ? "Physiopedia" : "ويكيبيديا";
+                String externalTitle = physio != null ? physio.title : null;
+                String externalUrl = physio != null ? physio.sourceUrl : null;
+                String externalName = "Physiopedia";
                 if (groundedCount > 0 && externalTitle != null) {
                     sourceLabel = "إجابة تكميلية عامة (لا يوجد تطابق مباشر) - بروتوكولات قريبة (" + groundedCount + ") + " + externalName + ": " + externalTitle;
                     sourceUrl = externalUrl;
@@ -263,7 +282,7 @@ public final class AiOrchestrator {
                     sourceLabel = "إجابة عامة من " + externalName + " (خارج قاعدة بيانات الجهاز): " + externalTitle;
                     sourceUrl = externalUrl;
                 } else {
-                    sourceLabel = "إجابة عامة من معرفة النموذج (بدون مصدر موثّق من الجهاز أو المصادر الخارجية)";
+                    sourceLabel = "إجابة عامة من معرفة النموذج (بدون مصدر موثّق من الجهاز أو Physiopedia)";
                 }
                 callback.onGroundedReply(reply, sourceLabel, sourceUrl);
             }

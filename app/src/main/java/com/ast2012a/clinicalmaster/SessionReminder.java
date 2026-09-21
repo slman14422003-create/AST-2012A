@@ -226,7 +226,7 @@ final class SessionReminder {
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
         NotificationCompat.Builder b = new NotificationCompat.Builder(ctx, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_stat_sessions)
+                .setSmallIcon(R.drawable.ic_stat_pulse)
                 .setContentTitle(title)
                 .setContentText(text)
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(today.size() > 1 ? text + "\n\n" + big : text))
