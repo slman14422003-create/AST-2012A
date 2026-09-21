@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- أيقونة شريط الحالة الموحّدة لكل إشعارات التطبيق: نفس خط النبضة
+     (Pulse/EMS waveform) المستخدم في أيقونة التطبيق نفسها (ic_launcher_
+     foreground) بدل جرس أندرويد الافتراضي - عشان الإشعار يبان منسجم مع
+     هوية Phizyo Studio البصرية فورًا من شريط الحالة. أحادية اللون
+     (أبيض/شفاف) زي ما يتطلب أندرويد لأيقونات الإشعارات. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M6,12.2 L8.9,12.2 L10,8.9 L11.8,15.6 L13.3,10.7 L14.4,12.2 L18,12.2"
+        android:strokeWidth="1.65"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeColor="#FFFFFFFF"
+        android:fillColor="#00000000" />
+</vector>
