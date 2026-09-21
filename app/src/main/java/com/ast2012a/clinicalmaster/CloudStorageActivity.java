@@ -13,6 +13,8 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.SystemClock;
 import android.provider.OpenableColumns;
 import android.text.format.Formatter;
@@ -102,6 +104,7 @@ public class CloudStorageActivity extends AppCompatActivity implements CloudFile
     private volatile boolean uploadCancelled;
     private boolean resumed;
     private final Runnable hideUploadCardRunnable = this::hideUploadCard;
+    private final Handler uiHandler = new Handler(Looper.getMainLooper());
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -195,7 +198,7 @@ public class CloudStorageActivity extends AppCompatActivity implements CloudFile
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        uploadCard.removeCallbacks(hideUploadCardRunnable);
+        uiHandler.removeCallbacks(hideUploadCardRunnable);
         executor.shutdownNow();
         // لو فيه رفع شغّال والمستخدم خرج من الشاشة نتركه يكمل (shutdown بدل
         // shutdownNow) ويوصل إشعار الانتهاء، بدل ما ينقطع الرفع في المنتصف.
@@ -264,8 +267,8 @@ public class CloudStorageActivity extends AppCompatActivity implements CloudFile
     }
 
     private void applyList(List<CloudFile> files) {
-        if (isFinishing()) return;
         progress.setVisibility(View.GONE);
+        if (isFinishing()) return;
         adapter.setItems(files);
         boolean empty = files == null || files.isEmpty();
         content.setVisibility(empty ? View.GONE : View.VISIBLE);
@@ -306,7 +309,7 @@ public class CloudStorageActivity extends AppCompatActivity implements CloudFile
     }
 
     /** رسالة الخطأ لو null (بعض الاستثناءات بلا رسالة) نعرض اسم النوع بدل "null". */
-    private static String errorText(Exception e) {
+    private static String errorText(Throwable e) {
         String m = e.getMessage();
         return m == null || m.trim().isEmpty() ? e.getClass().getSimpleName() : m;
     }
@@ -360,8 +363,10 @@ public class CloudStorageActivity extends AppCompatActivity implements CloudFile
                 runOnUiThread(() -> onUploadSucceeded(finalTarget, size));
             } catch (CloudStorageClient.UploadCancelledException e) {
                 runOnUiThread(this::onUploadCancelled);
-            } catch (Exception e) {
-                runOnUiThread(() -> onUploadFailed(finalTarget, errorText(e)));
+            } catch (Throwable t) {
+                // Throwable (وليس Exception فقط) عشان أي خطأ غير متوقع ما يترك بطاقة
+                // الرفع عالقة للأبد بدون نجاح ولا فشل.
+                runOnUiThread(() -> onUploadFailed(finalTarget, errorText(t)));
             }
         });
     }
@@ -369,7 +374,7 @@ public class CloudStorageActivity extends AppCompatActivity implements CloudFile
     // ------------------------------------------------------------------ بطاقة الرفع
 
     private void showUploadCard(String name, long size) {
-        uploadCard.removeCallbacks(hideUploadCardRunnable);
+        uiHandler.removeCallbacks(hideUploadCardRunnable);
         uploadIcon.setImageResource(R.drawable.ic_folder);
         uploadIcon.setImageTintList(ColorStateList.valueOf(getColor(R.color.primary_cyan)));
         uploadBar.setProgressTintList(ColorStateList.valueOf(getColor(R.color.primary_cyan)));
@@ -401,8 +406,8 @@ public class CloudStorageActivity extends AppCompatActivity implements CloudFile
     }
 
     private void hideUploadCard() {
-        if (uploading || uploadCard == null) return;
-        uploadCard.removeCallbacks(hideUploadCardRunnable);
+        if (uploadCard == null) return;
+        uiHandler.removeCallbacks(hideUploadCardRunnable);
         uploadCard.setVisibility(View.GONE);
     }
 
@@ -422,9 +427,10 @@ public class CloudStorageActivity extends AppCompatActivity implements CloudFile
                 ? BidiText.fix("تم الرفع بنجاح  ·  " + Formatter.formatShortFileSize(this, size))
                 : "تم الرفع بنجاح");
         uploadCancel.setContentDescription("إغلاق");
-        uploadCard.postDelayed(hideUploadCardRunnable, UPLOAD_CARD_AUTOHIDE_MS);
+        uiHandler.postDelayed(hideUploadCardRunnable, UPLOAD_CARD_AUTOHIDE_MS);
         reload();
     }
+
 
     private void onUploadCancelled() {
         uploading = false;
@@ -545,12 +551,26 @@ public class CloudStorageActivity extends AppCompatActivity implements CloudFile
                 CloudStorageClient.downloadToFile(this, file.name, dest);
                 runOnUiThread(() -> {
                     progress.setVisibility(View.GONE);
-                    openLocalFile(dest, file.name);
+                    if ("pdf".equals(file.extension())) {
+                        openPdfViewer(dest, file.name);
+                    } else {
+                        openLocalFile(dest, file.name);
+                    }
                 });
             } catch (Exception e) {
                 runOnUiThread(() -> showError("تعذّر تنزيل الملف.\n" + errorText(e)));
             }
         });
+    }
+
+    /** ملفات PDF تُعرض في قارئ التطبيق (منسّق مع الواجهة) بدل تطبيق خارجي. */
+    private void openPdfViewer(File file, String name) {
+        if (isFinishing() || isDestroyed()) return;
+        Intent i = new Intent(this, PdfViewerActivity.class)
+                .putExtra(PdfViewerActivity.EXTRA_PATH, file.getAbsolutePath())
+                .putExtra(PdfViewerActivity.EXTRA_TITLE, name);
+        startActivity(i);
+        overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
     }
 
     private void openLocalFile(File file, String name) {

@@ -151,10 +151,14 @@ public class MainActivity extends AppCompatActivity {
         TextView aiBtn = findViewById(R.id.btn_ai_assistant);
         aiBtn.setOnClickListener(v -> navigateTo(AiAssistantActivity.class));
 
+        // قارئ PDF: يفتح منتقي الملفات مباشرة ثم يعرض الملف بتنسيق التطبيق
+        TextView pdfReaderBtn = findViewById(R.id.btn_pdf_reader);
+        pdfReaderBtn.setOnClickListener(v -> navigateTo(PdfViewerActivity.class));
+
         // تحسين انميشن: كبسولات التنقل السفلية بقت تدي إحساس ضغط فعلي
         // (تصغير خفيف + نبضة رجوع) بدل ما تعتمد بس على تغيير لون الخلفية.
         for (View chip : new View[]{favoritesBtn, myCasesBtn, encyclopediaBtn, anatomyBtn,
-                patientsBtn, treatmentProgramsBtn, aiBtn}) {
+                patientsBtn, treatmentProgramsBtn, pdfReaderBtn, aiBtn}) {
             Ui.applyPressFeedback(chip);
         }
 

@@ -118,6 +118,8 @@ final class CloudStorageClient {
         HttpURLConnection conn = open(ctx, "/files/" + encodeSegment(name), "PUT");
         conn.setDoOutput(true);
         conn.setReadTimeout(TRANSFER_READ_TIMEOUT);
+        // اتصال جديد لكل رفع (بدون keep-alive) حتى لا يعلق طلب الرفع على اتصال قديم
+        conn.setRequestProperty("Connection", "close");
         if (mimeType != null && !mimeType.isEmpty()) conn.setRequestProperty("Content-Type", mimeType);
         if (length > 0) {
             conn.setFixedLengthStreamingMode(length);
@@ -137,7 +139,14 @@ final class CloudStorageClient {
                 if (listener != null) listener.onProgress(sent, length);
             }
             os.flush();
+            // إغلاق صريح لجسم الطلب ثم قراءة الرد كاملًا وإغلاقه، بدل الاعتماد على
+            // إغلاق ضمني داخل getResponseCode() (يختلف سلوكه بين إصدارات أندرويد).
+            os.close();
             checkResponse(conn);
+            try {
+                readAll(conn.getInputStream());
+            } catch (IOException ignored) {
+            }
         } finally {
             conn.disconnect();
         }
