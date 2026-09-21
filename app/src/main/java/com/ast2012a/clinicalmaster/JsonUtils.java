@@ -69,4 +69,27 @@ final class JsonUtils {
         // optLong/optInt الموجودة في Patient.fromJson.
         return value;
     }
+
+    /** يحوّل نص تاريخ ISO-8601 (زي اللي يرجعه Cloudflare R2: "2026-09-21T10:00:00.000Z")
+     *  لميلي ثانية Unix، أو 0 لو النص فاضي/غير صالح. minSdk 24 هنا فمفيش
+     *  java.time.Instant.parse متاح بدون desugaring، فبنجرب صيغتين شائعتين
+     *  بـ SimpleDateFormat بدل كده. */
+    static long parseIsoOrZero(String iso) {
+        if (iso == null || iso.trim().isEmpty()) return 0;
+        String[] patterns = {
+                "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+                "yyyy-MM-dd'T'HH:mm:ss'Z'"
+        };
+        for (String pattern : patterns) {
+            try {
+                java.text.SimpleDateFormat sdf =
+                        new java.text.SimpleDateFormat(pattern, java.util.Locale.US);
+                sdf.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+                return sdf.parse(iso).getTime();
+            } catch (Exception ignored) {
+                // نجرّب الصيغة التالية
+            }
+        }
+        return 0;
+    }
 }

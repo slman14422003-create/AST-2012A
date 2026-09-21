@@ -109,6 +109,12 @@ public class SettingsActivity extends AppCompatActivity {
         findViewById(R.id.btn_cloud_backup_now).setOnClickListener(v -> backupNowClicked());
         findViewById(R.id.btn_cloud_restore).setOnClickListener(v -> confirmRestoreFromCloud());
 
+        // الملفات السحابية (PDF/مستندات عبر Cloudflare Worker - منفصل عن Firebase)
+        findViewById(R.id.btn_cloud_files).setOnClickListener(v -> {
+            startActivity(new Intent(this, CloudStorageActivity.class));
+            overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
+        });
+
         // عن التطبيق
         updateStatus = findViewById(R.id.update_status);
         updateStatus.setText(UpdateManager.statusText(this));
