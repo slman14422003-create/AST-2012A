@@ -2,4 +2,6 @@
 <!-- مجلد تنزيل ملفات التحديث (داخل كاش التطبيق) لمشاركته مع مُثبّت النظام -->
 <paths>
     <cache-path name="updates" path="updates/" />
+    <!-- ملفات مؤقتة يتم تنزيلها من التخزين السحابي (CloudStorageActivity) قبل فتحها بمُشغّل خارجي -->
+    <cache-path name="cloud_files" path="cloud_files/" />
 </paths>
