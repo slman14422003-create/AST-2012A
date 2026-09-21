@@ -91,6 +91,19 @@
         <item name="android:gravity">end</item>
     </style>
 
+    <!-- قوائم منبثقة (Toolbar overflow / PopupMenu) بأسلوب بطاقات التطبيق الزجاجية
+         بدل خلفية Material الرمادية الافتراضية - يُطبَّق عبر app:popupTheme على
+         أي Toolbar يحتاج قائمة إضافية متناسقة مع هوية التطبيق. -->
+    <style name="ThemeOverlay.ClinicalMaster.PopupMenu" parent="">
+        <item name="android:popupBackground">@drawable/bg_popup_menu</item>
+        <item name="android:itemBackground">@android:color/transparent</item>
+        <item name="colorControlHighlight">@color/glass_border_soft</item>
+        <item name="android:textColorPrimary">@color/text_primary</item>
+        <item name="android:textColorSecondary">@color/text_secondary</item>
+        <item name="actionMenuTextColor">@color/text_primary</item>
+        <item name="android:dropDownVerticalOffset">6dp</item>
+    </style>
+
     <!-- عنوان قسم داخل شاشة الإعدادات (أو أي شاشة تحتاج تقسيم بصري لمجموعات
          من الخيارات) - لون مميز، خط عريض، محاذاة لليمين للعربي. -->
     <style name="SectionHeader">
