@@ -21,7 +21,10 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.google.android.material.textfield.TextInputEditText;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -40,7 +43,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView aiInlineAnswerText;
     private RecyclerView resultsList;
     private CaseAdapter adapter;
-    // معاينة "مرضى اليوم" أعلى شاشة الترحيب - يُعبّئها loadTodayPatientsPreview()
+    // بطاقة "المرضى" الدائمة أعلى شاشة الترحيب (مرتّبين حسب المواعيد) - يُعبّئها loadPatientsPreview()
     private View todayPatientsCard;
     private LinearLayout todayPatientsList;
     private TextView todayPatientsTitle;
@@ -117,7 +120,6 @@ public class MainActivity extends AppCompatActivity {
         todayPatientsCard = findViewById(R.id.today_patients_card);
         todayPatientsList = findViewById(R.id.today_patients_list);
         todayPatientsTitle = findViewById(R.id.today_patients_title);
-        todayPatientsCard.setOnClickListener(v -> navigateTo(PatientsActivity.class));
         Ui.applyPressFeedback(todayPatientsCard);
 
         adapter = new CaseAdapter(this::openDetail);
@@ -211,7 +213,7 @@ public class MainActivity extends AppCompatActivity {
         });
 
         doSearch("");
-        loadTodayPatientsPreview();
+        loadPatientsPreview();
         handleReminderIntent(getIntent());
     }
 
@@ -261,44 +263,125 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    /** يعبّئ بطاقة "مرضى اليوم" الصغيرة أعلى شاشة الترحيب (أول 4 مرضى + عداد
-     *  الباقي)، ويخفيها تمامًا لو ملهاش داعي (لا يوجد جلسات اليوم). */
-    private void loadTodayPatientsPreview() {
+    // ------------------------------------------------------------------
+    // بطاقة "المرضى" الدائمة: تظهر دائمًا في الشاشة الرئيسية (حتى لو لا توجد
+    // جلسات اليوم) وفيها المرضى مرتّبين حسب أقرب موعد: جلسات اليوم أولًا
+    // (المسجّلة فعلًا تُستثنى)، ثم المواعيد القادمة (يدوي أو من الجدول
+    // الأسبوعي)، وأخيرًا من ليس له موعد.
+    // ------------------------------------------------------------------
+
+    private static final int PATIENTS_PREVIEW_MAX_ROWS = 6;
+
+    private static final class PatientRow {
+        final String id;
+        final String name;
+        final long sortKey; // Long.MAX_VALUE = بلا موعد
+        final String when;  // "اليوم · 5:00 م" / "غدًا" / "" لو بلا موعد
+        final boolean today;
+
+        PatientRow(String id, String name, long sortKey, String when, boolean today) {
+            this.id = id;
+            this.name = name;
+            this.sortKey = sortKey;
+            this.when = when;
+            this.today = today;
+        }
+    }
+
+    private void loadPatientsPreview() {
         executor.execute(() -> {
-            List<SessionReminder.Entry> today = SessionReminder.patientsToday(this, System.currentTimeMillis());
-            runOnUiThread(() -> applyTodayPatientsPreview(today));
+            List<PatientRow> rows = buildPatientRows();
+            runOnUiThread(() -> applyPatientsPreview(rows));
         });
     }
 
-    private static final int TODAY_PREVIEW_MAX_ROWS = 4;
+    private List<PatientRow> buildPatientRows() {
+        long now = System.currentTimeMillis();
+        long todayStart = Fmt.startOfDay(now);
+        java.util.Calendar cal = java.util.Calendar.getInstance();
+        cal.setTimeInMillis(todayStart);
+        cal.add(java.util.Calendar.DAY_OF_YEAR, 1);
+        long tomorrowStart = cal.getTimeInMillis();
 
-    private void applyTodayPatientsPreview(List<SessionReminder.Entry> today) {
+        List<PatientRow> out = new ArrayList<>();
+        Set<String> todayIds = new HashSet<>();
+
+        // 1) جلسات اليوم (نفس منطق التذكير الصباحي بالضبط)
+        for (SessionReminder.Entry e : SessionReminder.patientsToday(this, now)) {
+            if (e.id != null) todayIds.add(e.id);
+            long key = e.minutes >= 0 ? todayStart + e.minutes * 60_000L : tomorrowStart - 1;
+            String when = e.minutes >= 0 ? "اليوم · " + Fmt.minutesToTime(e.minutes) : "اليوم";
+            out.add(new PatientRow(e.id, e.name, key, BidiText.fix(when), true));
+        }
+
+        // 2) باقي المرضى: أقرب موعد بعد اليوم، أو بلا موعد
+        for (Patient p : PatientManager.loadPatients(this)) {
+            if (p.id != null && todayIds.contains(p.id)) continue;
+            long t = p.effectiveNextAppointment(tomorrowStart);
+            if (t <= 0) {
+                out.add(new PatientRow(p.id, p.displayName(), Long.MAX_VALUE, "", false));
+                continue;
+            }
+            long days = Math.round((Fmt.startOfDay(t) - todayStart) / 86400000.0);
+            String day = days == 1 ? "غدًا" : Fmt.dayDate(t);
+            String when = p.nextAppointmentHasTime(tomorrowStart) ? day + " · " + Fmt.time(t) : day;
+            out.add(new PatientRow(p.id, p.displayName(), t, BidiText.fix(when), false));
+        }
+
+        Collections.sort(out, (a, b) -> {
+            int c = Long.compare(a.sortKey, b.sortKey);
+            return c != 0 ? c : a.name.compareTo(b.name);
+        });
+        return out;
+    }
+
+    private void applyPatientsPreview(List<PatientRow> rows) {
         if (isFinishing()) return;
         todayPatientsList.removeAllViews();
-        if (today.isEmpty()) {
-            todayPatientsCard.setVisibility(View.GONE);
+        todayPatientsCard.setVisibility(View.VISIBLE);
+
+        if (rows.isEmpty()) {
+            todayPatientsTitle.setText("المرضى");
+            TextView empty = new TextView(this);
+            empty.setText("لا يوجد مرضى بعد. اضغط هنا لإضافة أول مريض.");
+            empty.setTextColor(getColor(R.color.text_secondary));
+            empty.setTextSize(13.5f);
+            empty.setTextDirection(View.TEXT_DIRECTION_RTL);
+            empty.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+            empty.setPadding(0, Ui.dp(this, 4), 0, Ui.dp(this, 2));
+            todayPatientsList.addView(empty);
+            todayPatientsCard.setOnClickListener(v -> {
+                startActivity(new Intent(this, AddEditPatientActivity.class));
+                overridePendingTransition(R.anim.slide_up_in, R.anim.fade_out);
+            });
             return;
         }
-        todayPatientsCard.setVisibility(View.VISIBLE);
-        todayPatientsTitle.setText(today.size() == 1 ? "مريض واحد لديه جلسة اليوم" : "مرضى اليوم (" + today.size() + ")");
 
-        int shown = Math.min(today.size(), TODAY_PREVIEW_MAX_ROWS);
+        todayPatientsCard.setOnClickListener(v -> navigateTo(PatientsActivity.class));
+        int todayCount = 0;
+        for (PatientRow r : rows) if (r.today) todayCount++;
+        todayPatientsTitle.setText(todayCount > 0
+                ? "المرضى (" + rows.size() + ")  ·  اليوم " + todayCount
+                : "المرضى (" + rows.size() + ")");
+
+        int shown = Math.min(rows.size(), PATIENTS_PREVIEW_MAX_ROWS);
         for (int i = 0; i < shown; i++) {
-            addTodayPatientRow(today.get(i), i > 0);
+            addPatientRow(rows.get(i), i > 0);
         }
-        if (today.size() > shown) {
+        if (rows.size() > shown) {
             TextView more = new TextView(this);
-            more.setText("+" + (today.size() - shown) + " آخرين");
-            more.setTextColor(getColor(R.color.text_tertiary));
-            more.setTextSize(13f);
+            more.setText("عرض كل المرضى (+" + (rows.size() - shown) + ")");
+            more.setTextColor(getColor(R.color.primary_cyan));
+            more.setTextSize(13.5f);
             more.setTextDirection(View.TEXT_DIRECTION_RTL);
             more.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
-            more.setPadding(0, Ui.dp(this, 8), 0, 0);
+            more.setPadding(0, Ui.dp(this, 10), 0, 0);
+            more.setOnClickListener(v -> navigateTo(PatientsActivity.class));
             todayPatientsList.addView(more);
         }
     }
 
-    private void addTodayPatientRow(SessionReminder.Entry entry, boolean withDivider) {
+    private void addPatientRow(PatientRow entry, boolean withDivider) {
         if (withDivider) {
             View divider = new View(this);
             divider.setBackgroundColor(getColor(R.color.glass_border_soft));
@@ -310,13 +393,24 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        row.setPadding(0, Ui.dp(this, 9), 0, Ui.dp(this, 9));
+        row.setPadding(0, Ui.dp(this, 8), 0, Ui.dp(this, 8));
         row.setClickable(true);
         row.setFocusable(true);
         android.util.TypedValue tv = new android.util.TypedValue();
         if (getTheme().resolveAttribute(android.R.attr.selectableItemBackground, tv, true)) {
             row.setBackgroundResource(tv.resourceId);
         }
+
+        // دائرة بأول حرف من الاسم (نفس أسلوب قائمة المرضى)
+        TextView avatar = new TextView(this);
+        avatar.setText(Fmt.initial(entry.name));
+        avatar.setBackgroundResource(R.drawable.bg_avatar_circle);
+        avatar.setGravity(android.view.Gravity.CENTER);
+        avatar.setIncludeFontPadding(false);
+        avatar.setTypeface(android.graphics.Typeface.SERIF, android.graphics.Typeface.BOLD);
+        avatar.setTextColor(getColor(R.color.primary_cyan_dark));
+        avatar.setTextSize(15f);
+        row.addView(avatar, new LinearLayout.LayoutParams(Ui.dp(this, 36), Ui.dp(this, 36)));
 
         TextView nameView = new TextView(this);
         nameView.setText(entry.name);
@@ -326,16 +420,18 @@ public class MainActivity extends AppCompatActivity {
         nameView.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
         nameView.setEllipsize(android.text.TextUtils.TruncateAt.END);
         nameView.setMaxLines(1);
-        row.addView(nameView, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        nlp.setMarginStart(Ui.dp(this, 10));
+        row.addView(nameView, nlp);
 
-        if (entry.minutes >= 0) {
-            TextView timeView = new TextView(this);
-            timeView.setText(Fmt.minutesToTime(entry.minutes));
-            timeView.setTextColor(getColor(R.color.text_tertiary));
-            timeView.setTextSize(13f);
-            timeView.setPadding(Ui.dp(this, 10), 0, 0, 0);
-            row.addView(timeView);
-        }
+        TextView whenView = new TextView(this);
+        boolean hasWhen = entry.when != null && !entry.when.isEmpty();
+        whenView.setText(hasWhen ? entry.when : "بدون موعد");
+        whenView.setTextSize(12.5f);
+        whenView.setTextColor(getColor(entry.today ? R.color.primary_cyan : R.color.text_tertiary));
+        if (entry.today) whenView.setTypeface(null, android.graphics.Typeface.BOLD);
+        whenView.setPadding(Ui.dp(this, 10), 0, 0, 0);
+        row.addView(whenView);
 
         row.setOnClickListener(v -> {
             if (entry.id == null) {
@@ -364,7 +460,7 @@ public class MainActivity extends AppCompatActivity {
         } else if (searchField.getText() != null) {
             doSearch(searchField.getText().toString());
         }
-        loadTodayPatientsPreview();
+        loadPatientsPreview();
         // فحص صامت للتحديثات (كل 6 ساعات) وعرض نافذة التحديث لو وُجد إصدار أحدث
         UpdateManager.autoCheck(this);
     }

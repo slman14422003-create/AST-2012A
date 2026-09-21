@@ -68,6 +68,9 @@ final class CloudStorageClient {
     static void saveConfig(Context ctx, String url, String token) {
         String normalized = url == null ? "" : url.trim();
         if (normalized.endsWith("/")) normalized = normalized.substring(0, normalized.length() - 1);
+        // ملحوظة إصلاح: لو كتب المستخدم الرابط بدون https:// كان new URL(...) يفشل
+        // بـ MalformedURLException ولا تعمل أي عملية سحابية.
+        normalized = withScheme(normalized);
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
                 .putString(KEY_URL, normalized)
                 .putString(KEY_TOKEN, token == null ? "" : token.trim())
@@ -169,7 +172,7 @@ final class CloudStorageClient {
     private static HttpURLConnection open(Context ctx, String path, String method) throws IOException {
         String base = getBaseUrl(ctx);
         if (base.isEmpty()) throw new IOException("لم يتم ضبط رابط التخزين السحابي بعد.");
-        URL url = new URL(base + path);
+        URL url = new URL(withScheme(base) + path);
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         conn.setRequestMethod(method);
         conn.setConnectTimeout(CONNECT_TIMEOUT);
@@ -177,6 +180,12 @@ final class CloudStorageClient {
         String token = getToken(ctx);
         if (!token.isEmpty()) conn.setRequestProperty("Authorization", "Bearer " + token);
         return conn;
+    }
+
+    private static String withScheme(String url) {
+        if (url == null || url.isEmpty()) return "";
+        String lower = url.toLowerCase(java.util.Locale.ROOT);
+        return lower.startsWith("http://") || lower.startsWith("https://") ? url : "https://" + url;
     }
 
     private static void checkResponse(HttpURLConnection conn) throws IOException {

@@ -152,6 +152,7 @@ public class CloudStorageActivity extends AppCompatActivity implements CloudFile
         content.setVisibility(View.GONE);
         fab.setVisibility(View.GONE);
         statusRow.setVisibility(View.GONE);
+        progress.setVisibility(View.GONE);
         headerSubtitle.setVisibility(View.GONE);
         emptyBox.setVisibility(View.VISIBLE);
         ((android.widget.ImageView) emptyBox.findViewById(R.id.empty_icon)).setImageResource(R.drawable.ic_cloud);
@@ -188,7 +189,7 @@ public class CloudStorageActivity extends AppCompatActivity implements CloudFile
                 List<CloudFile> files = CloudStorageClient.list(this);
                 runOnUiThread(() -> applyList(files));
             } catch (Exception e) {
-                runOnUiThread(() -> showError("تعذّر تحميل قائمة الملفات.\n" + e.getMessage()));
+                runOnUiThread(() -> showError("تعذّر تحميل قائمة الملفات.\n" + errorText(e)));
             }
         });
     }
@@ -214,6 +215,31 @@ public class CloudStorageActivity extends AppCompatActivity implements CloudFile
         progress.setVisibility(View.GONE);
         statusText.setText(message);
         statusRow.setVisibility(View.VISIBLE);
+        // ملحوظة إصلاح: لو لا توجد قائمة ملفات معروضة (مثلًا أول اتصال فاشل بعد ضبط
+        // الرابط) كانت الشاشة تبقى على "لم يتم الضبط" بلا أي إشارة للفشل. الآن
+        // نعرض حالة خطأ واضحة مع زر "إعادة المحاولة".
+        if (adapter.getItemCount() == 0) showConnectionErrorState();
+    }
+
+    private void showConnectionErrorState() {
+        content.setVisibility(View.GONE);
+        fab.setVisibility(View.GONE);
+        headerSubtitle.setVisibility(View.GONE);
+        emptyBox.setVisibility(View.VISIBLE);
+        ((android.widget.ImageView) emptyBox.findViewById(R.id.empty_icon)).setImageResource(R.drawable.ic_cloud);
+        ((TextView) emptyBox.findViewById(R.id.empty_title)).setText("تعذّر الاتصال بالتخزين السحابي");
+        ((TextView) emptyBox.findViewById(R.id.empty_body)).setText(
+                "تأكد من رابط الووركر ورمز الدخول ومن اتصال الإنترنت، ثم أعد المحاولة. "
+                        + "يمكنك تعديل الرابط من أيقونة الإعدادات في الأعلى.");
+        TextView emptyAction = emptyBox.findViewById(R.id.empty_action);
+        emptyAction.setText("إعادة المحاولة");
+        emptyAction.setOnClickListener(v -> reload());
+    }
+
+    /** رسالة الخطأ لو null (بعض الاستثناءات بلا رسالة) نعرض اسم النوع بدل "null". */
+    private static String errorText(Exception e) {
+        String m = e.getMessage();
+        return m == null || m.trim().isEmpty() ? e.getClass().getSimpleName() : m;
     }
 
     // ------------------------------------------------------------------ رفع/استبدال
@@ -242,7 +268,7 @@ public class CloudStorageActivity extends AppCompatActivity implements CloudFile
                     reload();
                 });
             } catch (Exception e) {
-                runOnUiThread(() -> showError("تعذّر رفع الملف.\n" + e.getMessage()));
+                runOnUiThread(() -> showError("تعذّر رفع الملف.\n" + errorText(e)));
             }
         });
     }
@@ -290,14 +316,15 @@ public class CloudStorageActivity extends AppCompatActivity implements CloudFile
         progress.setVisibility(View.VISIBLE);
         executor.execute(() -> {
             try {
-                File dest = new File(new File(getCacheDir(), "cloud_files"), file.name);
+                // اسم الملف قد يحوي "/" فيُنشئ مسارات فرعية أو يخرج من مجلد الكاش
+                File dest = new File(new File(getCacheDir(), "cloud_files"), file.name.replace('/', '_').replace('\\', '_'));
                 CloudStorageClient.downloadToFile(this, file.name, dest);
                 runOnUiThread(() -> {
                     progress.setVisibility(View.GONE);
                     openLocalFile(dest, file.name);
                 });
             } catch (Exception e) {
-                runOnUiThread(() -> showError("تعذّر تنزيل الملف.\n" + e.getMessage()));
+                runOnUiThread(() -> showError("تعذّر تنزيل الملف.\n" + errorText(e)));
             }
         });
     }
@@ -349,7 +376,7 @@ public class CloudStorageActivity extends AppCompatActivity implements CloudFile
                             CloudStorageClient.rename(this, file.name, newName);
                             runOnUiThread(this::reload);
                         } catch (Exception e) {
-                            runOnUiThread(() -> showError("تعذّرت إعادة التسمية.\n" + e.getMessage()));
+                            runOnUiThread(() -> showError("تعذّرت إعادة التسمية.\n" + errorText(e)));
                         }
                     });
                 })
@@ -369,7 +396,7 @@ public class CloudStorageActivity extends AppCompatActivity implements CloudFile
                             CloudStorageClient.delete(this, file.name);
                             runOnUiThread(this::reload);
                         } catch (Exception e) {
-                            runOnUiThread(() -> showError("تعذّر حذف الملف.\n" + e.getMessage()));
+                            runOnUiThread(() -> showError("تعذّر حذف الملف.\n" + errorText(e)));
                         }
                     });
                 })
