@@ -525,6 +525,14 @@
                     android:layout_height="wrap_content"
                     android:drawableStart="@drawable/ic_clipboard"
                     android:text="برامج العلاج" />
+
+                <TextView
+                    android:id="@+id/btn_pdf_reader"
+                    style="@style/Phizyo.NavChip"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:drawableStart="@drawable/ic_pdf"
+                    android:text="قارئ PDF" />
             </LinearLayout>
         </HorizontalScrollView>
 
