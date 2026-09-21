@@ -47,6 +47,20 @@
         <activity android:name=".AiAssistantActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".CloudStorageActivity" android:exported="false" />
 
+        <!-- قارئ PDF: يُفتح من الملفات السحابية / زر "قارئ PDF" / أو كخيار "فتح باستخدام" لأي ملف PDF -->
+        <activity
+            android:name=".PdfViewerActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize"
+            android:exported="true"
+            android:label="قارئ PDF">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:mimeType="application/pdf" />
+            </intent-filter>
+        </activity>
+
         <!-- مشاركة ملف APK المنزَّل مع مُثبّت النظام (تحديث التطبيق من GitHub) -->
         <provider
             android:name="androidx.core.content.FileProvider"
