@@ -85,7 +85,7 @@ dependencies {
     // النسخ الاحتياطي السحابي لملفات المرضى (Firebase Firestore + مصادقة
     // مجهولة تلقائية لكل جهاز، بدون شاشة تسجيل دخول). الإصدارات تُدار عبر
     // Firebase BOM حتى تبقى متوافقة مع بعضها دائمًا.
-    implementation(platform("com.google.firebase:firebase-bom:34.5.0"))
+    implementation(platform("com.google.firebase:firebase-bom:34.19.0"))
     implementation("com.google.firebase:firebase-firestore")
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-analytics")
