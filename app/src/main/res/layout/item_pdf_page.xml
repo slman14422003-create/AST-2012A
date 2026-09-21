@@ -1,20 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- بطاقة صفحة واحدة داخل قارئ PDF: خلفية بيضاء بحواف مستديرة وظل خفيف، وصورة الصفحة المرسومة بداخلها. -->
+<!-- بطاقة صفحة واحدة داخل قارئ PDF: إطار زجاجي بحواف مستديرة وظل خفيف (نفس أسلوب
+     بطاقات التطبيق bg_card)، وصورة الصفحة المرسومة بداخله كأنها ورقة داخل برواز. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginStart="12dp"
-    android:layout_marginTop="10dp"
-    android:layout_marginEnd="12dp"
-    android:layout_marginBottom="10dp"
+    android:layout_marginStart="14dp"
+    android:layout_marginTop="8dp"
+    android:layout_marginEnd="14dp"
+    android:layout_marginBottom="8dp"
     android:background="@drawable/bg_card"
-    android:padding="12dp">
+    android:padding="10dp">
 
     <ImageView
         android:id="@+id/pdf_page_image"
         android:layout_width="match_parent"
         android:layout_height="400dp"
         android:adjustViewBounds="true"
+        android:background="@color/white"
         android:importantForAccessibility="no"
         android:scaleType="fitXY" />
 </FrameLayout>

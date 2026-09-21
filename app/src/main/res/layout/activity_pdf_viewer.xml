@@ -56,8 +56,17 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:clipToPadding="false"
-                android:paddingBottom="24dp" />
+                android:paddingTop="10dp"
+                android:paddingBottom="28dp" />
         </HorizontalScrollView>
+
+        <!-- تلاشي خفيف يمزج حواف الصفحات بخلفية التطبيق تحت الشريط العلوي مباشرة -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="16dp"
+            android:layout_gravity="top"
+            android:background="@drawable/bg_pdf_scroll_fade"
+            android:importantForAccessibility="no" />
 
         <LinearLayout
             android:id="@+id/pdf_loading"
@@ -98,6 +107,7 @@
             android:layout_marginBottom="18dp"
             android:background="@drawable/bg_pill_inverse"
             android:clickable="true"
+            android:elevation="6dp"
             android:focusable="true"
             android:paddingStart="16dp"
             android:paddingTop="8dp"
