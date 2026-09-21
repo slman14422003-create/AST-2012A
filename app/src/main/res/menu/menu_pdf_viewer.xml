@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- قائمة قارئ PDF: تصغير/تكبير + (الانتقال لصفحة، فتح بتطبيق آخر، اختيار ملف آخر) في القائمة الإضافية -->
+<!-- قائمة قارئ PDF: تصغير/تكبير كأيقونتين ثابتتين، والباقي (وضع القراءة الليلي،
+     الانتقال لصفحة، فتح بتطبيق آخر، اختيار ملف آخر) في القائمة الإضافية بأيقونات
+     متناسقة مع بقية أيقونات التطبيق. -->
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
     <item
@@ -13,15 +15,23 @@
         android:title="تكبير"
         app:showAsAction="always" />
     <item
+        android:id="@+id/action_pdf_night_pages"
+        android:icon="@drawable/ic_moon"
+        android:title="الوضع الليلي للصفحات"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/action_pdf_goto"
+        android:icon="@drawable/ic_search"
         android:title="الانتقال إلى صفحة"
         app:showAsAction="never" />
     <item
         android:id="@+id/action_pdf_open_external"
+        android:icon="@drawable/ic_share_out"
         android:title="فتح بتطبيق آخر"
         app:showAsAction="never" />
     <item
         android:id="@+id/action_pdf_pick_another"
+        android:icon="@drawable/ic_folder"
         android:title="فتح ملف PDF آخر"
         app:showAsAction="never" />
 </menu>
