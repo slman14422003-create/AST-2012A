@@ -240,6 +240,12 @@ public class DataManager {
         SYNONYMS.put("الرسغ", new String[]{"المعصم", "wrist", "النفق الرسغي", "carpal tunnel"});
         SYNONYMS.put("قاع الحوض", new String[]{"pelvic floor", "عضلات الحوض"});
         SYNONYMS.put("رباعية الرؤوس", new String[]{"quadriceps", "الفخذ الامامي"});
+        // إصلاح "ما يقدر يجاوب عن تيارات الجهاز": مرادفات "تيار" بمختلف
+        // صياغاتها الشائعة (سؤال عن نوع/أنواع تيار الجهاز، أو بالإنجليزي)
+        // عشان أي صياغة قريبة توصل لنفس مقال دليل التيارات في القاعدة حتى
+        // لو مش مطابقة حرفيًا لأي كلمة مفتاحية مُدرجة فيه.
+        SYNONYMS.put("تيار", new String[]{"تيارات", "التيار", "التيارات", "current",
+                "electrical current", "نوع التيار", "انواع التيار", "الموجة الكهربائية"});
     }
 
     public static String normalize(String text) {
