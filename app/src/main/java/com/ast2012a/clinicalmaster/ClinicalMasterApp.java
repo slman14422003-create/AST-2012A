@@ -22,6 +22,7 @@ public class ClinicalMasterApp extends Application {
     @Override
     public void onCreate() {
         super.onCreate();
+        CrashHandler.install(this);
         ThemeManager.applySavedTheme(this);
 
         // إعادة ضبط منبّه "جلسات اليوم" مع كل تشغيل (يغطي إيقاف التطبيق بالقوة)
