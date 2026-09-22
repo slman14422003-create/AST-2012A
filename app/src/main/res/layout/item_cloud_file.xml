@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- بطاقة ملف واحد في قائمة "الملفات السحابية" -->
+<!-- بطاقة ملف واحد في قائمة "الملفات السحابية": اسم + حجم/تاريخ، وصف إجراءات
+     أنيق بأربعة أزرار متساوية (فتح / تسمية / استبدال / حذف) بفواصل رأسية رفيعة
+     وأيقونة فوق تسمية كل زر، بدل نص وأيقونة متجاورين بلا فواصل. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/row_root"
     android:layout_width="match_parent"
@@ -11,8 +13,8 @@
     android:orientation="vertical"
     android:paddingStart="16dp"
     android:paddingTop="14dp"
-    android:paddingEnd="8dp"
-    android:paddingBottom="4dp">
+    android:paddingEnd="16dp"
+    android:paddingBottom="0dp">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -51,39 +53,134 @@
     <View
         android:layout_width="match_parent"
         android:layout_height="1dp"
-        android:layout_marginTop="10dp"
+        android:layout_marginTop="14dp"
         android:background="@color/glass_border_soft" />
 
+    <!-- شريط الإجراءات: أربع خلايا متساوية بفواصل رأسية دقيقة بينها -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
-        <TextView
+        <LinearLayout
+            android:id="@+id/btn_open"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:paddingTop="12dp"
+            android:paddingBottom="10dp">
+
+            <ImageView
+                android:layout_width="19dp"
+                android:layout_height="19dp"
+                android:importantForAccessibility="no"
+                android:src="@drawable/ic_download"
+                android:tint="@color/primary_cyan_dark" />
+
+            <TextView
+                style="@style/Phizyo.ActionLabel"
+                android:layout_marginTop="6dp"
+                android:text="فتح" />
+        </LinearLayout>
+
+        <View
+            android:layout_width="1dp"
+            android:layout_height="28dp"
+            android:background="@color/glass_border_soft" />
+
+        <LinearLayout
             android:id="@+id/btn_rename"
-            style="@style/Phizyo.ActionText"
             android:layout_width="0dp"
+            android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:drawableStart="@drawable/ic_edit"
-            android:text="تسمية" />
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:paddingTop="12dp"
+            android:paddingBottom="10dp">
 
-        <TextView
+            <ImageView
+                android:layout_width="19dp"
+                android:layout_height="19dp"
+                android:importantForAccessibility="no"
+                android:src="@drawable/ic_edit"
+                android:tint="@color/primary_cyan_dark" />
+
+            <TextView
+                style="@style/Phizyo.ActionLabel"
+                android:layout_marginTop="6dp"
+                android:text="تسمية" />
+        </LinearLayout>
+
+        <View
+            android:layout_width="1dp"
+            android:layout_height="28dp"
+            android:background="@color/glass_border_soft" />
+
+        <LinearLayout
             android:id="@+id/btn_replace"
-            style="@style/Phizyo.ActionText"
             android:layout_width="0dp"
+            android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:drawableStart="@drawable/ic_refresh"
-            android:text="استبدال" />
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:paddingTop="12dp"
+            android:paddingBottom="10dp">
 
-        <TextView
+            <ImageView
+                android:layout_width="19dp"
+                android:layout_height="19dp"
+                android:importantForAccessibility="no"
+                android:src="@drawable/ic_refresh"
+                android:tint="@color/primary_cyan_dark" />
+
+            <TextView
+                style="@style/Phizyo.ActionLabel"
+                android:layout_marginTop="6dp"
+                android:text="استبدال" />
+        </LinearLayout>
+
+        <View
+            android:layout_width="1dp"
+            android:layout_height="28dp"
+            android:background="@color/glass_border_soft" />
+
+        <LinearLayout
             android:id="@+id/btn_delete"
-            style="@style/Phizyo.ActionText"
             android:layout_width="0dp"
+            android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:drawableStart="@drawable/ic_trash"
-            android:drawableTint="@color/accent_red"
-            android:text="حذف"
-            android:textColor="@color/accent_red" />
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:paddingTop="12dp"
+            android:paddingBottom="10dp">
+
+            <ImageView
+                android:layout_width="19dp"
+                android:layout_height="19dp"
+                android:importantForAccessibility="no"
+                android:src="@drawable/ic_trash"
+                android:tint="@color/accent_red" />
+
+            <TextView
+                style="@style/Phizyo.ActionLabel"
+                android:layout_marginTop="6dp"
+                android:text="حذف"
+                android:textColor="@color/accent_red" />
+        </LinearLayout>
     </LinearLayout>
 </LinearLayout>
