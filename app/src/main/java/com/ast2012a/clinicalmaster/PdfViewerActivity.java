@@ -84,6 +84,9 @@ public class PdfViewerActivity extends AppCompatActivity {
 
     private final ExecutorService loadExecutor = Executors.newSingleThreadExecutor();
     private final ExecutorService renderExecutor = Executors.newSingleThreadExecutor();
+    /** استخراج نص الصفحة (PdfBox) قبل إرسالها لخدمة الترجمة - منفصل عن renderExecutor
+     *  حتى لا تنتظر الترجمة دورها خلف رسم الصفحات. */
+    private final ExecutorService textExecutor = Executors.newSingleThreadExecutor();
     /** PdfRenderer لا يدعم فتح أكثر من صفحة في نفس الوقت ولا الوصول من عدة خيوط. */
     private final Object renderLock = new Object();
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
@@ -101,6 +104,11 @@ public class PdfViewerActivity extends AppCompatActivity {
     private LruCache<Long, Bitmap> cache;
     private PageAdapter adapter;
     private ActivityResultLauncher<String[]> pickLauncher;
+    private boolean translateInProgress = false;
+    private static volatile boolean pdfBoxReadyForText = false;
+
+    private static final String[] TRANSLATE_LANG_LABELS = {"العربية", "English", "Français", "Türkçe"};
+    private static final String[] TRANSLATE_LANG_CODES = {"ar", "en", "fr", "tr"};
 
     private final Runnable hideIndicatorRunnable = () -> {
         if (pageIndicator == null) return;
@@ -234,6 +242,7 @@ public class PdfViewerActivity extends AppCompatActivity {
         uiHandler.removeCallbacksAndMessages(null);
         loadExecutor.shutdownNow();
         renderExecutor.shutdownNow();
+        textExecutor.shutdownNow();
         releaseRenderer();
         cache.evictAll();
     }
@@ -250,6 +259,9 @@ public class PdfViewerActivity extends AppCompatActivity {
             return true;
         } else if (id == R.id.action_pdf_goto) {
             showGoToPageDialog();
+            return true;
+        } else if (id == R.id.action_pdf_translate) {
+            showTranslateLanguageDialog();
             return true;
         } else if (id == R.id.action_pdf_open_external) {
             openExternally();
@@ -409,9 +421,17 @@ public class PdfViewerActivity extends AppCompatActivity {
         updateIndicator();
     }
 
-    /** عرض الصفحة بالبكسل = عرض المنطقة بعد التكبير - هوامش البطاقة (12dp من كل جهة). */
+    /**
+     * عرض الصفحة بالبكسل = عرض المنطقة بعد التكبير - هوامش بطاقة الصفحة الفعلية.
+     * إصلاح: كانت القيمة المطروحة 24dp فقط بينما بطاقة item_pdf_page.xml تستهلك
+     * فعليًا 48dp (14dp هامش + 10dp حشوة من كل جهة) - الفرق (24dp) كان يخلي عرض
+     * البتمَاب المرسوم أوسع من عرض الصورة المعروضة الحقيقي، فيتمدّد/يتشوّه ارتفاع
+     * كل صفحة (scaleType="fitXY") بدل ما تناسق حجم الشاشة بشكل سليم.
+     */
+    private static final int PAGE_CARD_HORIZONTAL_CHROME_DP = 48;
+
     private int pageWidthPx() {
-        int w = hScroll.getWidth() * ZOOM_PERCENT[zoomIndex] / 100 - Ui.dp(this, 24);
+        int w = hScroll.getWidth() * ZOOM_PERCENT[zoomIndex] / 100 - Ui.dp(this, PAGE_CARD_HORIZONTAL_CHROME_DP);
         return Math.max(1, w);
     }
 
@@ -529,6 +549,109 @@ public class PdfViewerActivity extends AppCompatActivity {
                     }
                 })
                 .setNegativeButton("إلغاء", null)
+                .show();
+    }
+
+    // ------------------------------------------------------------------ ترجمة الصفحة (Google، مجانًا)
+
+    /** يعرض اختيار اللغة الهدف، ثم يترجم الصفحة المرئية حاليًا إليها. */
+    private void showTranslateLanguageDialog() {
+        if (ratios.length == 0 || currentFile == null) {
+            Toast.makeText(this, "افتح ملف PDF أولًا.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (translateInProgress) {
+            Toast.makeText(this, "جارٍ ترجمة صفحة سابقة، يرجى الانتظار...", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        new ClaudeDialog(this)
+                .setTitle("ترجمة الصفحة إلى")
+                .setItems(TRANSLATE_LANG_LABELS, (dialog, which) ->
+                        translateCurrentPage(TRANSLATE_LANG_CODES[which], TRANSLATE_LANG_LABELS[which]))
+                .show();
+    }
+
+    private void translateCurrentPage(String targetLangCode, String targetLangLabel) {
+        int pos = layoutManager.findFirstCompletelyVisibleItemPosition();
+        if (pos < 0) pos = layoutManager.findFirstVisibleItemPosition();
+        if (pos < 0) pos = 0;
+        final int pageIndex = pos;
+        final File file = currentFile;
+
+        translateInProgress = true;
+        Toast.makeText(this, "جارٍ استخراج نص الصفحة " + (pageIndex + 1) + "...", Toast.LENGTH_SHORT).show();
+
+        textExecutor.execute(() -> {
+            String text = extractPageText(file, pageIndex);
+            if (text == null || text.trim().isEmpty()) {
+                runOnUiThread(() -> {
+                    translateInProgress = false;
+                    Toast.makeText(this, "لا يوجد نص قابل للاستخراج في هذه الصفحة (قد تكون صورة ممسوحة ضوئيًا).",
+                            Toast.LENGTH_LONG).show();
+                });
+                return;
+            }
+            GoogleTranslateClient.translateAsync(text, targetLangCode, (translated, error) -> {
+                translateInProgress = false;
+                if (isFinishing() || isDestroyed()) return;
+                if (error != null || translated == null || translated.trim().isEmpty()) {
+                    Toast.makeText(this, "تعذّر الاتصال بخدمة الترجمة، حاول مرة أخرى بعد قليل.",
+                            Toast.LENGTH_LONG).show();
+                    return;
+                }
+                showTranslationResult(pageIndex + 1, targetLangLabel, translated, "ar".equals(targetLangCode));
+            });
+        });
+    }
+
+    /** استخراج نص صفحة واحدة فعليًا (PdfBox) - وليس OCR، فيعتمد على وجود طبقة نص
+     *  حقيقية بالملف (وهذا حال أغلب ملفات PDF المُصدَّرة من Word/برامج التصميم). */
+    private String extractPageText(File file, int pageIndex) {
+        try {
+            if (!pdfBoxReadyForText) {
+                com.tom_roush.pdfbox.android.PDFBoxResourceLoader.init(getApplicationContext());
+                pdfBoxReadyForText = true;
+            }
+            try (com.tom_roush.pdfbox.pdmodel.PDDocument doc = com.tom_roush.pdfbox.pdmodel.PDDocument.load(file)) {
+                com.tom_roush.pdfbox.text.PDFTextStripper stripper = new com.tom_roush.pdfbox.text.PDFTextStripper();
+                stripper.setStartPage(pageIndex + 1);
+                stripper.setEndPage(pageIndex + 1);
+                return stripper.getText(doc);
+            }
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    private void showTranslationResult(int pageNumber, String targetLangLabel, String translatedText, boolean rtl) {
+        if (isFinishing() || isDestroyed()) return;
+
+        TextView tv = new TextView(this);
+        tv.setText(translatedText);
+        tv.setTextColor(getColor(R.color.text_primary));
+        tv.setTextSize(15f);
+        tv.setLineSpacing(Ui.dp(this, 4), 1f);
+        tv.setTextIsSelectable(true);
+        tv.setTextDirection(rtl ? View.TEXT_DIRECTION_RTL : View.TEXT_DIRECTION_LTR);
+        tv.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+
+        android.widget.ScrollView scroll = new android.widget.ScrollView(this);
+        int maxHeight = (int) (getResources().getDisplayMetrics().heightPixels * 0.5f);
+        scroll.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, maxHeight));
+        scroll.addView(tv);
+
+        new ClaudeDialog(this)
+                .setTitle("ترجمة الصفحة " + pageNumber + " · " + targetLangLabel)
+                .setView(scroll)
+                .setPositiveButton("نسخ النص", (d, w) -> {
+                    android.content.ClipboardManager cm =
+                            (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                    if (cm != null) {
+                        cm.setPrimaryClip(android.content.ClipData.newPlainText("pdf_translation", translatedText));
+                        Toast.makeText(this, "تم نسخ النص المترجم.", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNegativeButton("إغلاق", null)
                 .show();
     }
 
