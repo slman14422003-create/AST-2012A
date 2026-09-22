@@ -89,4 +89,10 @@ dependencies {
     implementation("com.google.firebase:firebase-firestore")
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-analytics")
+
+    // استخراج نص حقيقي من ملفات PDF اللي يرفعها المستخدم على التخزين
+    // السحابي (CloudStorageClient) - يُستخدم من DocumentTextExtractor
+    // وCloudKnowledgeManager عشان Phizyo AI يقدر "يقرأ" محتوى هذه الملفات
+    // فعليًا ويستخدمها كمصدر تأريض إضافي، بدل ما تفضل ملفات مغلقة عليه.
+    implementation("com.tom-roush:pdfbox-android:2.0.27.0")
 }
