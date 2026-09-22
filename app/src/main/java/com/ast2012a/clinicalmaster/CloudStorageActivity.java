@@ -102,6 +102,9 @@ public class CloudStorageActivity extends AppCompatActivity implements CloudFile
     private ProgressBar uploadBar;
     private volatile boolean uploading;
     private volatile boolean uploadCancelled;
+    /** نفس بطاقة الرفع تُستخدم أيضاً لعرض تقدّم تنزيل الملف عند الضغط على "فتح". */
+    private volatile boolean downloading;
+    private volatile boolean downloadCancelled;
     private boolean resumed;
     private final Runnable hideUploadCardRunnable = this::hideUploadCard;
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
@@ -144,6 +147,9 @@ public class CloudStorageActivity extends AppCompatActivity implements CloudFile
         uploadCancel.setOnClickListener(v -> {
             if (uploading) {
                 uploadCancelled = true;
+                uploadStatus.setText("جارٍ الإلغاء...");
+            } else if (downloading) {
+                downloadCancelled = true;
                 uploadStatus.setText("جارٍ الإلغاء...");
             } else {
                 hideUploadCard();
@@ -543,24 +549,122 @@ public class CloudStorageActivity extends AppCompatActivity implements CloudFile
 
     @Override
     public void onOpen(CloudFile file) {
-        progress.setVisibility(View.VISIBLE);
-        executor.execute(() -> {
+        if (uploading) {
+            Toast.makeText(this, "يوجد رفع جارٍ حاليًا، انتظر حتى ينتهي.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (downloading) {
+            Toast.makeText(this, "يوجد تنزيل جارٍ حاليًا، انتظر حتى ينتهي.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        downloading = true;
+        downloadCancelled = false;
+        showDownloadCard(file.name, file.size);
+
+        final long[] lastUiUpdate = {0};
+        uploadExecutor.execute(() -> {
             try {
                 // اسم الملف قد يحوي "/" فيُنشئ مسارات فرعية أو يخرج من مجلد الكاش
                 File dest = new File(new File(getCacheDir(), "cloud_files"), file.name.replace('/', '_').replace('\\', '_'));
-                CloudStorageClient.downloadToFile(this, file.name, dest);
-                runOnUiThread(() -> {
-                    progress.setVisibility(View.GONE);
-                    if ("pdf".equals(file.extension())) {
-                        openPdfViewer(dest, file.name);
-                    } else {
-                        openLocalFile(dest, file.name);
+                CloudStorageClient.downloadToFile(this, file.name, dest, new CloudStorageClient.UploadListener() {
+                    @Override
+                    public void onProgress(long sent, long total) {
+                        long now = SystemClock.uptimeMillis();
+                        boolean done = total > 0 && sent >= total;
+                        if (!done && now - lastUiUpdate[0] < 100) return;
+                        lastUiUpdate[0] = now;
+                        runOnUiThread(() -> updateDownloadProgress(sent, total));
+                    }
+
+                    @Override
+                    public boolean isCancelled() {
+                        return downloadCancelled;
                     }
                 });
-            } catch (Exception e) {
-                runOnUiThread(() -> showError("تعذّر تنزيل الملف.\n" + errorText(e)));
+                runOnUiThread(() -> onDownloadSucceeded(dest, file.name));
+            } catch (CloudStorageClient.UploadCancelledException e) {
+                runOnUiThread(this::onDownloadCancelled);
+            } catch (Throwable t) {
+                runOnUiThread(() -> onDownloadFailed(file.name, errorText(t)));
             }
         });
+    }
+
+    // ------------------------------------------------------------------ بطاقة التنزيل (نفس بطاقة الرفع)
+
+    private void showDownloadCard(String name, long size) {
+        uiHandler.removeCallbacks(hideUploadCardRunnable);
+        uploadIcon.setImageResource(R.drawable.ic_download);
+        uploadIcon.setImageTintList(ColorStateList.valueOf(getColor(R.color.primary_cyan)));
+        uploadBar.setProgressTintList(ColorStateList.valueOf(getColor(R.color.primary_cyan)));
+        uploadBar.setIndeterminate(size <= 0);
+        uploadBar.setProgress(0);
+        uploadCancel.setContentDescription("إلغاء التنزيل");
+        uploadName.setText(name);
+        uploadStatus.setText("جارٍ التنزيل... 0%");
+        uploadCard.setVisibility(View.VISIBLE);
+    }
+
+    private void updateDownloadProgress(long received, long total) {
+        if (isDestroyed() || !downloading || downloadCancelled) return;
+        if (total <= 0) {
+            uploadStatus.setText(BidiText.fix("جارٍ التنزيل... " + Formatter.formatShortFileSize(this, received)));
+            return;
+        }
+        int pct = (int) Math.min(100, (received * 100) / total);
+        uploadBar.setIndeterminate(false);
+        uploadBar.setProgress(pct);
+        if (received >= total) {
+            uploadStatus.setText("جارٍ إنهاء التنزيل...");
+        } else {
+            uploadStatus.setText(BidiText.fix("جارٍ التنزيل... " + pct + "%  ·  "
+                    + Formatter.formatShortFileSize(this, received) + " من "
+                    + Formatter.formatShortFileSize(this, total)));
+        }
+    }
+
+    private void onDownloadSucceeded(File dest, String name) {
+        downloading = false;
+        if (isFinishing() || isDestroyed()) return;
+
+        int green = getColor(R.color.accent_green);
+        uploadBar.setIndeterminate(false);
+        uploadBar.setProgress(100);
+        uploadBar.setProgressTintList(ColorStateList.valueOf(green));
+        uploadIcon.setImageResource(R.drawable.ic_check);
+        uploadIcon.setImageTintList(ColorStateList.valueOf(green));
+        uploadName.setText(name);
+        uploadStatus.setText("تم التنزيل بنجاح");
+        uploadCancel.setContentDescription("إغلاق");
+        uiHandler.postDelayed(hideUploadCardRunnable, UPLOAD_CARD_AUTOHIDE_MS);
+
+        if ("pdf".equals(extensionOf(name))) {
+            openPdfViewer(dest, name);
+        } else {
+            openLocalFile(dest, name);
+        }
+    }
+
+    /** نفس منطق CloudFile.extension() لكن من اسم الملف مباشرة (بعد التنزيل قد لا يتوفر كائن CloudFile). */
+    private static String extensionOf(String name) {
+        int dot = name.lastIndexOf('.');
+        if (dot < 0 || dot == name.length() - 1) return "";
+        return name.substring(dot + 1).toLowerCase(java.util.Locale.ROOT);
+    }
+
+    private void onDownloadCancelled() {
+        downloading = false;
+        downloadCancelled = false;
+        if (isFinishing() || isDestroyed()) return;
+        uploadCard.setVisibility(View.GONE);
+        Toast.makeText(this, "أُلغي تنزيل الملف.", Toast.LENGTH_SHORT).show();
+    }
+
+    private void onDownloadFailed(String name, String message) {
+        downloading = false;
+        if (isFinishing() || isDestroyed()) return;
+        uploadCard.setVisibility(View.GONE);
+        showError("تعذّر تنزيل الملف.\n" + message);
     }
 
     /** ملفات PDF تُعرض في قارئ التطبيق (منسّق مع الواجهة) بدل تطبيق خارجي. */

@@ -180,17 +180,31 @@ final class CloudStorageClient {
 
     /** ينزّل الملف بالكامل إلى dest (تُنشأ المجلدات الأب تلقائيًا). */
     static void downloadToFile(Context ctx, String name, File dest) throws IOException {
+        downloadToFile(ctx, name, dest, null);
+    }
+
+    /** نفس التنزيل أعلاه، مع إبلاغ listener بالتقدّم الحقيقي (بالبايت) وإتاحة الإلغاء
+     *  أثناء القراءة (نفس واجهة UploadListener، تُستخدم هنا لعدد البايتات المُستقبَلة). */
+    static void downloadToFile(Context ctx, String name, File dest, UploadListener listener) throws IOException {
         HttpURLConnection conn = open(ctx, "/files/" + encodeSegment(name), "GET");
         conn.setReadTimeout(TRANSFER_READ_TIMEOUT);
         try {
             checkResponse(conn);
+            long total = conn.getContentLengthLong();
             File parent = dest.getParentFile();
             if (parent != null) //noinspection ResultOfMethodCallIgnored
                 parent.mkdirs();
             try (InputStream in = conn.getInputStream(); OutputStream out = new FileOutputStream(dest)) {
                 byte[] buf = new byte[8192];
+                long received = 0;
                 int n;
-                while ((n = in.read(buf)) != -1) out.write(buf, 0, n);
+                if (listener != null) listener.onProgress(0, total);
+                while ((n = in.read(buf)) != -1) {
+                    if (listener != null && listener.isCancelled()) throw new UploadCancelledException();
+                    out.write(buf, 0, n);
+                    received += n;
+                    if (listener != null) listener.onProgress(received, total);
+                }
             }
         } finally {
             conn.disconnect();

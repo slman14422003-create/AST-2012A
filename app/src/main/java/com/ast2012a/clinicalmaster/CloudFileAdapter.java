@@ -16,8 +16,8 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * بطاقات قائمة "الملفات السحابية": اسم الملف + الحجم/التاريخ + فتح/تعديل
- * (إعادة تسمية أو استبدال المحتوى)/حذف. نفس أسلوب CaseRowAdapter بالضبط.
+ * بطاقات قائمة "الملفات السحابية": اسم الملف + الحجم/التاريخ + شريط إجراءات
+ * (فتح/إعادة تسمية/استبدال المحتوى/حذف). نفس أسلوب CaseRowAdapter بالضبط.
  */
 public class CloudFileAdapter extends RecyclerView.Adapter<CloudFileAdapter.ViewHolder> {
 
@@ -62,11 +62,13 @@ public class CloudFileAdapter extends RecyclerView.Adapter<CloudFileAdapter.View
         holder.meta.setText(meta.toString());
 
         holder.itemView.setOnClickListener(v -> { if (callback != null) callback.onOpen(item); });
+        holder.openBtn.setOnClickListener(v -> { if (callback != null) callback.onOpen(item); });
         holder.renameBtn.setOnClickListener(v -> { if (callback != null) callback.onRename(item); });
         holder.replaceBtn.setOnClickListener(v -> { if (callback != null) callback.onReplace(item); });
         holder.deleteBtn.setOnClickListener(v -> { if (callback != null) callback.onDelete(item); });
 
         Ui.applyPressFeedback(holder.itemView);
+        Ui.applyPressFeedback(holder.openBtn);
         Ui.applyPressFeedback(holder.renameBtn);
         Ui.applyPressFeedback(holder.replaceBtn);
         Ui.applyPressFeedback(holder.deleteBtn);
@@ -90,15 +92,17 @@ public class CloudFileAdapter extends RecyclerView.Adapter<CloudFileAdapter.View
         final android.widget.ImageView icon;
         final TextView title;
         final TextView meta;
-        final TextView renameBtn;
-        final TextView replaceBtn;
-        final TextView deleteBtn;
+        final View openBtn;
+        final View renameBtn;
+        final View replaceBtn;
+        final View deleteBtn;
 
         ViewHolder(View itemView) {
             super(itemView);
             icon = itemView.findViewById(R.id.row_icon);
             title = itemView.findViewById(R.id.row_title);
             meta = itemView.findViewById(R.id.row_meta);
+            openBtn = itemView.findViewById(R.id.btn_open);
             renameBtn = itemView.findViewById(R.id.btn_rename);
             replaceBtn = itemView.findViewById(R.id.btn_replace);
             deleteBtn = itemView.findViewById(R.id.btn_delete);
