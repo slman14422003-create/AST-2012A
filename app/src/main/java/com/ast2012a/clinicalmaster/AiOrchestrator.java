@@ -125,14 +125,41 @@ public final class AiOrchestrator {
     // يكمّل بالضبط من حيث وقف - وبندمج النتيجتين قبل ما نرجّع الرد النهائي
     // للواجهة. الحد الأقصى MAX_CONTINUATIONS محاولات إضافية بس عشان ما
     // يفضلش يلف لو ظل الرد "يبدو" ناقصًا بسبب طبيعة المحتوى نفسه.
+    //
+    // إصلاح مهم (تكرار الرد بالكامل): كان بيحصل إن الرد يوصل للمستخدم
+    // مكرر بالكامل 2-3 مرات ورا بعض. السبب: 1) looksTruncated القديمة
+    // كانت بتعتبر أي رد عربي عادي "ناقص" لمجرد إنه بينتهي بحرف عادي (مفيش
+    // نقطة إجبارية بنهاية الجملة العربية زي الإنجليزي) - فكانت بتطلب
+    // استكمال حتى لو الرد كان مكتمل فعلًا. 2) الووركر/النموذج نفسه أحيانًا
+    // ما كانش بيلتزم بتعليمة "أكمل من حيث توقفت" وكان بيعيد صياغة الإجابة
+    // من الأول من جديد بدل الاستكمال الفعلي - فكان الدمج (accumulated +
+    // reply) بيحط نفس الإجابة مرتين/تلاتة ورا بعض. الإصلاح: (أ) توسيع
+    // علامات "نهاية واضحة" اللي بتمنع محاولة استكمال غير لازمة أصلًا،
+    // و(ب) الأهم: looksLikeDuplicateRestart بتقارن أول أي محاولة استكمال
+    // بأول الرد الأصلي - لو النموذج بدأ من نفس الكلام تاني (إعادة صياغة
+    // بدل استكمال)، نرفض هذا الجزء بالكامل ونوقف عند آخر رد مكتمل موجود
+    // فعليًا، بدل ما نلزق نسخة مكررة تانية للمستخدم.
     // ================================================================
     private static final int MAX_CONTINUATIONS = 2;
 
     private static void sendWithAutoContinue(String systemContext, String userMessage,
             String originalQuestion, String accumulated, int attempt, AiClient.Callback finalCallback) {
+        sendWithAutoContinue(systemContext, userMessage, originalQuestion, accumulated, null, attempt, finalCallback);
+    }
+
+    private static void sendWithAutoContinue(String systemContext, String userMessage,
+            String originalQuestion, String accumulated, String firstChunk, int attempt,
+            AiClient.Callback finalCallback) {
         AiClient.sendMessage(systemContext, userMessage, new AiClient.Callback() {
             @Override
             public void onSuccess(String reply) {
+                String effectiveFirstChunk = firstChunk != null ? firstChunk : reply;
+                if (attempt > 0 && looksLikeDuplicateRestart(effectiveFirstChunk, reply)) {
+                    // النموذج أعاد الإجابة من الأول بدل ما يكمّلها - نتجاهل
+                    // هذا الجزء المكرر تمامًا ونوقف بآخر رد مكتمل متاح فعليًا.
+                    finalCallback.onSuccess(accumulated);
+                    return;
+                }
                 String combined = accumulated.isEmpty() ? reply : accumulated + reply;
                 if (attempt < MAX_CONTINUATIONS && looksTruncated(combined)) {
                     String continueSystem = systemContext + "\n\n---\nملحوظة مهمة: هذا استكمال " +
@@ -141,7 +168,7 @@ public final class AiOrchestrator {
                             "أي كلمة منه ولا أي مقدمة جديدة، فقط الجزء الناقص لحد ما تخلص الفكرة " +
                             "بالكامل:\n\"\"\"\n" + lastChars(combined, 700) + "\n\"\"\"";
                     sendWithAutoContinue(continueSystem, "أكمل من حيث توقفت بالضبط.",
-                            originalQuestion, combined, attempt + 1, finalCallback);
+                            originalQuestion, combined, effectiveFirstChunk, attempt + 1, finalCallback);
                 } else {
                     finalCallback.onSuccess(combined);
                 }
@@ -160,9 +187,11 @@ public final class AiOrchestrator {
         });
     }
 
-    /** فحص تقريبي بسيط: رد طويل نسبيًا (فوق 200 حرف) وينتهي بحرف/رقم عادي
-     *  بدون أي علامة ترقيم ختامية، أو فيه عدد فردي من ``` (كتلة كود
-     *  مفتوحة ولم تُغلق) - في الحالتين الأرجح إن الرد اتقطع في نص الكلام. */
+    /** فحص تقريبي بسيط: رد طويل نسبيًا (فوق 200 حرف) وفيه عدد فردي من
+     *  ``` (كتلة كود مفتوحة ولم تُغلق) - الأرجح إن الرد اتقطع في نص
+     *  الكلام. لو الرد بينتهي بعلامة ترقيم أو رمز بيدل على نهاية واضحة
+     *  (زي . ! ؟ : أو إيموجي ختامي)، ما بنعتبروش ناقص حتى لو آخر حرف
+     *  عادي - لأن الجملة العربية غالبًا مالهاش نقطة إجبارية أصلًا. */
     private static boolean looksTruncated(String text) {
         if (text == null) return false;
         String t = text.trim();
@@ -172,7 +201,30 @@ public final class AiOrchestrator {
         while ((idx = t.indexOf("```", idx)) != -1) { fenceCount++; idx += 3; }
         if (fenceCount % 2 != 0) return true;
         char last = t.charAt(t.length() - 1);
+        if (CLEAR_ENDING_CHARS.indexOf(last) >= 0) return false;
         return Character.isLetterOrDigit(last);
+    }
+
+    private static final String CLEAR_ENDING_CHARS =
+            ".!?؟؛;)]”\"»…✅⚠️•－-";
+
+    /** بيقارن أول جزء من محاولة الاستكمال بأول الرد الأصلي (المحفوظ في
+     *  firstChunk) - لو النموذج بدأ كلامه بنفس الفتحة تقريبًا (إعادة
+     *  صياغة من الأول بدل استكمال فعلي من حيث توقف)، نعتبرها محاولة
+     *  فاشلة/مكررة. المقارنة على أول 60 حرف بعد تطبيع المسافات فقط -
+     *  كفاية للإمساك بإعادة صياغة كاملة بدون حساسية زيادة لاختلافات
+     *  بسيطة في نص طويل. */
+    private static boolean looksLikeDuplicateRestart(String firstChunk, String newReply) {
+        if (firstChunk == null || newReply == null) return false;
+        String a = normalizeForCompare(firstChunk);
+        String b = normalizeForCompare(newReply);
+        int len = Math.min(60, Math.min(a.length(), b.length()));
+        if (len < 20) return false; // نص قصير جدًا ملهوش دلالة كافية للمقارنة
+        return a.substring(0, len).equals(b.substring(0, len));
+    }
+
+    private static String normalizeForCompare(String s) {
+        return s.trim().replaceAll("\\s+", " ");
     }
 
     private static String lastChars(String text, int max) {
