@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- شاشة "المفضلة" المستقلة: شريط علوي بزر رجوع + عنوان وعدد الحالات،
+     وقائمة الحالات المفضّلة (بنفس بطاقة نتائج البحث الرئيسية)، أو حالة
+     فارغة لو لسه مافيش أي حالة مفضّلة. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_app_gradient"
+    android:orientation="vertical">
+
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
+        style="@style/Phizyo.Toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        app:navigationIcon="@drawable/ic_arrow_back">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:gravity="center_horizontal"
+            android:orientation="vertical">
+
+            <TextView
+                style="@style/Phizyo.HeaderTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="المفضلة" />
+
+            <TextView
+                android:id="@+id/header_subtitle"
+                style="@style/Phizyo.HeaderSubtitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:visibility="gone" />
+        </LinearLayout>
+    </com.google.android.material.appbar.MaterialToolbar>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/favorites_list"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:paddingStart="16dp"
+            android:paddingTop="14dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="24dp" />
+
+        <include
+            android:id="@+id/empty_hint_container"
+            layout="@layout/view_empty_state"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:visibility="gone" />
+    </FrameLayout>
+</LinearLayout>
