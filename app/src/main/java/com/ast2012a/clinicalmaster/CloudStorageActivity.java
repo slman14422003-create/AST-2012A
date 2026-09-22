@@ -84,6 +84,13 @@ public class CloudStorageActivity extends AppCompatActivity implements CloudFile
     /** اسم الملف المستهدف عند "استبدال" (null = رفع ملف جديد بنفس اسمه الأصلي). */
     private String pendingReplaceTarget;
 
+    /** آخر ملف اتضاف محليًا فورًا بعد نجاح رفع (upsertItem) ولسه السيرفر
+     *  ما أكّدش وجوده في رد GET /files (تأخر انتشار عادي). طول ما هو
+     *  موجود، أي reload() بيدمجه مع رد السيرفر بدل ما يمسحه لو السيرفر
+     *  رجّع قائمة لسه من غيره - وبيتصفّر أول ما رد السيرفر فعليًا يتضمّنه
+     *  (اتأكد)، أو لو المستخدم حذفه بنفسه قبل ما السيرفر يلحق يتأكد. */
+    private CloudFile pendingOptimisticUpload;
+
     private ActivityResultLauncher<String[]> pickDocumentLauncher;
     private ActivityResultLauncher<String> notifPermissionLauncher;
 
@@ -275,15 +282,40 @@ public class CloudStorageActivity extends AppCompatActivity implements CloudFile
     private void applyList(List<CloudFile> files) {
         progress.setVisibility(View.GONE);
         if (isFinishing()) return;
-        adapter.setItems(files);
-        boolean empty = files == null || files.isEmpty();
+
+        // لو لسه فيه ملف مضاف محليًا بعد رفع ناجح وما اتأكدش من السيرفر
+        // بعد: لو رد السيرفر ده بقى فعلًا فيه (بالاسم)، يبقى اتأكد - نمسح
+        // العلامة ونسيب رد السيرفر (نسخته الرسمية) زي ما هو. لو لسه مش
+        // موجود في الرد ده (تأخر انتشار عادي)، نضيفه إحنا لقائمة السيرفر
+        // قبل ما نعرضها - عشان reload() (اللي بتتنفذ فورًا بعد كل رفع) ما
+        // تمسحش الملف اللي ظهر فورًا وترجعه "يختفي" تاني، وهو بالظبط أصل
+        // الشكوى اللي كانت بتحصل قبل الإصلاح ده.
+        List<CloudFile> effectiveFiles = files;
+        if (pendingOptimisticUpload != null) {
+            boolean confirmedByServer = false;
+            if (files != null) {
+                for (CloudFile f : files) {
+                    if (pendingOptimisticUpload.name.equals(f.name)) { confirmedByServer = true; break; }
+                }
+            }
+            if (confirmedByServer) {
+                pendingOptimisticUpload = null;
+            } else {
+                effectiveFiles = files == null ? new java.util.ArrayList<>() : new java.util.ArrayList<>(files);
+                effectiveFiles.add(0, pendingOptimisticUpload);
+            }
+        }
+
+        adapter.setItems(effectiveFiles);
+        List<CloudFile> statsFiles = effectiveFiles;
+        boolean empty = statsFiles == null || statsFiles.isEmpty();
         content.setVisibility(empty ? View.GONE : View.VISIBLE);
         emptyBox.setVisibility(empty ? View.VISIBLE : View.GONE);
         fab.setVisibility(View.VISIBLE);
         if (empty) {
             showEmptyFilesState();
         } else {
-            headerSubtitle.setText(files.size() == 1 ? "ملف واحد" : files.size() + " ملفات");
+            headerSubtitle.setText(statsFiles.size() == 1 ? "ملف واحد" : statsFiles.size() + " ملفات");
             headerSubtitle.setVisibility(View.VISIBLE);
         }
     }
@@ -434,6 +466,32 @@ public class CloudStorageActivity extends AppCompatActivity implements CloudFile
                 : "تم الرفع بنجاح");
         uploadCancel.setContentDescription("إغلاق");
         uiHandler.postDelayed(hideUploadCardRunnable, UPLOAD_CARD_AUTOHIDE_MS);
+
+        // إصلاح مهم (الملف المرفوع ما يظهرش إلا بعد قفل التطبيق وفتحه
+        // تاني): reload() تحت بتسأل الووركر GET /files فورًا بعد الرفع
+        // مباشرة - ولو فيه أي تأخر انتشار عادي في السيرفر (Cache أو
+        // eventual consistency، شائع في أي تخزين سحابي)، الرد بيرجع لسه
+        // من غير الملف الجديد، فيبان للمستخدم إن الملف "اختفى" أو ما
+        // اترفعش، لحد ما يقفل التطبيق ويرجع يفتحه (onResume بيستدعي
+        // reload() تاني بعد وقت كافي يكون السيرفر لحق يتحدّث فيه). الرفع
+        // نفسه نجح فعلًا (وصلنا هنا أصلًا) - المشكلة في توقيت عرض القائمة
+        // بس. الحل: نضيف الملف المرفوع فورًا للقائمة المعروضة محليًا
+        // (adapter.upsertItem) بمجرد نجاح الرفع، بدل ما ننتظر رد السيرفر -
+        // فيظهر فورًا مهما كان توقيت استجابة الووركر، وبعدين reload() في
+        // الخلفية بيتأكد من مزامنة القائمة كاملة مع السيرفر (وبيصحّح أي
+        // فرق لو حصل، زي وقت الرفع الدقيق من السيرفر نفسه).
+        CloudFile justUploaded = new CloudFile();
+        justUploaded.name = name;
+        justUploaded.size = size;
+        justUploaded.uploadedAt = System.currentTimeMillis();
+        pendingOptimisticUpload = justUploaded;
+        adapter.upsertItem(justUploaded);
+        content.setVisibility(View.VISIBLE);
+        emptyBox.setVisibility(View.GONE);
+        fab.setVisibility(View.VISIBLE);
+        headerSubtitle.setText(adapter.getItemCount() == 1 ? "ملف واحد" : adapter.getItemCount() + " ملفات");
+        headerSubtitle.setVisibility(View.VISIBLE);
+
         reload();
     }
 
@@ -742,6 +800,12 @@ public class CloudStorageActivity extends AppCompatActivity implements CloudFile
                     executor.execute(() -> {
                         try {
                             CloudStorageClient.delete(this, file.name);
+                            // لو الملف المحذوف هو نفسه اللي لسه مُعلّق كـ
+                            // "مضاف محليًا لحد تأكيد السيرفر"، نمسح العلامة
+                            // عشان reload() الجاي ما يرجّعش يضيفه تاني.
+                            if (pendingOptimisticUpload != null && pendingOptimisticUpload.name.equals(file.name)) {
+                                pendingOptimisticUpload = null;
+                            }
                             runOnUiThread(this::reload);
                         } catch (Exception e) {
                             runOnUiThread(() -> showError("تعذّر حذف الملف.\n" + errorText(e)));

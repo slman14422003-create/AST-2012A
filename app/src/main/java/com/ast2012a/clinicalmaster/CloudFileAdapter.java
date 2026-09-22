@@ -40,6 +40,26 @@ public class CloudFileAdapter extends RecyclerView.Adapter<CloudFileAdapter.View
         notifyDataSetChanged();
     }
 
+    /** بتضيف أو تحدّث عنصر واحد فورًا في القائمة المعروضة - بدون انتظار
+     *  إعادة تحميل القائمة كاملة من السيرفر. تُستخدم مباشرة بعد نجاح رفع
+     *  ملف عشان يظهر فورًا للمستخدم حتى لو رد GET /files من الووركر لسه
+     *  ما لحقش يعكس الرفع الجديد (تأخر انتشار عادي في أي تخزين سحابي -
+     *  كان بيخلي الملف "يختفي" فعليًا للمستخدم لحد ما يقفل التطبيق ويرجع
+     *  يفتحه بعد شوية). لو فيه عنصر بنفس الاسم بالفعل (استبدال محتوى)،
+     *  بيتحدّث مكانه بدل ما يتضاف نسخة تانية مكررة. */
+    public void upsertItem(CloudFile file) {
+        if (file == null || file.name == null || file.name.isEmpty()) return;
+        for (int i = 0; i < items.size(); i++) {
+            if (file.name.equals(items.get(i).name)) {
+                items.set(i, file);
+                notifyItemChanged(i);
+                return;
+            }
+        }
+        items.add(0, file);
+        notifyItemInserted(0);
+    }
+
     @NonNull
     @Override
     public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
