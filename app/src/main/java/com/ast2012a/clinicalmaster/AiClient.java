@@ -111,7 +111,7 @@ public class AiClient {
                 callback.onError("تعذّر قراءة رد الووركر (شكل غير متوقع). الرد الخام: " + responseBody);
                 return;
             }
-            callback.onSuccess(reply.trim());
+            callback.onSuccess(sanitizeMarkdown(reply.trim()));
 
         } catch (Exception e) {
             callback.onError("تعذر الوصول لرابط الووركر: " + (e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()));
@@ -154,6 +154,34 @@ public class AiClient {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    /**
+     * طبقة أمان أخيرة على أي رد قادم من الووركر: الشاشة تعرض رد المساعد
+     * كنص عادي فقط (TextView.setText) بدون أي تفسير Markdown، فكان أي **
+     * أو # أو ``` أو --- يظهر للمستخدم حرفيًا كرمز غريب وسط الكلام بدل ما
+     * يتفسر كتنسيق - وده أصل شكوى "الرد فيه ** غريبة" اللي وصلت من
+     * المستخدم. AiPrompts.FORMAT_RULES بيوجّه النموذج ما يستخدمش Markdown
+     * من الأساس، لكن لو خالف التعليمات (بيحصل أحيانًا مع أي نموذج)، الدالة
+     * دي نقطة مرور موحّدة (كل رد فعلي، سواء دردشة أو تأريض أو استكمال، بيعدي
+     * من هنا) بتشيل أي رمز Markdown فعليًا قبل ما يوصل للواجهة نهائيًا -
+     * بدون ما تغيّر أو تحذف أي كلمة من محتوى الرد نفسه.
+     */
+    private static String sanitizeMarkdown(String s) {
+        if (s == null || s.isEmpty()) return s;
+        String t = s;
+        // كتل كود ```...``` وbackticks مفردة: تشال الأسوار فقط والمحتوى يفضل زي ما هو.
+        t = t.replace("```", "");
+        t = t.replace("`", "");
+        // سطر فاصل بالكامل من نجوم/شرط/underscore (--- أو *** أو ___).
+        t = t.replaceAll("(?m)^[ \\t]*([\\-*_])\\1{2,}[ \\t]*$\\n?", "");
+        // عناوين Markdown (# أو ## ... إلخ) في أول السطر - يتشال الرمز ويفضل النص.
+        t = t.replaceAll("(?m)^#{1,6}\\s*", "");
+        // أي نجوم متبقية (Bold/Italic **نص** أو *نص*) - نشيل الرمز بس ونسيب
+        // النص جواه زي ما هو، مفيش داعي نحوّل التنسيق لحاجة تانية.
+        t = t.replace("*", "");
+        t = t.replace("__", "");
+        return t;
     }
 
     private static String readStream(InputStream is) throws IOException {

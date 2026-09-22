@@ -85,7 +85,12 @@ public final class AiOrchestrator {
             @Override
             public void onSuccess(String decision) {
                 if (needsSearch(decision)) {
-                    runGrounded(ctx, text, patientId, historyContext, stages, callback);
+                    // v5: المصنّف بقى ممكن يرجع مع SEARCH مصطلح بحث إنجليزي
+                    // جاهز لـ Physiopedia (AiPrompts.extractSearchTerm) - لو
+                    // مش موجود (رد قديم الشكل أو فضّل يسيبه فاضي)، runGrounded
+                    // بترجع تلقائيًا لنص السؤال الأصلي زي السلوك القديم.
+                    String physioTermHint = AiPrompts.extractSearchTerm(decision);
+                    runGrounded(ctx, text, patientId, historyContext, physioTermHint, stages, callback);
                 } else {
                     runChat(ctx, text, historyContext, stages, callback);
                 }
@@ -94,8 +99,9 @@ public final class AiOrchestrator {
             @Override
             public void onError(String message) {
                 // فشل التصنيف نفسه (مشكلة شبكة مثلًا) - نرجع للسلوك الآمن
-                // الأصلي (تأريض كامل) بدل ما نوقف الرد على المستخدم.
-                runGrounded(ctx, text, patientId, historyContext, stages, callback);
+                // الأصلي (تأريض كامل) بدل ما نوقف الرد على المستخدم. مفيش
+                // مصطلح بحث جاهز هنا فـrunGrounded هتستخدم نص السؤال كما هو.
+                runGrounded(ctx, text, patientId, historyContext, null, stages, callback);
             }
         });
     }
@@ -126,49 +132,81 @@ public final class AiOrchestrator {
     // للواجهة. الحد الأقصى MAX_CONTINUATIONS محاولات إضافية بس عشان ما
     // يفضلش يلف لو ظل الرد "يبدو" ناقصًا بسبب طبيعة المحتوى نفسه.
     //
-    // إصلاح مهم (تكرار الرد بالكامل): كان بيحصل إن الرد يوصل للمستخدم
-    // مكرر بالكامل 2-3 مرات ورا بعض. السبب: 1) looksTruncated القديمة
+    // إصلاح مهم (تكرار الرد بالكامل أو جزء منه): كان بيحصل إن الرد يوصل
+    // للمستخدم فيه فقرات/عناوين مكررة. السبب: 1) looksTruncated القديمة
     // كانت بتعتبر أي رد عربي عادي "ناقص" لمجرد إنه بينتهي بحرف عادي (مفيش
     // نقطة إجبارية بنهاية الجملة العربية زي الإنجليزي) - فكانت بتطلب
-    // استكمال حتى لو الرد كان مكتمل فعلًا. 2) الووركر/النموذج نفسه أحيانًا
-    // ما كانش بيلتزم بتعليمة "أكمل من حيث توقفت" وكان بيعيد صياغة الإجابة
-    // من الأول من جديد بدل الاستكمال الفعلي - فكان الدمج (accumulated +
-    // reply) بيحط نفس الإجابة مرتين/تلاتة ورا بعض. الإصلاح: (أ) توسيع
-    // علامات "نهاية واضحة" اللي بتمنع محاولة استكمال غير لازمة أصلًا،
-    // و(ب) الأهم: looksLikeDuplicateRestart بتقارن أول أي محاولة استكمال
-    // بأول الرد الأصلي - لو النموذج بدأ من نفس الكلام تاني (إعادة صياغة
-    // بدل استكمال)، نرفض هذا الجزء بالكامل ونوقف عند آخر رد مكتمل موجود
-    // فعليًا، بدل ما نلزق نسخة مكررة تانية للمستخدم.
+    // استكمال حتى لو الرد كان مكتمل فعلًا. 2) الأهم: النموذج، لما يُطلب
+    // منه "أكمل من حيث توقفت" مع إرفاق آخر جزء من الرد السابق كسياق، كان
+    // غالبًا بيبدأ رده الجديد بإعادة نفس الجزء المُرفَق (صدى/echo) قبل ما
+    // يكمّل فعليًا - أحيانًا القسم الأخير بالكامل (عنوان + نقاطه) مش
+    // بالضرورة الرد كله من أوله. الكشف القديم (looksLikeDuplicateRestart)
+    // كان بيقارن بداية محاولة الاستكمال ببداية *الرد الأصلي كله* بس - فكان
+    // يمسك حالة "إعادة الرد من الصفر" فقط، ومش يمسك حالة "إعادة القسم
+    // الأخير اللي اتبعت كسياق" اللي هي فعليًا اللي كانت بتحصل. الإصلاح
+    // الحالي بيغطي الحالتين معًا:
+    // (أ) لسه بنرفض المحاولة بالكامل لو بدأت بنفس افتتاحية الرد الأصلي
+    //     (looksLikeDuplicateRestart) - إعادة صياغة كاملة من الصفر.
+    // (ب) الجديد: findEchoOverlapRawLength بتقارن بداية رد الاستكمال بآخر
+    //     جزء فعليًا اتبعت للنموذج كسياق (contextTailGiven) - لو لقت تطابق
+    //     (بعد تطبيع المسافات) بطول ذو دلالة، بتشيل التداخل المكرر ده من
+    //     أول الرد الجديد قبل ما تلزقه على accumulated، بدل ما تلزق نسخة
+    //     تانية من نفس الكلام. لو بعد الشيل مفيش محتوى جديد فعلي، نوقف
+    //     بآخر رد مكتمل بدل ما نطلب استكمال تاني مالوش لازمة.
     // ================================================================
     private static final int MAX_CONTINUATIONS = 2;
 
     private static void sendWithAutoContinue(String systemContext, String userMessage,
             String originalQuestion, String accumulated, int attempt, AiClient.Callback finalCallback) {
-        sendWithAutoContinue(systemContext, userMessage, originalQuestion, accumulated, null, attempt, finalCallback);
+        sendWithAutoContinue(systemContext, userMessage, originalQuestion, accumulated, null, null, attempt, finalCallback);
     }
 
     private static void sendWithAutoContinue(String systemContext, String userMessage,
-            String originalQuestion, String accumulated, String firstChunk, int attempt,
-            AiClient.Callback finalCallback) {
+            String originalQuestion, String accumulated, String firstChunk, String contextTailGiven,
+            int attempt, AiClient.Callback finalCallback) {
         AiClient.sendMessage(systemContext, userMessage, new AiClient.Callback() {
             @Override
             public void onSuccess(String reply) {
                 String effectiveFirstChunk = firstChunk != null ? firstChunk : reply;
+
+                // دفاع أول: رفض المحاولة بالكامل لو النموذج أعاد الإجابة من
+                // الصفر بنفس افتتاحية الرد الأصلي (إعادة صياغة كاملة).
                 if (attempt > 0 && looksLikeDuplicateRestart(effectiveFirstChunk, reply)) {
-                    // النموذج أعاد الإجابة من الأول بدل ما يكمّلها - نتجاهل
-                    // هذا الجزء المكرر تمامًا ونوقف بآخر رد مكتمل متاح فعليًا.
                     finalCallback.onSuccess(accumulated);
                     return;
                 }
-                String combined = accumulated.isEmpty() ? reply : accumulated + reply;
+
+                // دفاع تاني: شيل أي صدى/تكرار لآخر جزء اتبعت كسياق استكمال
+                // من أول الرد الجديد، قبل ما نلزقه على accumulated.
+                String newContent = reply;
+                if (attempt > 0 && contextTailGiven != null) {
+                    int overlapRawEnd = findEchoOverlapRawLength(contextTailGiven, reply);
+                    if (overlapRawEnd > 0) {
+                        newContent = reply.substring(overlapRawEnd).trim();
+                    }
+                }
+
+                // لو بعد شيل الصدى مفيش أي محتوى جديد فعليًا، النموذج فعليًا
+                // كرر نفس القسم من غير ما يضيف حاجة - نوقف هنا بدل ما نطلب
+                // استكمال تاني لنفس الحاجة اللي هتتكرر تاني الأرجح.
+                if (attempt > 0 && newContent.trim().isEmpty()) {
+                    finalCallback.onSuccess(accumulated);
+                    return;
+                }
+
+                String combined = accumulated.isEmpty() ? newContent
+                        : (newContent.isEmpty() ? accumulated : accumulated + newContent);
+
                 if (attempt < MAX_CONTINUATIONS && looksTruncated(combined)) {
+                    String tailForNext = lastChars(combined, 700);
                     String continueSystem = systemContext + "\n\n---\nملحوظة مهمة: هذا استكمال " +
                             "لرد سابق على نفس السؤال الأصلي (\"" + originalQuestion + "\") انقطع " +
                             "في المنتصف. فيما يلي آخر جزء منه فعلًا، أكمل منه مباشرة بدون تكرار " +
                             "أي كلمة منه ولا أي مقدمة جديدة، فقط الجزء الناقص لحد ما تخلص الفكرة " +
-                            "بالكامل:\n\"\"\"\n" + lastChars(combined, 700) + "\n\"\"\"";
-                    sendWithAutoContinue(continueSystem, "أكمل من حيث توقفت بالضبط.",
-                            originalQuestion, combined, effectiveFirstChunk, attempt + 1, finalCallback);
+                            "بالكامل. ممنوع تعيد كتابة أي كلمة من المقطع المقتبس ده تاني في ردك:" +
+                            "\n\"\"\"\n" + tailForNext + "\n\"\"\"";
+                    sendWithAutoContinue(continueSystem, "أكمل من حيث توقفت بالضبط، بدون إعادة أي جزء سابق.",
+                            originalQuestion, combined, effectiveFirstChunk, tailForNext, attempt + 1, finalCallback);
                 } else {
                     finalCallback.onSuccess(combined);
                 }
@@ -185,6 +223,47 @@ public final class AiOrchestrator {
                 }
             }
         });
+    }
+
+    /** بيدور على أطول "صدى" ممكن في بداية reply لآخر جزء من contextTail
+     *  اللي اتبعت للنموذج كسياق استكمال - عشان نشيله بدل ما نلزقه مكرر
+     *  فوق accumulated. المقارنة بعد تطبيع المسافات فقط (مش حساسة لفروق
+     *  بسيطة في المسافات/الأسطر بين النسختين). يرجّع الفهرس في نص reply
+     *  الخام (مش المطبّع) اللي بعده يبدأ المحتوى الجديد الفعلي، أو 0 لو
+     *  ملقاش أي تداخل ذو دلالة (أقل من 18 حرف مطبّع). */
+    private static int findEchoOverlapRawLength(String contextTail, String reply) {
+        if (contextTail == null || reply == null) return 0;
+        String normTail = normalizeForCompare(contextTail);
+        if (normTail.isEmpty() || reply.trim().isEmpty()) return 0;
+
+        int rawScanLimit = Math.min(reply.length(), contextTail.length() + 200);
+        StringBuilder normReplyStart = new StringBuilder();
+        java.util.List<Integer> rawIndexAfter = new java.util.ArrayList<>();
+        boolean lastWasSpace = true; // يتجاهل أي مسافات بادئة (زي trim())
+        for (int i = 0; i < rawScanLimit; i++) {
+            char c = reply.charAt(i);
+            if (Character.isWhitespace(c)) {
+                if (!lastWasSpace && normReplyStart.length() > 0) {
+                    normReplyStart.append(' ');
+                    rawIndexAfter.add(i + 1);
+                }
+                lastWasSpace = true;
+            } else {
+                normReplyStart.append(c);
+                rawIndexAfter.add(i + 1);
+                lastWasSpace = false;
+            }
+        }
+        String normStart = normReplyStart.toString();
+        if (normStart.isEmpty()) return 0;
+
+        int maxLen = Math.min(normTail.length(), normStart.length());
+        for (int len = maxLen; len >= 18; len--) {
+            if (normTail.regionMatches(normTail.length() - len, normStart, 0, len)) {
+                return rawIndexAfter.get(len - 1);
+            }
+        }
+        return 0;
     }
 
     /** فحص تقريبي بسيط: رد طويل نسبيًا (فوق 200 حرف) وفيه عدد فردي من
@@ -250,7 +329,7 @@ public final class AiOrchestrator {
     }
 
     private static void runGrounded(Context ctx, String text, String patientId,
-            String historyContext, StageListener stages, ResultCallback callback) {
+            String historyContext, String physioTermHint, StageListener stages, ResultCallback callback) {
         if (stages != null) stages.onSearching();
 
         // المرحلة صفر: هل يوجد تطابق مباشر وواثق في قاعدة بيانات الجهاز؟
@@ -275,7 +354,17 @@ public final class AiOrchestrator {
         // العلاج الطبيعي فقط، مراجَع من أخصائيين). لا يوجد أي بحث احتياطي
         // عام (زي ويكيبيديا أو أي محرك بحث آخر) لو مفيش نتيجة منه - بدل
         // كده بيكمل بمعرفة النموذج العامة فقط، موضّح صراحة في شارة المصدر.
-        PhysiopediaClient.Result physio = PhysiopediaClient.search(text);
+        //
+        // إصلاح مهم (v5): Physiopedia موقع إنجليزي بالكامل، وكان البحث
+        // بيتم دايمًا بنص سؤال المستخدم كما هو (غالبًا عربي) - فكان بيرجع
+        // صفر نتائج فعليًا في أغلب الحالات، يعني "التدقيق/البحث" كان شبه
+        // معطّل بصمت رغم وجود الكود. physioTermHint هو مصطلح إنجليزي جاهز
+        // جاء من المصنّف (AiClient.classifyIntent + AiPrompts.ROUTER_PROMPT)
+        // مترجم من جوهر السؤال - لو موجود بنستخدمه، وإلا نرجع لنص السؤال
+        // الأصلي زي السلوك القديم (بدل ما نمنع البحث تمامًا لو مفيش مصطلح).
+        String physioQuery = (physioTermHint != null && !physioTermHint.trim().isEmpty())
+                ? physioTermHint.trim() : text;
+        PhysiopediaClient.Result physio = PhysiopediaClient.search(physioQuery);
 
         StringBuilder extraContext = new StringBuilder();
         if (grounding != null) {
