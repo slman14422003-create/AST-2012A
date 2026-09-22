@@ -177,7 +177,19 @@ public final class AiOrchestrator {
     // آخر جزء اتبعت كسياق) - لو لقت نفس الجملة تقريبًا موجودة فعلًا، بتشيلها
     // قبل ما تتلزق، بدل ما توصل للمستخدم فقرة معادة.
     // ================================================================
-    private static final int MAX_CONTINUATIONS = 2;
+    // إصلاح مهم (رد بيتقطع نهائي وما يكملش): كان الحد الأقصى 2 محاولة
+    // استكمال بس (يعني 3 نداءات شبكة كحد أقصى للسؤال الواحد) - كافي لرد
+    // قصير/متوسط، لكن مش كافي لبروتوكول إكلينيكي مفصّل (مقارنة كاملة بين
+    // TENS/EMS بكل تفاصيلها مثلًا) لو كل نداء بيرجع جزء محدود بسبب حد
+    // طول الرد من السيرفر - فكان الرد يوصل للمستخدم ناقص وواقف في نص
+    // الفكرة رغم إن كل الدفاعات (منع التكرار/الصدى) شغالة صح. رفعنا الحد
+    // لـ 6 (يعني لحد 7 نداءات) عشان تدي مساحة كافية لردود طويلة فعلًا
+    // توصل لنهاية طبيعية - مع إن دفاعات التكرار (findEchoOverlapRawLength +
+    // stripAlreadyCoveredContent) هي اللي بتوقف الاستكمال فعليًا وطبيعيًا
+    // أول ما مفيش محتوى جديد حقيقي يتضاف (newContent فاضي)، مش عدد
+    // المحاولات نفسه - فرفع الحد مش بيخلي الرد "يلف" أكتر لو خلص فعلًا،
+    // بس بيدي مساحة كافية لو لسه فيه فكرة ناقصة محتاجة تتقال.
+    private static final int MAX_CONTINUATIONS = 6;
 
     private static void sendWithAutoContinue(String systemContext, String userMessage,
             String originalQuestion, String accumulated, int attempt, AiClient.Callback finalCallback) {
@@ -231,15 +243,21 @@ public final class AiOrchestrator {
                         : (newContent.isEmpty() ? accumulated : accumulated + newContent);
 
                 boolean appearsTruncated = looksTruncated(combined);
-                if (appearsTruncated) {
-                    // نشيل أي كلمة مبتورة من نهاية الرد المتراكم قبل أي
-                    // حاجة تانية - سواء هنطلب استكمال تاني أو ده آخر
-                    // محاولة متاحة - عشان النص اللي يوصل للمستخدم ما
-                    // ينتهيش أبدًا في نص كلمة مقطوعة.
+                boolean willContinue = attempt < MAX_CONTINUATIONS && appearsTruncated;
+
+                // نشيل أي كلمة مبتورة من نهاية الرد المتراكم بس لو فعلًا
+                // هنطلب استكمال تاني - عشان النموذج التالي ياخد سياق نظيف
+                // يبدأ بكلمة كاملة. لو ده آخر شيء (خلصت المحاولات المتاحة
+                // أو الرد مش ناقص أصلًا)، ما نمسحش آخر كلمة ممكن تكون
+                // فعلًا كاملة - إصلاح سابق كان بيمسحها هنا كمان، فكان بيخلي
+                // الرد النهائي يوصل للمستخدم أقصر مما هو فعلًا في الحالات
+                // النادرة اللي المحاولات بتخلص فيها - عكس المطلوب تمامًا
+                // (رد كامل من غير أي قطع أو حذف).
+                if (willContinue) {
                     combined = trimTrailingPartialWord(combined);
                 }
 
-                if (attempt < MAX_CONTINUATIONS && appearsTruncated) {
+                if (willContinue) {
                     String tailForNext = lastCharsAtWordBoundary(combined, 700);
                     String continueSystem = systemContext + "\n\n---\nملحوظة مهمة: هذا استكمال " +
                             "لرد سابق على نفس السؤال الأصلي (\"" + originalQuestion + "\") انقطع " +
