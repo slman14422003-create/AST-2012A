@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- قائمة قارئ PDF: تصغير/تكبير كأيقونتين ثابتتين دائمًا، وترجمة الصفحة كأيقونة
      تظهر أيضًا في الشريط طالما هناك متسع (نفس سلوك بقية شاشات التطبيق)، والباقي
-     (وضع القراءة الليلي، الانتقال لصفحة، فتح بتطبيق آخر، اختيار ملف آخر) في
-     القائمة الإضافية بأيقونات متناسقة مع بقية أيقونات التطبيق. -->
+     (ترجمة الملف بالكامل كـ PDF، حفظ نسخة على الجهاز، وضع القراءة الليلي،
+     الانتقال لصفحة، فتح بتطبيق آخر، اختيار ملف آخر) في القائمة الإضافية
+     بأيقونات متناسقة مع بقية أيقونات التطبيق. -->
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
     <item
@@ -20,6 +21,16 @@
         android:icon="@drawable/ic_globe"
         android:title="ترجمة الصفحة"
         app:showAsAction="ifRoom" />
+    <item
+        android:id="@+id/action_pdf_translate_full"
+        android:icon="@drawable/ic_pdf"
+        android:title="ترجمة الملف بالكامل (PDF)"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_pdf_save_copy"
+        android:icon="@drawable/ic_download"
+        android:title="حفظ نسخة على الجهاز"
+        app:showAsAction="never" />
     <item
         android:id="@+id/action_pdf_night_pages"
         android:icon="@drawable/ic_moon"
