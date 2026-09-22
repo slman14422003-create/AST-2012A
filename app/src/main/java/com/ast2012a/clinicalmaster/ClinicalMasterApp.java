@@ -31,6 +31,11 @@ public class ClinicalMasterApp extends Application {
         } catch (Throwable ignored) {
         }
 
+        // تهيئة مبكرة (في الخلفية) لمكتبة استخراج نص PDF - بدل ما أول سؤال
+        // للمساعد الذكي يحتاج مستند سحابي ينتظر تحميل موارد PdfBox لحظتها.
+        // آمنة تمامًا لو فشلت (مثلًا مفيش تخزين سحابي مضبوط أصلًا).
+        new Thread(() -> DocumentTextExtractor.warmUp(getApplicationContext())).start();
+
         DynamicColorsOptions options = new DynamicColorsOptions.Builder()
                 .setPrecondition((activity, theme) -> DynamicColors.isDynamicColorAvailable()
                         // شاشة splash مستثناة عمدًا: لازم تفضل بنفس لون علامة

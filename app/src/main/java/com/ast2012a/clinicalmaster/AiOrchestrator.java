@@ -238,6 +238,17 @@ public final class AiOrchestrator {
             extraContext.append(encyclopediaContext).append("\n\n");
         }
 
+        // مكتبة مستندات المستخدم على التخزين السحابي (PDF/مستندات مرفوعة
+        // بنفسه من شاشة "الملفات السحابية"): مزامنة بأقل تكلفة ممكنة (بحد
+        // أقصى مرة كل فترة قصيرة، بدون ما توقف الرد لو فشلت الشبكة)، ثم
+        // إرفاق أقرب مقتطفات لسؤال المستخدم الحالي من الكاش المحلي - ده
+        // اللي بيخلي المساعد فعليًا "يقرأ" ملفات المستخدم ويستخدمها.
+        CloudKnowledgeManager.syncIfNeeded(ctx);
+        String cloudDocsContext = CloudKnowledgeManager.buildCloudDocumentsContext(ctx, text);
+        if (cloudDocsContext != null) {
+            extraContext.append(cloudDocsContext).append("\n\n");
+        }
+
         // ملف المريض (مُعرَّف الهوية - بدون اسم أو هاتف إطلاقًا): يُرفق فقط
         // لو السؤال منطلق فعليًا من ملف مريض محدد (patientId)، أو لو
         // المستخدم بيسأل عن "مرضاه" بشكل عام فنرفق نظرة عامة مجهولة الهوية
@@ -273,14 +284,17 @@ public final class AiOrchestrator {
                 String externalTitle = physio != null ? physio.title : null;
                 String externalUrl = physio != null ? physio.sourceUrl : null;
                 String externalName = "Physiopedia";
+                String cloudSuffix = cloudDocsContext != null ? " + مستندات سحابية للمستخدم" : "";
                 if (groundedCount > 0 && externalTitle != null) {
-                    sourceLabel = "إجابة تكميلية عامة (لا يوجد تطابق مباشر) - بروتوكولات قريبة (" + groundedCount + ") + " + externalName + ": " + externalTitle;
+                    sourceLabel = "إجابة تكميلية عامة (لا يوجد تطابق مباشر) - بروتوكولات قريبة (" + groundedCount + ") + " + externalName + ": " + externalTitle + cloudSuffix;
                     sourceUrl = externalUrl;
                 } else if (groundedCount > 0) {
-                    sourceLabel = "إجابة تكميلية عامة - أقرب بروتوكولات في القاعدة (" + groundedCount + ")، بدون تطابق مباشر مؤكد";
+                    sourceLabel = "إجابة تكميلية عامة - أقرب بروتوكولات في القاعدة (" + groundedCount + ")، بدون تطابق مباشر مؤكد" + cloudSuffix;
                 } else if (externalTitle != null) {
-                    sourceLabel = "إجابة عامة من " + externalName + " (خارج قاعدة بيانات الجهاز): " + externalTitle;
+                    sourceLabel = "إجابة عامة من " + externalName + " (خارج قاعدة بيانات الجهاز): " + externalTitle + cloudSuffix;
                     sourceUrl = externalUrl;
+                } else if (cloudDocsContext != null) {
+                    sourceLabel = "إجابة عامة بالاستناد لمستندات سحابية رفعها المستخدم (بدون تطابق في قاعدة الجهاز أو Physiopedia)";
                 } else {
                     sourceLabel = "إجابة عامة من معرفة النموذج (بدون مصدر موثّق من الجهاز أو Physiopedia)";
                 }
