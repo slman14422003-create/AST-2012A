@@ -153,6 +153,29 @@ public final class AiOrchestrator {
     //     أول الرد الجديد قبل ما تلزقه على accumulated، بدل ما تلزق نسخة
     //     تانية من نفس الكلام. لو بعد الشيل مفيش محتوى جديد فعلي، نوقف
     //     بآخر رد مكتمل بدل ما نطلب استكمال تاني مالوش لازمة.
+    //
+    // إصلاح إضافي مهم (كلمة مقطوعة + تكرار مُعاد الصياغة بكلام مختلف):
+    // ظهرت فعليًا حالة أوضح من مجرد تكرار حرفي: 1) القطع كان بيحصل أحيانًا
+    // في نص كلمة عربية (lastChars القديمة بتقطع بعدد حروف خام من غير أي
+    // وعي بحدود الكلمة) - فالنموذج التاني كان بياخد كسياق كلمة مبتورة
+    // ("مست" بدل "مستقل" مثلًا)، وبدل ما يكملها كان أحيانًا يتجاهلها
+    // ويبدأ كلام جديد يُلزق عليها مباشرة بلا مسافة (زي "توجيهالفرق")، أو
+    // حتى ينتج كلمة بلغة تانية بالغلط بدل تكملة الكلمة العربية المقطوعة.
+    // 2) فحص الصدى (findEchoOverlapRawLength) بيقارن بس مع آخر جزء اتبعت
+    //    (contextTailGiven) - فلو النموذج في محاولة استكمال أعاد فكرة/جملة
+    //    سبق قالها في جزء أبكر من الرد (مش عند حد التداخل المباشر)، بصياغة
+    //    مطابقة أو شبه مطابقة، الفحص القديم ما كانش يمسكها فتوصل للمستخدم
+    //    فقرة متكررة فعليًا (زي "الفرق الرئيسي بين TENS و EMS هو الغرض من
+    //    كل منهما" اللي اتكررت حرفيًا تقريبًا مرتين في نفس الرد).
+    // الإصلاح: (أ) lastCharsAtWordBoundary بتقتطع دايمًا من أول حد كلمة
+    // كامل (مسافة)، مش من نص كلمة، فسياق الاستكمال يوصل نظيف. (ب)
+    // trimTrailingPartialWord بتشيل أي كلمة مبتورة من نهاية accumulated
+    // نفسها (مش بس من نسخة السياق) قبل أي استكمال أو أي رد نهائي - فالنص
+    // اللي يوصل للمستخدم فعليًا ما بينتهيش أبدًا في نص كلمة مقطوعة، حتى لو
+    // خلصت محاولات الاستكمال. (ج) stripAlreadyCoveredContent بتفحص أي
+    // سطر/جملة في محتوى الاستكمال الجديد مقابل الرد المتراكم *كله* (مش بس
+    // آخر جزء اتبعت كسياق) - لو لقت نفس الجملة تقريبًا موجودة فعلًا، بتشيلها
+    // قبل ما تتلزق، بدل ما توصل للمستخدم فقرة معادة.
     // ================================================================
     private static final int MAX_CONTINUATIONS = 2;
 
@@ -186,9 +209,19 @@ public final class AiOrchestrator {
                     }
                 }
 
-                // لو بعد شيل الصدى مفيش أي محتوى جديد فعليًا، النموذج فعليًا
-                // كرر نفس القسم من غير ما يضيف حاجة - نوقف هنا بدل ما نطلب
-                // استكمال تاني لنفس الحاجة اللي هتتكرر تاني الأرجح.
+                // دفاع تالت: شيل أي سطر/جملة في المحتوى الجديد سبق فعليًا
+                // ذكرها في أي جزء من الرد المتراكم كله - مش بس عند حد
+                // التداخل المباشر زي الدفاع التاني. ده اللي بيمسك حالة
+                // "إعادة فكرة سبق قولها بصياغة قريبة" اللي كانت بتفلت من
+                // الفحصين التانيين.
+                if (attempt > 0) {
+                    newContent = stripAlreadyCoveredContent(accumulated, newContent).trim();
+                }
+
+                // لو بعد شيل الصدى والتكرار مفيش أي محتوى جديد فعليًا،
+                // النموذج فعليًا كرر نفس الكلام من غير ما يضيف حاجة - نوقف
+                // هنا بدل ما نطلب استكمال تاني لنفس الحاجة اللي هتتكرر
+                // تاني الأرجح.
                 if (attempt > 0 && newContent.trim().isEmpty()) {
                     finalCallback.onSuccess(accumulated);
                     return;
@@ -197,13 +230,26 @@ public final class AiOrchestrator {
                 String combined = accumulated.isEmpty() ? newContent
                         : (newContent.isEmpty() ? accumulated : accumulated + newContent);
 
-                if (attempt < MAX_CONTINUATIONS && looksTruncated(combined)) {
-                    String tailForNext = lastChars(combined, 700);
+                boolean appearsTruncated = looksTruncated(combined);
+                if (appearsTruncated) {
+                    // نشيل أي كلمة مبتورة من نهاية الرد المتراكم قبل أي
+                    // حاجة تانية - سواء هنطلب استكمال تاني أو ده آخر
+                    // محاولة متاحة - عشان النص اللي يوصل للمستخدم ما
+                    // ينتهيش أبدًا في نص كلمة مقطوعة.
+                    combined = trimTrailingPartialWord(combined);
+                }
+
+                if (attempt < MAX_CONTINUATIONS && appearsTruncated) {
+                    String tailForNext = lastCharsAtWordBoundary(combined, 700);
                     String continueSystem = systemContext + "\n\n---\nملحوظة مهمة: هذا استكمال " +
                             "لرد سابق على نفس السؤال الأصلي (\"" + originalQuestion + "\") انقطع " +
                             "في المنتصف. فيما يلي آخر جزء منه فعلًا، أكمل منه مباشرة بدون تكرار " +
                             "أي كلمة منه ولا أي مقدمة جديدة، فقط الجزء الناقص لحد ما تخلص الفكرة " +
-                            "بالكامل. ممنوع تعيد كتابة أي كلمة من المقطع المقتبس ده تاني في ردك:" +
+                            "بالكامل. ممنوع تعيد كتابة أي كلمة من المقطع المقتبس ده تاني في ردك، " +
+                            "وممنوع كمان تعيد أي فكرة أو نقطة سبق ذكرها في الإجابة كلها من أولها " +
+                            "(مش بس المقطع المقتبس ده) حتى لو بصياغة مختلفة أو ترتيب مختلف - لو " +
+                            "حسّيت إنك هتكرر فكرة سبق قولها، انتقل مباشرة للنقطة الجديدة اللي لسه " +
+                            "ما اتقالتش، أو اختم ردك لو مفيش حاجة جديدة فعلًا تضيفها:" +
                             "\n\"\"\"\n" + tailForNext + "\n\"\"\"";
                     sendWithAutoContinue(continueSystem, "أكمل من حيث توقفت بالضبط، بدون إعادة أي جزء سابق.",
                             originalQuestion, combined, effectiveFirstChunk, tailForNext, attempt + 1, finalCallback);
@@ -309,6 +355,85 @@ public final class AiOrchestrator {
     private static String lastChars(String text, int max) {
         if (text == null) return "";
         return text.length() <= max ? text : text.substring(text.length() - max);
+    }
+
+    /** زي lastChars، لكن بتتأكد إن أول حرف في النص المرجّع يبدأ من أول
+     *  كلمة كاملة (بعد مسافة)، مش من نص كلمة اتقطعت بسبب القطع الخام بعدد
+     *  حروف ثابت. النموذج اللي بيستقبل السياق ده عشان "يكمل منه" بيحتاج
+     *  نص نظيف يبدأ بكلمة كاملة - سياق يبدأ بنص كلمة كان بيربكه أحيانًا
+     *  (بيتجاهل تكملتها أو حتى ينتج كلمة غريبة بدالها). */
+    private static String lastCharsAtWordBoundary(String text, int max) {
+        if (text == null) return "";
+        if (text.length() <= max) return text;
+        String tail = text.substring(text.length() - max);
+        int firstSpace = -1;
+        for (int i = 0; i < tail.length(); i++) {
+            if (Character.isWhitespace(tail.charAt(i))) { firstSpace = i; break; }
+        }
+        if (firstSpace >= 0 && firstSpace < tail.length() - 1) {
+            return tail.substring(firstSpace + 1);
+        }
+        return tail; // مفيش مسافة قريبة (نادر جدًا) - أفضل من إضاعة كل السياق
+    }
+
+    /** لو النص بينتهي فعليًا في نص كلمة (سبب looksTruncated يعتبره ناقص -
+     *  آخر حرف عادي مش علامة ترقيم واضحة)، بترجع نسخة منه لحد آخر حد كلمة
+     *  كامل (آخر مسافة قريبة من النهاية) بدل ما تسيب كلمة مبتورة ظاهرة في
+     *  النص النهائي. لو مفيش مسافة قريبة كفاية (نادر)، بترجع النص زي ما
+     *  هو بدل ما تقص جزء كبير بلا داعي. */
+    private static String trimTrailingPartialWord(String text) {
+        if (text == null || text.isEmpty()) return text;
+        if (Character.isWhitespace(text.charAt(text.length() - 1))) return text;
+        int searchFrom = Math.max(0, text.length() - 40);
+        int lastSpace = -1;
+        for (int i = text.length() - 1; i >= searchFrom; i--) {
+            if (Character.isWhitespace(text.charAt(i))) { lastSpace = i; break; }
+        }
+        if (lastSpace < 0) return text;
+        return text.substring(0, lastSpace).trim();
+    }
+
+    /** بتفحص محتوى استكمال جديد (newContent) مقابل الرد المتراكم *كله*
+     *  (accumulated) - مش بس آخر جزء اتبعت كسياق زي findEchoOverlapRawLength
+     *  - وبتشيل أي سطر أو جملة داخله سبق فعليًا ذكرها بنفس الصياغة تقريبًا
+     *  في مكان أبكر من الرد. المقارنة سطر بسطر (الشاشة أصلًا بتعرض كل
+     *  نقطة/عنوان في سطر منفصل حسب FORMAT_RULES)، ولو السطر نفسه مش مكرر
+     *  بالكامل بتفحص جمل السطر منفردة كمان (لحالة جملة مكررة جوه سطر أطول). */
+    private static String stripAlreadyCoveredContent(String accumulated, String newContent) {
+        if (newContent == null || newContent.trim().isEmpty()) return newContent;
+        if (accumulated == null || accumulated.trim().isEmpty()) return newContent;
+        String normAccumulated = normalizeForCompare(accumulated);
+
+        String[] lines = newContent.split("\n", -1);
+        StringBuilder result = new StringBuilder();
+        for (int i = 0; i < lines.length; i++) {
+            String keptLine = stripDuplicateSentencesInLine(lines[i], normAccumulated);
+            if (i > 0) result.append('\n');
+            result.append(keptLine);
+        }
+        return result.toString();
+    }
+
+    private static final int MIN_DUPLICATE_UNIT_LEN = 18;
+
+    private static String stripDuplicateSentencesInLine(String line, String normAccumulated) {
+        if (line == null || line.trim().isEmpty()) return line;
+        String normLine = normalizeForCompare(line);
+        if (normLine.length() >= MIN_DUPLICATE_UNIT_LEN && normAccumulated.contains(normLine)) {
+            return "";
+        }
+        String[] sentences = line.split("(?<=[.!؟?])\\s+");
+        if (sentences.length <= 1) return line;
+        StringBuilder kept = new StringBuilder();
+        for (String sentence : sentences) {
+            String normSentence = normalizeForCompare(sentence);
+            if (normSentence.length() >= MIN_DUPLICATE_UNIT_LEN && normAccumulated.contains(normSentence)) {
+                continue;
+            }
+            if (kept.length() > 0) kept.append(' ');
+            kept.append(sentence);
+        }
+        return kept.toString();
     }
 
     /** كلمات دالة على إن السؤال يتكلم عن "مرضى" المستخدم بشكل عام (مش
