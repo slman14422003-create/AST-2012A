@@ -51,8 +51,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -468,6 +466,59 @@ public class PdfViewerActivity extends AppCompatActivity {
         return ((long) page << 8) | zoom;
     }
 
+    /** عرض التصدير الأقصى بالبكسل لخلفية كل صفحة في ملف الترجمة الناتج - أعلى
+     *  من عرض شاشة العرض العادي لجودة قراءة أفضل، لكن مقيّد حتى لا يتضخّم
+     *  حجم الملف الناتج مع الملفات الكبيرة (كل صفحة بتتضمّن كصورة). */
+    private static final int TRANSLATE_EXPORT_WIDTH = 1400;
+
+    /** يرسم صفحة أصلية بجودة تصدير (بدون تحسين/انعكاس الوضع الليلي، فهي
+     *  خلفية داخل ملف PDF ناتج ثابت وليست عرضًا حيًا) - تُستخدم فقط أثناء
+     *  بناء "ترجمة الملف بالكامل" حتى يحافظ الملف الناتج على تصميم كل صفحة
+     *  أصلية (راجع تعليق TranslatedPdfBuilder). يرجّع null لو تعذّر الرسم
+     *  (الملف اتقفل أو الصفحة غير موجودة) - النداء المستدعي بيكمل بدونها. */
+    private Bitmap renderPageForExportBackground(int page) {
+        synchronized (renderLock) {
+            if (renderer == null || page < 0 || page >= renderer.getPageCount()) return null;
+            PdfRenderer.Page p = null;
+            try {
+                p = renderer.openPage(page);
+                int pw = p.getWidth();
+                int ph = p.getHeight();
+                if (pw <= 0 || ph <= 0) return null;
+                int bw = Math.min(TRANSLATE_EXPORT_WIDTH, MAX_BITMAP_WIDTH);
+                int bh = Math.max(1, Math.round(bw * (ph / (float) pw)));
+                Bitmap bmp = Bitmap.createBitmap(bw, bh, Bitmap.Config.ARGB_8888);
+                bmp.eraseColor(Color.WHITE);
+                p.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+                return bmp;
+            } catch (OutOfMemoryError oom) {
+                return null;
+            } catch (Exception e) {
+                return null;
+            } finally {
+                if (p != null) p.close();
+            }
+        }
+    }
+
+    /** أبعاد صفحة أصلية بوحدة نقطة PDF (72dpi) - نفس الوحدة اللي PdfDocument
+     *  بيستخدمها لحجم الصفحة الناتجة، حتى تطابق أبعاد الصفحة الناتجة الأصل
+     *  تمامًا بدل حجم A4 ثابت بغض النظر عن حجم/اتجاه الصفحة الأصلية الفعلي. */
+    private float[] pagePointSize(int page) {
+        synchronized (renderLock) {
+            if (renderer == null || page < 0 || page >= renderer.getPageCount()) return null;
+            PdfRenderer.Page p = null;
+            try {
+                p = renderer.openPage(page);
+                return new float[]{p.getWidth(), p.getHeight()};
+            } catch (Exception e) {
+                return null;
+            } finally {
+                if (p != null) p.close();
+            }
+        }
+    }
+
     private Bitmap renderPage(int page, int w, int h) {
         int bw = w;
         int bh = h;
@@ -743,46 +794,58 @@ public class PdfViewerActivity extends AppCompatActivity {
         fullTranslateDialog.show();
 
         textExecutor.execute(() -> {
-            List<TranslatedPdfBuilder.PageEntry> entries = new ArrayList<>();
-            for (int i = 0; i < total; i++) {
-                if (fullTranslateCancelled) {
-                    finishFullTranslateCancelled();
-                    return;
-                }
-                int pageNum = i + 1;
-                updateFullTranslateProgress(pageNum, total, "جارٍ استخراج نص الصفحة " + pageNum + " من " + total);
-                String extracted = extractPageText(sourceFile, i);
-                String translated = "";
-                if (extracted != null && !extracted.trim().isEmpty()) {
+            String base = sourceTitle.replaceAll("(?i)\\.pdf$", "").trim();
+            boolean rtlOut = "ar".equals(targetLangCode);
+            File outFile;
+            // إصلاح مهم (طلب المستخدم + خطر تعطّل بالذاكرة): النسخة القديمة
+            // كانت بتستخرج النص بس وتبني صفحة نص بديلة بالكامل، فيضيع تصميم/
+            // شكل الصفحة الأصلية (صور، ألوان، تخطيط) تمامًا حتى لو نجحت
+            // الترجمة. دلوقتي كل صفحة أصلية بترتسم كخلفية (زي PdfRenderer في
+            // القارئ العادي) بأبعادها الحقيقية وتتضاف فورًا (streaming) لملف
+            // الترجمة الناتج بدل ما تتجمّع كل صور الصفحات في الذاكرة أولًا -
+            // كان ده هيسبب تعطّل (OutOfMemoryError) على ملفات كبيرة زي كتب
+            // العلاج الطبيعي (100+ صفحة). صفحة اتفشلت ترجمتها تحديدًا هتفضل
+            // خلفيتها زي ما هي بدون أي إضافة، بدل ما توقف ترجمة باقي الملف.
+            try (TranslatedPdfBuilder builder = new TranslatedPdfBuilder(base, targetLangLabel, total, rtlOut)) {
+                for (int i = 0; i < total; i++) {
                     if (fullTranslateCancelled) {
                         finishFullTranslateCancelled();
                         return;
                     }
-                    updateFullTranslateProgress(pageNum, total, "جارٍ ترجمة الصفحة " + pageNum + " من " + total);
-                    String result = translateBlockingSync(extracted, targetLangCode);
-                    if (result != null) translated = result;
-                }
-                entries.add(new TranslatedPdfBuilder.PageEntry(pageNum, translated));
-            }
-            if (fullTranslateCancelled) {
-                finishFullTranslateCancelled();
-                return;
-            }
+                    int pageNum = i + 1;
+                    updateFullTranslateProgress(pageNum, total, "جارٍ تجهيز الصفحة " + pageNum + " من " + total);
+                    Bitmap background = renderPageForExportBackground(i);
+                    float[] pointSize = pagePointSize(i);
+                    float pageWidthPt = pointSize != null ? pointSize[0] : 0f;
+                    float pageHeightPt = pointSize != null ? pointSize[1] : 0f;
 
-            updateFullTranslateProgress(total, total, "جارٍ إنشاء ملف PDF المترجم");
-            String base = sourceTitle.replaceAll("(?i)\\.pdf$", "").trim();
-            try {
+                    updateFullTranslateProgress(pageNum, total, "جارٍ استخراج نص الصفحة " + pageNum + " من " + total);
+                    String extracted = extractPageText(sourceFile, i);
+                    String translated = null;
+                    if (extracted != null && !extracted.trim().isEmpty()) {
+                        if (fullTranslateCancelled) {
+                            finishFullTranslateCancelled();
+                            return;
+                        }
+                        updateFullTranslateProgress(pageNum, total, "جارٍ ترجمة الصفحة " + pageNum + " من " + total);
+                        // لو فشلت ترجمة هذه الصفحة تحديدًا (بترجع null) نسيبها
+                        // null هنا - يعني addPage هتسيب خلفية هذه الصفحة "متل
+                        // ما هي" بدون أي إضافة.
+                        translated = translateBlockingSync(extracted, targetLangCode);
+                    }
+                    builder.addPage(pageNum, background, pageWidthPt, pageHeightPt, translated);
+                }
+                if (fullTranslateCancelled) {
+                    finishFullTranslateCancelled();
+                    return;
+                }
+
+                updateFullTranslateProgress(total, total, "جارٍ إنشاء ملف PDF المترجم");
                 File dir = new File(getCacheDir(), CACHE_DIR);
                 //noinspection ResultOfMethodCallIgnored
                 dir.mkdirs();
-                File outFile = new File(dir, "translated_" + System.currentTimeMillis() + ".pdf");
-                TranslatedPdfBuilder.build(outFile, base, targetLangLabel, "ar".equals(targetLangCode), entries);
-                runOnUiThread(() -> {
-                    fullTranslateInProgress = false;
-                    if (isFinishing() || isDestroyed()) return;
-                    if (fullTranslateDialog != null) fullTranslateDialog.dismiss();
-                    openTranslatedPdf(outFile, "ترجمة - " + base);
-                });
+                outFile = new File(dir, "translated_" + System.currentTimeMillis() + ".pdf");
+                builder.writeTo(outFile);
             } catch (Exception e) {
                 runOnUiThread(() -> {
                     fullTranslateInProgress = false;
@@ -790,7 +853,16 @@ public class PdfViewerActivity extends AppCompatActivity {
                     if (fullTranslateDialog != null) fullTranslateDialog.dismiss();
                     Toast.makeText(this, "تعذّر إنشاء ملف الترجمة: " + errorText(e), Toast.LENGTH_LONG).show();
                 });
+                return;
             }
+            final File finalOutFile = outFile;
+            final String finalBase = base;
+            runOnUiThread(() -> {
+                fullTranslateInProgress = false;
+                if (isFinishing() || isDestroyed()) return;
+                if (fullTranslateDialog != null) fullTranslateDialog.dismiss();
+                openTranslatedPdf(finalOutFile, "ترجمة - " + finalBase);
+            });
         });
     }
 

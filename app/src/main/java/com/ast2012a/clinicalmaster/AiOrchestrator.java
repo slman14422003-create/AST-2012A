@@ -191,6 +191,35 @@ public final class AiOrchestrator {
     // بس بيدي مساحة كافية لو لسه فيه فكرة ناقصة محتاجة تتقال.
     private static final int MAX_CONTINUATIONS = 6;
 
+    // ================================================================
+    // إصلاح مهم (جملة أخيرة بتتكرر مرتين حتى بدون أي استكمال): كل دفاعات
+    // التكرار فوق (findEchoOverlapRawLength / stripAlreadyCoveredContent)
+    // بتتفعّل بس لو attempt > 0 - يعني بتقارن بس بين جولات استكمال منفصلة.
+    // لكن ظهرت حالات فعلية إن النموذج بيكرر جملة/فقرة كاملة جوه *نفس* الرد
+    // الواحد من نفس النداء (attempt == 0 نفسه)، من غير ما يحصل أي استكمال
+    // أصلًا - زي جملة "يجب أن يتم استخدام نمط... تحت إشراف أخصائي علاج
+    // طبيعي مؤهل..." اللي كانت بتتكرر حرفيًا مرتين متتاليتين آخر الرد. ده
+    // مش سببه منطق الاستكمال هنا - النموذج نفسه بيكرر جزء من كلامه أحيانًا
+    // - فبنعمل تمشيطة أخيرة على الرد النهائي بالكامل (مهما كان عدد جولات
+    // الاستكمال، حتى لو صفر) قبل ما يوصل لأي finalCallback.onSuccess، بتشيل
+    // أي سطر/جملة سبق ظهورها فعليًا بنفس الصياغة تقريبًا في مكان أبكر من
+    // نفس الرد - بنفس منطق stripDuplicateSentencesInLine لكن ماشي على كل
+    // الرد مرة واحدة من الأول للآخر بدل حدود جولات الاستكمال بس.
+    // ================================================================
+    private static String finalizeReply(String text) {
+        if (text == null || text.trim().isEmpty()) return text;
+        String[] lines = text.split("\n", -1);
+        StringBuilder result = new StringBuilder();
+        StringBuilder seenSoFar = new StringBuilder();
+        for (int i = 0; i < lines.length; i++) {
+            String kept = stripDuplicateSentencesInLine(lines[i], normalizeForCompare(seenSoFar.toString()));
+            if (i > 0) result.append('\n');
+            result.append(kept);
+            if (!kept.trim().isEmpty()) seenSoFar.append(' ').append(kept);
+        }
+        return result.toString().trim();
+    }
+
     private static void sendWithAutoContinue(String systemContext, String userMessage,
             String originalQuestion, String accumulated, int attempt, AiClient.Callback finalCallback) {
         sendWithAutoContinue(systemContext, userMessage, originalQuestion, accumulated, null, null, attempt, finalCallback);
@@ -207,7 +236,7 @@ public final class AiOrchestrator {
                 // دفاع أول: رفض المحاولة بالكامل لو النموذج أعاد الإجابة من
                 // الصفر بنفس افتتاحية الرد الأصلي (إعادة صياغة كاملة).
                 if (attempt > 0 && looksLikeDuplicateRestart(effectiveFirstChunk, reply)) {
-                    finalCallback.onSuccess(accumulated);
+                    finalCallback.onSuccess(finalizeReply(accumulated));
                     return;
                 }
 
@@ -235,12 +264,22 @@ public final class AiOrchestrator {
                 // هنا بدل ما نطلب استكمال تاني لنفس الحاجة اللي هتتكرر
                 // تاني الأرجح.
                 if (attempt > 0 && newContent.trim().isEmpty()) {
-                    finalCallback.onSuccess(accumulated);
+                    finalCallback.onSuccess(finalizeReply(accumulated));
                     return;
                 }
 
+                // إصلاح مهم (كلمتين بيتلزقوا في بعض من غير مسافة): accumulated
+                // بيوصل هنا من الجولة اللي فاتت بعد ما trimTrailingPartialWord
+                // قصّته لحد آخر حد كلمة كامل و.trim() شالت أي مسافة زيادة في
+                // آخره، وnewContent كمان بيتعمله .trim() في أكتر من مكان فوق -
+                // يعني التلزيق المباشر (من غير فاصل) كان بيلزق آخر كلمة في
+                // accumulated بأول كلمة في newContent مباشرة بلا مسافة بينهم
+                // (زي "العضليةهذه" بدل "العضلية هذه") - ده أصل شكوى "الرد فيه
+                // كلمات ملزوقة في بعض غريبة" اللي وصلت من المستخدم. إضافة
+                // مسافة واحدة بينهم هنا كافية لأن الطرفين اتقصّوا لحد كلمة
+                // كاملة بالفعل، فمفيش خطر تكرار مسافة أو قطع كلمة.
                 String combined = accumulated.isEmpty() ? newContent
-                        : (newContent.isEmpty() ? accumulated : accumulated + newContent);
+                        : (newContent.isEmpty() ? accumulated : accumulated + " " + newContent);
 
                 boolean appearsTruncated = looksTruncated(combined);
                 boolean willContinue = attempt < MAX_CONTINUATIONS && appearsTruncated;
@@ -272,7 +311,7 @@ public final class AiOrchestrator {
                     sendWithAutoContinue(continueSystem, "أكمل من حيث توقفت بالضبط، بدون إعادة أي جزء سابق.",
                             originalQuestion, combined, effectiveFirstChunk, tailForNext, attempt + 1, finalCallback);
                 } else {
-                    finalCallback.onSuccess(combined);
+                    finalCallback.onSuccess(finalizeReply(combined));
                 }
             }
 
@@ -281,7 +320,7 @@ public final class AiOrchestrator {
                 // لو فشلت محاولة الإكمال بعد ما نجح جزء أول، الأفضل نرجّع
                 // الجزء المتاح بدل ما نضيّع رد جزئي مفيد على المستخدم.
                 if (!accumulated.isEmpty()) {
-                    finalCallback.onSuccess(accumulated);
+                    finalCallback.onSuccess(finalizeReply(accumulated));
                 } else {
                     finalCallback.onError(message);
                 }
@@ -434,11 +473,29 @@ public final class AiOrchestrator {
 
     private static final int MIN_DUPLICATE_UNIT_LEN = 18;
 
+    /** سطر قائمة مرقّمة ("1. نص" أو "2) نص"): بيتعامل معاها كوحدة واحدة أدناه
+     *  بدل التقسيم لجمل - راجع تعليق الإصلاح فوق stripDuplicateSentencesInLine. */
+    private static final java.util.regex.Pattern NUMBERED_LIST_ITEM =
+            java.util.regex.Pattern.compile("^\\s*\\d{1,2}[.)]\\s+.+");
+
     private static String stripDuplicateSentencesInLine(String line, String normAccumulated) {
         if (line == null || line.trim().isEmpty()) return line;
         String normLine = normalizeForCompare(line);
         if (normLine.length() >= MIN_DUPLICATE_UNIT_LEN && normAccumulated.contains(normLine)) {
             return "";
+        }
+        // إصلاح مهم (بند رقم "1." يفضل فاضي من غير محتواه): التقسيم لجمل تحت
+        // بيعتبر "." بعد أي رقم في أول السطر "نهاية جملة" (نفس معاملة نقطة
+        // آخر الكلام العادية) - فكان بيفصل رقم الترقيم ("1.") عن نص البند
+        // نفسه كجملتين منفصلتين. لو نص البند (الجملة التانية) طلع "مكرر"
+        // (نفس الفكرة سبق ذكرها بصياغة قريبة في مكان أبكر من الرد)، كان
+        // بيتشال هو بس ويفضل رقم الترقيم لوحده - فيظهر للمستخدم "1." فاضية
+        // بلا أي نص جنبها (زي ما وصل فعليًا: "1.\n2.\n3.\n4." من غير محتوى).
+        // الإصلاح: سطر القائمة المرقّمة بيتفحص ككتلة واحدة (رقم + محتواه
+        // مع بعض) - لو الكتلة كلها مكررة تتشال كلها، ولو مش مكررة تفضل زي
+        // ما هي، من غير ما يتفصل الرقم عن محتواه أبدًا.
+        if (NUMBERED_LIST_ITEM.matcher(line).matches()) {
+            return line;
         }
         String[] sentences = line.split("(?<=[.!؟?])\\s+");
         if (sentences.length <= 1) return line;
