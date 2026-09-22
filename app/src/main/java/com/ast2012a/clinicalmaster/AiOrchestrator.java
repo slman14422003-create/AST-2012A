@@ -116,8 +116,12 @@ public final class AiOrchestrator {
     private static void runChat(Context ctx, String text, String historyContext,
             StageListener stages, ResultCallback callback) {
         if (stages != null) stages.onThinking();
+        // فلتر اختيار النموذج: سريع افتراضيًا للدردشة العادية، إلا لو
+        // الرسالة نفسها فيها مضمون طبي/علاجي فعلي رغم تصنيفها CHAT - طبقة
+        // أمان إضافية لو أخطأ التصنيف (راجع AiModelSelector.forChat).
+        String chatModel = AiModelSelector.forChat(text);
         sendWithAutoContinue(AiPrompts.buildChatSystemPrompt(ctx, historyContext), text, text, "",
-                0, new AiClient.Callback() {
+                chatModel, 0, new AiClient.Callback() {
             @Override public void onSuccess(String reply) { callback.onChatReply(reply); }
             @Override public void onError(String message) { callback.onError(message); }
         });
@@ -221,14 +225,14 @@ public final class AiOrchestrator {
     }
 
     private static void sendWithAutoContinue(String systemContext, String userMessage,
-            String originalQuestion, String accumulated, int attempt, AiClient.Callback finalCallback) {
-        sendWithAutoContinue(systemContext, userMessage, originalQuestion, accumulated, null, null, attempt, finalCallback);
+            String originalQuestion, String accumulated, String model, int attempt, AiClient.Callback finalCallback) {
+        sendWithAutoContinue(systemContext, userMessage, originalQuestion, accumulated, model, null, null, attempt, finalCallback);
     }
 
     private static void sendWithAutoContinue(String systemContext, String userMessage,
-            String originalQuestion, String accumulated, String firstChunk, String contextTailGiven,
+            String originalQuestion, String accumulated, String model, String firstChunk, String contextTailGiven,
             int attempt, AiClient.Callback finalCallback) {
-        AiClient.sendMessage(systemContext, userMessage, new AiClient.Callback() {
+        AiClient.sendMessage(systemContext, userMessage, model, new AiClient.Callback() {
             @Override
             public void onSuccess(String reply) {
                 String effectiveFirstChunk = firstChunk != null ? firstChunk : reply;
@@ -309,7 +313,7 @@ public final class AiOrchestrator {
                             "ما اتقالتش، أو اختم ردك لو مفيش حاجة جديدة فعلًا تضيفها:" +
                             "\n\"\"\"\n" + tailForNext + "\n\"\"\"";
                     sendWithAutoContinue(continueSystem, "أكمل من حيث توقفت بالضبط، بدون إعادة أي جزء سابق.",
-                            originalQuestion, combined, effectiveFirstChunk, tailForNext, attempt + 1, finalCallback);
+                            originalQuestion, combined, model, effectiveFirstChunk, tailForNext, attempt + 1, finalCallback);
                 } else {
                     finalCallback.onSuccess(finalizeReply(combined));
                 }
@@ -617,7 +621,11 @@ public final class AiOrchestrator {
 
         if (stages != null) stages.onThinking();
 
-        sendWithAutoContinue(systemPromptToUse, text, text, "", 0, new AiClient.Callback() {
+        // فلتر اختيار النموذج: المسار الإكلينيكي (تأريض + توصيات/موانع
+        // استطباب فعلية) بيستخدم دايمًا أقوى نموذج متاح لتقليل احتمال
+        // الهلوسة في سياق طبي حسّاس (راجع AiModelSelector.forClinical).
+        String clinicalModel = AiModelSelector.forClinical();
+        sendWithAutoContinue(systemPromptToUse, text, text, "", clinicalModel, 0, new AiClient.Callback() {
             @Override
             public void onSuccess(String reply) {
                 String sourceLabel;

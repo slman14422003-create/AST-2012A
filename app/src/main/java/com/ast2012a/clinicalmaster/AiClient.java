@@ -21,6 +21,15 @@ import java.nio.charset.StandardCharsets;
  * أي تعليمات مخصّصة يضيفها المستخدم من شاشة الإعدادات (AiPrompts.
  * getCustomInstructions) بتتحط تلقائيًا جوه systemContext قبل ما توصل
  * هنا، فالووركر بيلتزم بيها في كل رد.
+ *
+ * اختيار النموذج (AiModelSelector): كل استدعاء ممكن ياخد اسم نموذج
+ * اختياري (model) بيتحدد حسب طبيعة الطلب - تصنيف خفيف/دردشة عادية
+ * (نموذج سريع) مقابل مسار إكلينيكي/طبي فعلي (أقوى نموذج متاح للدقة).
+ * الحقل ده بيتضاف لجسم JSON بجانب "system" و"message" الحاليين. لو
+ * تُرك null، ما بيتضافش أي حقل "model" أصلًا فيفضل السلوك القديم زي ما
+ * هو تمامًا (توافق كامل مع الووركر الحالي حتى لو مش قاريه). النداءات
+ * القديمة اللي مفيهاش النسخة الجديدة (بدون model) اتسابت كما هي كتوافق
+ * خلفي، وبتستدعي داخليًا النسخة الجديدة بـmodel = null.
  */
 public class AiClient {
 
@@ -32,15 +41,22 @@ public class AiClient {
         void onError(String message);
     }
 
-    /** يُستدعى من Thread خلفية (مش الـ UI Thread). */
+    /** يُستدعى من Thread خلفية (مش الـ UI Thread). بدون تحديد نموذج معيّن -
+     *  الووركر يستخدم نموذجه الافتراضي. */
     public static void sendMessage(String systemContext, String userMessage, Callback callback) {
-        sendViaWorker(FIXED_WORKER_URL, systemContext, userMessage, callback);
+        sendMessage(systemContext, userMessage, null, callback);
+    }
+
+    /** نفس sendMessage، مع تحديد اسم نموذج مقترح (AiModelSelector) يُرسل
+     *  كحقل "model" اختياري - مرّر null لعدم تحديد أي نموذج (سلوك قديم). */
+    public static void sendMessage(String systemContext, String userMessage, String model, Callback callback) {
+        sendViaWorker(FIXED_WORKER_URL, systemContext, userMessage, model, callback);
     }
 
     /** فحص اتصال بسيط بالووركر الثابت (تُستخدم من زر "اختبار الاتصال" في
      *  شاشة الإعدادات) - يرسل رسالة تجريبية قصيرة ويرجّع نجاح/فشل مباشرة. */
     public static void testWorker(Callback callback) {
-        sendViaWorker(FIXED_WORKER_URL, "أجب بكلمة واحدة فقط للتأكد من عمل الاتصال.", "قل: تم الاتصال بنجاح ✅", callback);
+        sendViaWorker(FIXED_WORKER_URL, "أجب بكلمة واحدة فقط للتأكد من عمل الاتصال.", "قل: تم الاتصال بنجاح ✅", null, callback);
     }
 
     /**
@@ -56,9 +72,12 @@ public class AiClient {
 
     /** نفس التصنيف أعلاه، مع إرفاق سياق المحادثة السابقة (ذاكرة قصيرة
      *  المدى) لو موجود، عشان القرار يفهم إشارات مختصرة بترجع لسياق سابق
-     *  في نفس الجلسة بدل ما يحكم على الرسالة بمعزل تام عمّا قبلها. */
+     *  في نفس الجلسة بدل ما يحكم على الرسالة بمعزل تام عمّا قبلها.
+     *  بيستخدم دايمًا أسرع نموذج متاح (AiModelSelector.forRouter) لأن
+     *  المطلوب رد قصير جدًا (سطر أو سطرين) بأقل زمن انتظار ممكن. */
     public static void classifyIntent(String userMessage, String historyContext, Callback callback) {
-        sendViaWorker(FIXED_WORKER_URL, AiPrompts.buildRouterPrompt(historyContext), userMessage, callback);
+        sendViaWorker(FIXED_WORKER_URL, AiPrompts.buildRouterPrompt(historyContext), userMessage,
+                AiModelSelector.forRouter(), callback);
     }
 
     /**
@@ -67,8 +86,13 @@ public class AiClient {
      * المستخدم في worker.js. عند أي فشل بيتم تمرير رسالة الخطأ الحقيقية
      * القادمة من الووركر نفسه (لو موجودة) بدل رسالة عامة مبهمة، عشان
      * تشخيص أي عطل مستقبلي يبقى سريع من داخل التطبيق نفسه.
+     *
+     * حقل "model" اختياري (لو model != null) بيتضاف لنفس جسم الـJSON -
+     * اقتراح اسم نموذج (AiModelSelector) للووركر يستخدمه بدل نموذجه
+     * الافتراضي الثابت، لو الووركر بيدعم القراءة منه. إضافة حقل JSON غير
+     * معروف لا تكسر أي ووركر حالي (بيتجاهله بأمان)، فده توسيع تراكمي بحت.
      */
-    private static void sendViaWorker(String workerUrl, String systemContext, String userMessage, Callback callback) {
+    private static void sendViaWorker(String workerUrl, String systemContext, String userMessage, String model, Callback callback) {
         HttpURLConnection conn = null;
         try {
             URL url = new URL(workerUrl);
@@ -85,6 +109,9 @@ public class AiClient {
             JSONObject body = new JSONObject();
             body.put("system", systemContext == null ? "" : systemContext);
             body.put("message", userMessage);
+            if (model != null && !model.trim().isEmpty()) {
+                body.put("model", model.trim());
+            }
 
             OutputStream os = conn.getOutputStream();
             os.write(body.toString().getBytes(StandardCharsets.UTF_8));
