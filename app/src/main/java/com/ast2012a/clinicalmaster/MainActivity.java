@@ -50,7 +50,6 @@ public class MainActivity extends AppCompatActivity {
     private LayoutAnimationController listAnimation;
     private String lastQuery = "";
     private String lastAiAnswer = "";
-    private boolean showingFavorites = false;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
     // ملحوظة إصلاح "لاج" مربع البحث الرئيسي: doSearch() كانت تُستدعى مع كل
@@ -62,16 +61,6 @@ public class MainActivity extends AppCompatActivity {
     private static final long SEARCH_DEBOUNCE_MS = 200;
     private final Handler searchHandler = new Handler(Looper.getMainLooper());
     private Runnable pendingSearch;
-
-    // ملحوظة إصلاح خطأ "زر المفضلة يرجع للشاشة الرئيسية": refreshFavoritesView()
-    // كانت بتنادي searchField.setText("") عشان تفضي مربع البحث، وده بيشغّل
-    // TextWatcher.afterTextChanged تلقائيًا واللي بيحط showingFavorites = false
-    // ويجدول doSearch("") بعد 200ms (SEARCH_DEBOUNCE_MS) - فبعد ربع ثانية
-    // بالظبط الشاشة كانت "ترجع" لواجهة الترحيب الفارغة فوق نتيجة المفضلة
-    // اللي ظهرت لحظة واحدة قبلها، وكأن الزر مش شغال. الحل: هذا العلم يخلي
-    // afterTextChanged يتجاهل مرة واحدة بس أي تغيير برمجي (مش من كتابة
-    // المستخدم الفعلية) في النص، فمايشغلش بحث جديد ولا يلغي showingFavorites.
-    private boolean suppressNextTextChange = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -123,15 +112,12 @@ public class MainActivity extends AppCompatActivity {
         Ui.applyPressFeedback(todayPatientsCard);
 
         adapter = new CaseAdapter(this::openDetail);
-        adapter.setOnFavoriteToggleListener((item, nowFavorite) -> {
-            if (showingFavorites && !nowFavorite) refreshFavoritesView();
-        });
         resultsList.setLayoutManager(new LinearLayoutManager(this));
         resultsList.setAdapter(adapter);
         listAnimation = AnimationUtils.loadLayoutAnimation(this, R.anim.layout_fall_stagger);
 
         TextView favoritesBtn = findViewById(R.id.btn_favorites);
-        favoritesBtn.setOnClickListener(v -> refreshFavoritesView());
+        favoritesBtn.setOnClickListener(v -> navigateTo(FavoritesActivity.class));
 
         TextView myCasesBtn = findViewById(R.id.btn_my_cases);
         myCasesBtn.setOnClickListener(v -> navigateTo(MyCasesActivity.class));
@@ -204,11 +190,6 @@ public class MainActivity extends AppCompatActivity {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
             @Override public void afterTextChanged(Editable s) {
-                if (suppressNextTextChange) {
-                    suppressNextTextChange = false;
-                    return;
-                }
-                showingFavorites = false;
                 final String query = s.toString();
                 if (pendingSearch != null) searchHandler.removeCallbacks(pendingSearch);
                 pendingSearch = () -> doSearch(query);
@@ -459,9 +440,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        if (showingFavorites) {
-            refreshFavoritesView();
-        } else if (searchField.getText() != null) {
+        if (searchField.getText() != null) {
             doSearch(searchField.getText().toString());
         }
         loadPatientsPreview();
@@ -500,32 +479,6 @@ public class MainActivity extends AppCompatActivity {
                     overridePendingTransition(R.anim.slide_up_in, R.anim.fade_out);
                 })
                 .show();
-    }
-
-    /** يعرض قائمة الحالات المفضّلة فقط، متجاوزًا محرك البحث. */
-    private void refreshFavoritesView() {
-        showingFavorites = true;
-        // نلغي أي بحث مؤجَّل (debounced) كان في انتظاره قبل ما نمسح الحقل،
-        // وإلا كان ممكن يتنفذ بعد 200ms ويكتب فوق نتيجة المفضلة اللي هنعرضها.
-        if (pendingSearch != null) searchHandler.removeCallbacks(pendingSearch);
-        suppressNextTextChange = true;
-        searchField.setText("");
-        resetAiInlineState();
-        emptyHintContainer.setVisibility(View.GONE);
-        resultsContainer.setVisibility(View.VISIBLE);
-        askAiFallback.setVisibility(View.GONE);
-        suggestionNote.setVisibility(View.GONE);
-        resultsList.setVisibility(View.VISIBLE);
-
-        List<CaseItem> favorites = FavoritesManager.getFavoriteCases(this);
-        if (favorites.isEmpty()) {
-            showNote(R.drawable.ic_star_stroke, R.color.accent_gold,
-                    "لا توجد حالات مفضّلة بعد. اضغط على النجمة بجانب أي حالة لإضافتها هنا.");
-        } else {
-            showNote(R.drawable.ic_star_stroke, R.color.accent_gold,
-                    "حالاتك المفضّلة (" + favorites.size() + ")");
-        }
-        setResults(favorites);
     }
 
     private void doSearch(String query) {
