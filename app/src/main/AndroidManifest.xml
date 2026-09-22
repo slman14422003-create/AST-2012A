@@ -46,6 +46,7 @@
         <activity android:name=".PrivacyPolicyActivity" android:exported="false" />
         <activity android:name=".AiAssistantActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".CloudStorageActivity" android:exported="false" />
+        <activity android:name=".CrashActivity" android:exported="false" />
 
         <!-- قارئ PDF: يُفتح من الملفات السحابية / زر "قارئ PDF" / أو كخيار "فتح باستخدام" لأي ملف PDF -->
         <activity
