@@ -1,5 +1,6 @@
 package com.ast2012a.clinicalmaster;
 
+import android.app.Dialog;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.res.Configuration;
@@ -27,6 +28,8 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -43,10 +46,15 @@ import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.textfield.TextInputEditText;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -109,6 +117,18 @@ public class PdfViewerActivity extends AppCompatActivity {
 
     private static final String[] TRANSLATE_LANG_LABELS = {"العربية", "English", "Français", "Türkçe"};
     private static final String[] TRANSLATE_LANG_CODES = {"ar", "en", "fr", "tr"};
+
+    /** ترجمة الملف كاملاً (كل الصفحات) إلى PDF منسّق - بخلاف "ترجمة الصفحة" أعلاه
+     *  التي تعرض نص صفحة واحدة فقط داخل نافذة عابرة. */
+    private boolean fullTranslateInProgress = false;
+    private volatile boolean fullTranslateCancelled = false;
+    private Dialog fullTranslateDialog;
+    private TextView fullTranslateStatus;
+    private ProgressBar fullTranslateBar;
+
+    /** حفظ نسخة من أي PDF مفتوح حاليًا (الأصلي أو ناتج الترجمة) على الجهاز عبر منتقي حفظ النظام. */
+    private ActivityResultLauncher<String> createDocumentLauncher;
+    private File pendingSaveSource;
 
     private final Runnable hideIndicatorRunnable = () -> {
         if (pageIndicator == null) return;
@@ -174,6 +194,9 @@ public class PdfViewerActivity extends AppCompatActivity {
                 finish(); // ألغى الاختيار ولا يوجد ملف معروض
             }
         });
+
+        createDocumentLauncher = registerForActivityResult(
+                new ActivityResultContracts.CreateDocument("application/pdf"), this::onSaveDestinationChosen);
 
         handleIntent(getIntent());
     }
@@ -262,6 +285,12 @@ public class PdfViewerActivity extends AppCompatActivity {
             return true;
         } else if (id == R.id.action_pdf_translate) {
             showTranslateLanguageDialog();
+            return true;
+        } else if (id == R.id.action_pdf_translate_full) {
+            showFullTranslateLanguageDialog();
+            return true;
+        } else if (id == R.id.action_pdf_save_copy) {
+            saveCurrentFileCopy();
             return true;
         } else if (id == R.id.action_pdf_open_external) {
             openExternally();
@@ -653,6 +682,201 @@ public class PdfViewerActivity extends AppCompatActivity {
                 })
                 .setNegativeButton("إغلاق", null)
                 .show();
+    }
+
+    // ------------------------------------------------------------------ ترجمة الملف بالكامل (PDF منسّق)
+
+    /** يعرض اختيار اللغة الهدف، ثم يترجم كل صفحات الملف (وليس صفحة واحدة فقط)
+     *  ويبني منها ملف PDF منسّق جاهز للعرض والحفظ. */
+    private void showFullTranslateLanguageDialog() {
+        if (ratios.length == 0 || currentFile == null) {
+            Toast.makeText(this, "افتح ملف PDF أولًا.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (translateInProgress || fullTranslateInProgress) {
+            Toast.makeText(this, "يوجد عملية ترجمة جارية بالفعل، يرجى الانتظار...", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        new ClaudeDialog(this)
+                .setTitle("ترجمة الملف بالكامل إلى")
+                .setItems(TRANSLATE_LANG_LABELS, (dialog, which) ->
+                        startFullTranslation(TRANSLATE_LANG_CODES[which], TRANSLATE_LANG_LABELS[which]))
+                .show();
+    }
+
+    private void startFullTranslation(String targetLangCode, String targetLangLabel) {
+        final int total = ratios.length;
+        final File sourceFile = currentFile;
+        final String sourceTitle = titleView.getText() != null ? titleView.getText().toString() : "مستند PDF";
+
+        fullTranslateInProgress = true;
+        fullTranslateCancelled = false;
+
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+
+        fullTranslateStatus = new TextView(this);
+        fullTranslateStatus.setTextColor(getColor(R.color.text_primary));
+        fullTranslateStatus.setTextSize(14f);
+        fullTranslateStatus.setTextDirection(View.TEXT_DIRECTION_RTL);
+        fullTranslateStatus.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+        fullTranslateStatus.setText(BidiText.fix("جارٍ التحضير..."));
+        box.addView(fullTranslateStatus, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        fullTranslateBar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        LinearLayout.LayoutParams barLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, Ui.dp(this, 6));
+        barLp.topMargin = Ui.dp(this, 14);
+        fullTranslateBar.setLayoutParams(barLp);
+        fullTranslateBar.setMax(100);
+        fullTranslateBar.setProgress(0);
+        fullTranslateBar.setProgressDrawable(getDrawable(R.drawable.bg_upload_progress));
+        box.addView(fullTranslateBar);
+
+        fullTranslateDialog = new ClaudeDialog(this)
+                .setTitle("ترجمة الملف بالكامل")
+                .setView(box)
+                .setNegativeButton("إلغاء", (d, w) -> fullTranslateCancelled = true)
+                .create();
+        fullTranslateDialog.setCancelable(false);
+        fullTranslateDialog.show();
+
+        textExecutor.execute(() -> {
+            List<TranslatedPdfBuilder.PageEntry> entries = new ArrayList<>();
+            for (int i = 0; i < total; i++) {
+                if (fullTranslateCancelled) {
+                    finishFullTranslateCancelled();
+                    return;
+                }
+                int pageNum = i + 1;
+                updateFullTranslateProgress(pageNum, total, "جارٍ استخراج نص الصفحة " + pageNum + " من " + total);
+                String extracted = extractPageText(sourceFile, i);
+                String translated = "";
+                if (extracted != null && !extracted.trim().isEmpty()) {
+                    if (fullTranslateCancelled) {
+                        finishFullTranslateCancelled();
+                        return;
+                    }
+                    updateFullTranslateProgress(pageNum, total, "جارٍ ترجمة الصفحة " + pageNum + " من " + total);
+                    String result = translateBlockingSync(extracted, targetLangCode);
+                    if (result != null) translated = result;
+                }
+                entries.add(new TranslatedPdfBuilder.PageEntry(pageNum, translated));
+            }
+            if (fullTranslateCancelled) {
+                finishFullTranslateCancelled();
+                return;
+            }
+
+            updateFullTranslateProgress(total, total, "جارٍ إنشاء ملف PDF المترجم");
+            String base = sourceTitle.replaceAll("(?i)\\.pdf$", "").trim();
+            try {
+                File dir = new File(getCacheDir(), CACHE_DIR);
+                //noinspection ResultOfMethodCallIgnored
+                dir.mkdirs();
+                File outFile = new File(dir, "translated_" + System.currentTimeMillis() + ".pdf");
+                TranslatedPdfBuilder.build(outFile, base, targetLangLabel, "ar".equals(targetLangCode), entries);
+                runOnUiThread(() -> {
+                    fullTranslateInProgress = false;
+                    if (isFinishing() || isDestroyed()) return;
+                    if (fullTranslateDialog != null) fullTranslateDialog.dismiss();
+                    openTranslatedPdf(outFile, "ترجمة - " + base);
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    fullTranslateInProgress = false;
+                    if (isFinishing() || isDestroyed()) return;
+                    if (fullTranslateDialog != null) fullTranslateDialog.dismiss();
+                    Toast.makeText(this, "تعذّر إنشاء ملف الترجمة: " + errorText(e), Toast.LENGTH_LONG).show();
+                });
+            }
+        });
+    }
+
+    private void updateFullTranslateProgress(int current, int total, String message) {
+        int pct = total > 0 ? Math.min(100, current * 100 / total) : 0;
+        runOnUiThread(() -> {
+            if (isFinishing() || isDestroyed()) return;
+            if (fullTranslateStatus != null) fullTranslateStatus.setText(BidiText.fix(message + " · " + pct + "%"));
+            if (fullTranslateBar != null) fullTranslateBar.setProgress(pct);
+        });
+    }
+
+    private void finishFullTranslateCancelled() {
+        runOnUiThread(() -> {
+            fullTranslateInProgress = false;
+            if (isFinishing() || isDestroyed()) return;
+            if (fullTranslateDialog != null) fullTranslateDialog.dismiss();
+            Toast.makeText(this, "تم إلغاء ترجمة الملف.", Toast.LENGTH_SHORT).show();
+        });
+    }
+
+    /** نسخة متزامنة (تحجب خيط الاستدعاء فقط، وليس الخيط الرئيسي) من GoogleTranslateClient
+     *  حتى يمكن ترجمة الصفحات الواحدة تلو الأخرى داخل حلقة، مع الاستفادة من نفس
+     *  آليات التسلسل/الفاصل الزمني/إعادة المحاولة الموجودة أصلًا في العميل. */
+    private String translateBlockingSync(String text, String targetLangCode) {
+        final String[] holder = {null};
+        CountDownLatch latch = new CountDownLatch(1);
+        GoogleTranslateClient.translateAsync(text, targetLangCode, (translated, error) -> {
+            holder[0] = (error == null) ? translated : null;
+            latch.countDown();
+        });
+        try {
+            latch.await();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return holder[0];
+    }
+
+    /** يفتح ملف الترجمة الناتج مباشرة في نافذة قارئ جديدة (فوق الملف الأصلي)
+     *  حتى يظهر للمستخدم فور انتهاء الترجمة، ومنها يمكنه "حفظ نسخة على الجهاز". */
+    private void openTranslatedPdf(File file, String title) {
+        Intent i = new Intent(this, PdfViewerActivity.class)
+                .putExtra(EXTRA_PATH, file.getAbsolutePath())
+                .putExtra(EXTRA_TITLE, title);
+        startActivity(i);
+        overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
+    }
+
+    // ------------------------------------------------------------------ حفظ/تنزيل نسخة على الجهاز
+
+    /** يفتح منتقي حفظ النظام (Storage Access Framework) ليختار المستخدم مكان
+     *  واسم الحفظ بنفسه - يعمل مع أي PDF مفتوح حاليًا، الأصلي أو ناتج الترجمة. */
+    private void saveCurrentFileCopy() {
+        if (currentFile == null || !currentFile.exists()) {
+            Toast.makeText(this, "لا يوجد ملف مفتوح لحفظه.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        pendingSaveSource = currentFile;
+        CharSequence titleText = titleView.getText();
+        String suggested = titleText != null && titleText.length() > 0 ? titleText.toString() : currentFile.getName();
+        if (!suggested.toLowerCase(Locale.ROOT).endsWith(".pdf")) suggested = suggested + ".pdf";
+        try {
+            createDocumentLauncher.launch(suggested);
+        } catch (Exception e) {
+            pendingSaveSource = null;
+            Toast.makeText(this, "تعذّر فتح نافذة الحفظ.", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void onSaveDestinationChosen(Uri destination) {
+        if (destination == null || pendingSaveSource == null) return;
+        final File src = pendingSaveSource;
+        pendingSaveSource = null;
+        loadExecutor.execute(() -> {
+            try (InputStream in = new FileInputStream(src);
+                 OutputStream out = getContentResolver().openOutputStream(destination)) {
+                if (out == null) throw new IOException("تعذّر فتح الوجهة للكتابة.");
+                byte[] buf = new byte[16 * 1024];
+                int n;
+                while ((n = in.read(buf)) != -1) out.write(buf, 0, n);
+                runOnUiThread(() -> Toast.makeText(this, "تم حفظ الملف بنجاح.", Toast.LENGTH_SHORT).show());
+            } catch (Exception e) {
+                runOnUiThread(() -> Toast.makeText(this, "تعذّر حفظ الملف: " + errorText(e), Toast.LENGTH_LONG).show());
+            }
+        });
     }
 
     // ------------------------------------------------------------------ الحالات (تحميل/خطأ)
