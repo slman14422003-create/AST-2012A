@@ -588,7 +588,7 @@
       "ضعف القبضة"
     ],
     "title": "بروتوكول تقوية قبضة اليد والعضلات القابضة (Finger/Wrist Flexors)",
-    "mode": "EMS - النمط 10 (Acupuncture Squeezing)",
+    "mode": "EMS",
     "freq": "40Hz - 50Hz",
     "channel": "القناة: Channel 1 أو 2",
     "duration": "15 دقيقة (لتجنب إرهاق الألياف العضلية السريعة)",
@@ -733,13 +733,14 @@
       "العصب السابع",
       "bell's palsy",
       "شلل بيل",
-      "نصف الوجه"
+      "نصف الوجه",
+      "شلل الوجه النصفي"
     ],
-    "title": "بروتوكول شلل العصب الوجهي السابع (Bell's Palsy)",
-    "mode": "EMS دقيق جداً - النمط 16 (أو أي نمط تحفيز مستمر خفيف)",
-    "freq": "10Hz - 20Hz (تردد منخفض جداً لتجنب التعب)",
-    "channel": "Channel 1 (شدة منخفضة للغاية)",
-    "duration": "5-10 دقائق فقط للمنطقة",
+    "title": "بروتوكول شلل العصب الوجهي السابع - شلل بيل (Bell's Palsy / Facial Nerve Palsy)",
+    "mode": "EMS دقيق جداً - النمط 16 (Body Shaping) بشدة منخفضة، أو TENS - النمط 2 (Acupuncture) للمرحلة المتأخرة فقط",
+    "freq": "EMS: 10-20Hz, TENS: 80Hz",
+    "channel": "القناة 1 (شدة منخفضة)",
+    "duration": "5-10 دقائق",
     "poles": [
       "(+) القطب الموجب: يوضع خلف شحمة الأذن مباشرة فوق خروج العصب الوجهي (Stylomastoid foramen).",
       "(-) القطب السالب (يفضل أقطاب صغيرة): يوضع على النقاط الحركية للعضلات المستهدفة (مثلاً عضلة الجبهة، أو عضلة الوجنة، أو حول الفم)."
@@ -757,7 +758,7 @@
       "العصب الناصف"
     ],
     "title": "بروتوكول متلازمة النفق الرسغي (Carpal Tunnel Syndrome)",
-    "mode": "TENS - النمط 7 (Massage) أو النمط 1",
+    "mode": "TENS أو النمط 1",
     "freq": "80Hz - 120Hz (تسكين ألم وتنميل)",
     "channel": "Channel 1",
     "duration": "20 دقيقة",
@@ -821,7 +822,7 @@
       "الم الكوع"
     ],
     "title": "بروتوكول التهاب اللقيمة الجانبية - تنس ألبو (Lateral Epicondylitis)",
-    "mode": "TENS - النمط 14 (Scraping Pressing) أو النمط 17",
+    "mode": "TENS أو النمط 17",
     "freq": "100Hz (لتقليل التهاب الوتر الحاد)",
     "channel": "Channel 1",
     "duration": "15-20 دقيقة",
@@ -850,27 +851,6 @@
       "(-) القطب السالب: يوضع على العضلة الماضغة (Masseter) في زاوية الفك السفلي."
     ],
     "explanation": "يرخي التشنج الناتج عن صرير الأسنان (Bruxism) ويقلل ألم المفصل. التنبيه: يجب الحذر الشديد وعدم وضع الأقطاب قرب الرقبة الأمامية. الشدة يجب أن تكون بالكاد محسوسة (وخز لطيف)."
-  },
-  {
-    "keywords": [
-      "اللفافة",
-      "التهاب اللفافة",
-      "كعب",
-      "الم الكعب",
-      "مسمار القدم",
-      "باطن القدم",
-      "plantar"
-    ],
-    "title": "بروتوكول التهاب اللفافة الأخمصية ومسمار العظم (Plantar Fasciitis)",
-    "mode": "TENS - النمط 18 (Massage Tapping)",
-    "freq": "100Hz",
-    "channel": "Channel 1",
-    "duration": "20 دقيقة",
-    "poles": [
-      "(+) القطب الموجب: يوضع على كعب القدم (نقطة ارتكاز الألم).",
-      "(-) القطب السالب: يوضع على القوس الطولي لباطن القدم (منتصف القدم من الأسفل)."
-    ],
-    "explanation": "يحسن التروية الدموية في الأنسجة الليفية البطيئة الشفاء في باطن القدم ويغسل السوائل الالتهابية. يساعد النمط 18 ذو النقر المساجي في تقليل حساسية مستقبلات الألم الصباحية."
   },
   {
     "keywords": [
@@ -952,7 +932,7 @@
       "shoulder dislocation posterior"
     ],
     "title": "بروتوكول الخلع الخلفي لمفصل الكتف (Posterior Shoulder Dislocation)",
-    "mode": "EMS - النمط 16 و TENS - النمط 8",
+    "mode": "EMS - النمط 16 و TENS",
     "freq": "EMS: 35Hz, TENS: 90Hz",
     "channel": "القناتين",
     "duration": "25 دقيقة",
@@ -988,7 +968,7 @@
       "تمزق pcl"
     ],
     "title": "بروتوكول تمزق الرباط الصليبي الخلفي (PCL Tear)",
-    "mode": "EMS - النمط 16 (Body Shaping) و TENS - النمط 7",
+    "mode": "EMS - النمط 16 (Body Shaping) و TENS",
     "freq": "EMS: 35-45Hz, TENS: 80Hz",
     "channel": "القناتين",
     "duration": "25 دقيقة",
@@ -1075,7 +1055,7 @@
       "patellar dislocation"
     ],
     "title": "بروتوكول خلع صابونة الركبة (Patellar Dislocation)",
-    "mode": "EMS - النمط 19 (Pushing) و TENS - النمط 8 (Pushing Massage)",
+    "mode": "EMS - النمط 19 (Pushing) و TENS",
     "freq": "EMS: 40Hz, TENS: 90Hz",
     "channel": "القناتين",
     "duration": "مرحلة حادة: 15 دقيقة, مرحلة التقوية: 25 دقيقة",
@@ -1092,7 +1072,7 @@
       "ألم أسفل الرضفة"
     ],
     "title": "بروتوكول التهاب وتر الرضفة (Jumper's Knee / Patellar Tendinopathy)",
-    "mode": "TENS - النمط 14 (Scraping Pressing) و EMS - النمط 5 (Scraping)",
+    "mode": "TENS و EMS - النمط 5 (Scraping)",
     "freq": "TENS: 80Hz, EMS: 30-40Hz",
     "channel": "القناة 1",
     "duration": "20 دقيقة",
@@ -1128,7 +1108,7 @@
       "ورك صناعي"
     ],
     "title": "بروتوكول استبدال مفصل الورك الكلي (THA - Total Hip Arthroplasty)",
-    "mode": "TENS - النمط 7 (Massage) و EMS - النمط 19 (Pushing)",
+    "mode": "TENS و EMS - النمط 19 (Pushing)",
     "freq": "TENS: 80Hz, EMS: 40Hz",
     "channel": "القناتين",
     "duration": "25 دقيقة",
@@ -1175,12 +1155,19 @@
   },
   {
     "keywords": [
+      "اللفافة",
+      "التهاب اللفافة",
+      "كعب",
+      "الم الكعب",
+      "مسمار القدم",
+      "باطن القدم",
+      "plantar",
       "التهاب اللفافة الأخمصية",
       "plantar fasciitis",
       "ألم الكعب",
       "مسمار الكعب"
     ],
-    "title": "بروتوكول التهاب اللفافة الأخمصية (Plantar Fasciitis)",
+    "title": "بروتوكول التهاب اللفافة الأخمصية ومسمار الكعب (Plantar Fasciitis)",
     "mode": "TENS - النمط 18 (Massage Tapping) و EMS - النمط 14 (Scraping Pressing)",
     "freq": "TENS: 100Hz, EMS: 40Hz",
     "channel": "القناة 1",
@@ -1252,7 +1239,7 @@
       "انزلاق فقري"
     ],
     "title": "بروتوكول انزلاق الفقرات (Spondylolisthesis)",
-    "mode": "EMS - النمط 16 (Body Shaping) و TENS - النمط 8 (Pushing)",
+    "mode": "EMS - النمط 16 (Body Shaping) و TENS",
     "freq": "EMS: 35Hz, TENS: 90Hz",
     "channel": "القناتين",
     "duration": "25 دقيقة",
@@ -1270,7 +1257,7 @@
       "ألم الرقبة"
     ],
     "title": "بروتوكول إصابة الضربات السوطية للرقبة (Whiplash Injury)",
-    "mode": "TENS - النمط 7 (Massage) و EMS - النمط 22 (Stroke)",
+    "mode": "TENS و EMS - النمط 22 (Stroke)",
     "freq": "TENS: 80Hz, EMS: 30Hz",
     "channel": "القناة 1 و 2",
     "duration": "20 دقيقة",
@@ -1360,7 +1347,7 @@
       "ألم الظهر عند المراهقين"
     ],
     "title": "بروتوكول متلازمة شورمان (Scheuermann's Disease)",
-    "mode": "EMS - النمط 16 (Body Shaping) و TENS - النمط 8 (Pushing)",
+    "mode": "EMS - النمط 16 (Body Shaping) و TENS",
     "freq": "EMS: 35Hz, TENS: 80Hz",
     "channel": "القناتين",
     "duration": "25 دقيقة",
@@ -1463,31 +1450,13 @@
   },
   {
     "keywords": [
-      "شلل الوجه النصفي",
-      "bell's palsy",
-      "العصب السابع",
-      "شلل بيل"
-    ],
-    "title": "بروتوكول شلل الوجه النصفي (Bell's Palsy)",
-    "mode": "EMS - النمط 16 (Body Shaping) و TENS - النمط 2 (Acupuncture)",
-    "freq": "EMS: 10-20Hz, TENS: 80Hz",
-    "channel": "القناة 1 (شدة منخفضة)",
-    "duration": "5-10 دقائق",
-    "poles": [
-      "(+) القطب الموجب: يوضع خلف شحمة الأذن (Stylomastoid foramen).",
-      "(-) القطب السالب: على النقاط الحركية للعضلات الوجهية (الجبهة، الوجنة، الشفة)."
-    ],
-    "explanation": "التحفيز الكهربائي للوجه يتطلب حذراً شديداً. يجب ألا يتجاوز التيار حدود الشعور بالوخز الخفيف إلى انقباض غير مرئي تقريباً. الشدة العالية قد تؤدي إلى التزامن الحركي الخاطئ (Synkinesis) وتفاقم الحالة."
-  },
-  {
-    "keywords": [
       "متلازمة جيلان باريه",
       "guillain-barré",
       "شلل الأعصاب",
       "اعتلال الأعصاب"
     ],
     "title": "بروتوكول متلازمة جيلان باريه (Guillain-Barré Syndrome)",
-    "mode": "EMS - النمط 19 (Pushing Squeezing) و TENS - النمط 7 (Massage)",
+    "mode": "EMS - النمط 19 (Pushing Squeezing) و TENS",
     "freq": "EMS: 30-40Hz, TENS: 80Hz",
     "channel": "القناتين",
     "duration": "20-25 دقيقة",
@@ -1540,7 +1509,7 @@
       "قسطرة قلبية"
     ],
     "title": "بروتوكول جراحة الشريان التاجي (CABG Post-Op Protocol)",
-    "mode": "TENS - النمط 7 (Massage) و EMS - النمط 22 (Stroke)",
+    "mode": "TENS و EMS - النمط 22 (Stroke)",
     "freq": "TENS: 80Hz, EMS: 30Hz",
     "channel": "القناة 1 (فقط)",
     "duration": "15 دقيقة",
@@ -1590,7 +1559,7 @@
       "تليف الرئتين"
     ],
     "title": "بروتوكول التليف الرئوي (Pulmonary Fibrosis)",
-    "mode": "TENS - النمط 7 (Massage) و EMS - النمط 22 (Stroke)",
+    "mode": "TENS و EMS - النمط 22 (Stroke)",
     "freq": "TENS: 80Hz, EMS: 30Hz",
     "channel": "القناة 1 و 2",
     "duration": "20 دقيقة",
@@ -1624,7 +1593,7 @@
       "انحناء الرقبة لدى الأطفال"
     ],
     "title": "بروتوكول صعر الرقبة الخلقي (Congenital Torticollis)",
-    "mode": "EMS - النمط 16 (Body Shaping) و TENS - النمط 7 (Massage)",
+    "mode": "EMS - النمط 16 (Body Shaping) و TENS",
     "freq": "EMS: 30Hz, TENS: 80Hz",
     "channel": "القناة 1 (شدة منخفضة)",
     "duration": "10-15 دقيقة",
@@ -1708,7 +1677,7 @@
       "متلازمة قصبة الساق"
     ],
     "title": "بروتوكول متلازمة إجهاد قصبة الساق (Shin Splints)",
-    "mode": "TENS - النمط 14 (Scraping Pressing) و EMS - النمط 19 (Pushing)",
+    "mode": "TENS و EMS - النمط 19 (Pushing)",
     "freq": "TENS: 100Hz, EMS: 35Hz",
     "channel": "القناة 1",
     "duration": "20 دقيقة",
@@ -1740,7 +1709,7 @@
       "إصابة مشط القدم"
     ],
     "title": "بروتوكول كسور الإجهاد في مشط القدم (Stress Fractures)",
-    "mode": "TENS - النمط 7 (Massage) و EMS - النمط 16 (Body Shaping)",
+    "mode": "TENS و EMS - النمط 16 (Body Shaping)",
     "freq": "TENS: 80Hz, EMS: 30Hz",
     "channel": "القناة 1",
     "duration": "15 دقيقة",
@@ -1773,7 +1742,7 @@
       "طحن الأسنان"
     ],
     "title": "بروتوكول خلع مفصل الفك الصدغي (TMJ Disorder)",
-    "mode": "TENS - النمط 8 (Pushing) و EMS - النمط 16 (Body Shaping)",
+    "mode": "TENS و EMS - النمط 16 (Body Shaping)",
     "freq": "TENS: 50-80Hz, EMS: 30Hz",
     "channel": "القناة 1 (شدة منخفضة)",
     "duration": "10 دقائق",
@@ -1884,7 +1853,7 @@
       "شد الساق أثناء النوم"
     ],
     "title": "بروتوكول تشنجات الساق الليلية (Nocturnal Leg Cramps)",
-    "mode": "TENS - النمط 7 (Massage) و TENS - النمط 5 (Scraping)",
+    "mode": "TENS",
     "freq": "60Hz",
     "channel": "القناة 1",
     "duration": "10-15 دقيقة قبل النوم",
@@ -1984,7 +1953,7 @@
       "ضعف الدورة الدموية بالساق"
     ],
     "title": "بروتوكول الدوالي الوريدية وتحسين الدورة الدموية (Varicose Veins Support)",
-    "mode": "TENS - النمط 5 (Scraping) بشدة منخفضة جداً",
+    "mode": "TENS بشدة منخفضة جداً",
     "freq": "50-60Hz",
     "channel": "القناة 1",
     "duration": "10-15 دقيقة",
@@ -2046,7 +2015,7 @@
       "توتر اصابع القدم"
     ],
     "title": "بروتوكول تشنج وتقلص أصابع القدم (Toe Flexor Cramps)",
-    "mode": "TENS - النمط 7 (Massage) بشدة منخفضة جداً",
+    "mode": "TENS بشدة منخفضة جداً",
     "freq": "50-60Hz",
     "channel": "القناة 1",
     "duration": "8-10 دقائق",
