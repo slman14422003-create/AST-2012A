@@ -25,7 +25,7 @@ runs:
         java-version: ${{ inputs.java-version }}
 
     - name: تجهيز Android SDK (وقبول التراخيص)
-      uses: android-actions/setup-android@v3
+      uses: android-actions/setup-android@v4
       with:
         packages: ''
 
