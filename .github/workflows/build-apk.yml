@@ -52,7 +52,7 @@ jobs:
 
       - name: رفع تقارير الفحص
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: reports-${{ github.run_number }}
           path: |
@@ -146,7 +146,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: رفع ملفات APK كـ Artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: apk-${{ github.run_number }}
           path: dist/
@@ -156,13 +156,13 @@ jobs:
       - name: شهادة مصدر الملف (Build Provenance)
         if: github.event_name != 'pull_request'
         continue-on-error: true   # قد لا تكون متاحة في المستودعات الخاصة بالخطة المجانية
-        uses: actions/attest-build-provenance@v3
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: dist/*.apk
 
       - name: رفع تقارير البناء عند الفشل
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: build-failure-reports-${{ github.run_number }}
           path: |
