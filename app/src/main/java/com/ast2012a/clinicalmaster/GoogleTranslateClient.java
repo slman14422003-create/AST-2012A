@@ -119,9 +119,11 @@ final class GoogleTranslateClient {
      * الحد الأقصى) مفصولة بسطر جديد "\n" - هذه الواجهة غير الرسمية بترجع
      * كل سطر كعنصر منفصل في مصفوفة الجمل عند وجود "\n" بين المدخلات (نفس
      * الأسلوب المُستخدم في أدوات ترجمة ملفات الترجمة المصاحبة SRT)، فبنعتمد
-     * عليه للحصول على محاذاة 1:1. لو اختلف عدد العناصر الراجعة (نادر) -
-     * الأسطر اللي معندناش لها ترجمة مؤكدة المحاذاة بترجع بنصها الأصلي زي
-     * ما هو، بدل تخمين محاذاة ممكن تحط ترجمة في مكان سطر غلط.
+     * عليه للحصول على محاذاة 1:1 في الحالة الشائعة (سريع، طلب واحد للدفعة
+     * كلها). لو اختلف عدد العناصر الراجعة - بيحصل كتير في مستندات كثيفة
+     * الأسطر القصيرة زي السير الذاتية - كل سطر من الدفعة دي بيتترجم لوحده
+     * بطلب مستقل (انظر alignToBatch) بدل ما يترك بنصه الأجنبي الأصلي وسط
+     * صفحة مترجمة.
      */
     static void translateLinesAsync(List<String> lines, String targetLangCode, LinesCallback callback) {
         if (lines == null || lines.isEmpty()) {
@@ -144,8 +146,10 @@ final class GoogleTranslateClient {
         mainHandler.post(() -> callback.onDone(result, error));
     }
 
-    /** يشتغل فقط على خيط الطابور الداخلي (queue). */
-    private static List<String> translateLinesBlocking(List<String> lines, String targetLangCode) throws IOException {
+    /** يشتغل فقط على خيط الطابور الداخلي (queue). لا يرمي أبدًا - أي سطر
+     *  يتعذّر ترجمته بأي طريقة بيرجع بنصه الأصلي (انظر alignToBatch) بدل ما
+     *  يوقف ترجمة باقي الصفحة. */
+    private static List<String> translateLinesBlocking(List<String> lines, String targetLangCode) {
         List<String> result = new ArrayList<>(lines.size());
         for (List<String> batch : splitLinesIntoBatches(lines, MAX_CHUNK_CHARS)) {
             result.addAll(translateBatchWithRetry(batch, targetLangCode));
@@ -175,39 +179,39 @@ final class GoogleTranslateClient {
         return batches;
     }
 
-    private static List<String> translateBatchWithRetry(List<String> batch, String targetLangCode) throws IOException {
+    /** لا يرمي أبدًا - أي فشل (جوجل، المحرّك الاحتياطي، أو محاذاة غير
+     *  مؤكدة) بينتهي بترجمة فردية مضمونة لكل سطر فيه شك (انظر alignToBatch). */
+    private static List<String> translateBatchWithRetry(List<String> batch, String targetLangCode) {
         String joined = joinLines(batch);
-        IOException lastError = null;
+        List<String> sentences = null;
         for (int attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
             throttleBeforeRequest();
             String host = HOSTS[attempt % HOSTS.length];
             try {
-                List<String> sentences = translateBatchOnce(host, joined, targetLangCode);
-                return alignToBatch(sentences, batch);
+                sentences = translateBatchOnce(host, joined, targetLangCode);
+                break;
             } catch (IOException e) {
-                lastError = e;
                 if (attempt < MAX_ATTEMPTS - 1) sleepQuietly(backoffDelay(attempt));
             }
         }
-        // جوجل رفضت/فشلت في كل المحاولات على المضيفين الاتنين - قبل ما
-        // نستسلم لهذه الدفعة بالكامل، نجرّب محرّك احتياطي مستقل (MyMemory)
-        // كخط دفاع تاني (طلب واحد للنص كله، مش سطر-بسطر - انظر تعليق
-        // translateWithMyMemory)، بدل توقف ترجمة الصفحة دي بالكامل لمجرد
-        // أن جوجل محظور/بطيء مؤقتًا.
-        try {
-            throttleBeforeRequest();
-            String blob = translateWithMyMemory(joined, targetLangCode);
-            return alignToBatch(splitByNewline(blob), batch);
-        } catch (IOException fallbackError) {
-            // فشل المحرّك الاحتياطي كمان - نرجّع خطأ جوجل الأصلي، هو الأوضح.
-            throw lastError != null ? lastError : fallbackError;
+        if (sentences == null) {
+            // جوجل رفضت/فشلت في كل المحاولات على المضيفين الاتنين - نجرّب
+            // محرّك احتياطي مستقل (MyMemory) على الدفعة كلها كمحاولة أخيرة
+            // سريعة قبل اللجوء للترجمة الفردية الأبطأ تحت.
+            try {
+                throttleBeforeRequest();
+                sentences = splitByNewline(translateWithMyMemory(joined, targetLangCode));
+            } catch (IOException fallbackError) {
+                sentences = new ArrayList<>();
+            }
         }
+        return alignToBatch(sentences, batch, targetLangCode);
     }
 
     /** يقسّم ردًا نصيًا واحدًا من محرّك احتياطي (ما بيرجعش مصفوفة جمل زي
-     *  جوجل) على أسطر جديدة لمحاولة محاذاته مع عدد الأسطر الأصلي - محاذاة
-     *  أفضل الجهد فقط (best-effort)، وalignToBatch بعدها بترجع أي سطر ناقص
-     *  بنصه الأصلي بدل تخمين خاطئ. */
+     *  جوجل) على أسطر جديدة لمحاولة محاذاته مع عدد الأسطر الأصلي - محاولة
+     *  سريعة أولى فقط؛ alignToBatch بعدها بتتأكد من المحاذاة وتترجم أي سطر
+     *  مش متأكد منه لوحده بطلب مستقل بدل الاعتماد على هذا التقسيم وحده. */
     private static List<String> splitByNewline(String blob) {
         if (blob == null) return new ArrayList<>();
         String[] parts = blob.split("\n");
@@ -225,17 +229,36 @@ final class GoogleTranslateClient {
         return sb.toString();
     }
 
-    /** لو عدد الجمل الراجعة من الخدمة طابق عدد الأسطر المُرسَلة - محاذاة
-     *  مضمونة 1:1. لو اختلف (نادر، بيحصل لو دمجت الخدمة سطرين قصيرين
-     *  متتاليين في جملة واحدة) - الأسطر الزايدة اللي معندناش لها ترجمة
-     *  مؤكدة بترجع بنصها الأصلي زي ما هو، بدل تخمين محاذاة قد تكون خاطئة. */
-    private static List<String> alignToBatch(List<String> sentences, List<String> originalBatch) {
+    /**
+     * لو عدد الجمل الراجعة من جوجل/المحرّك الاحتياطي طابق عدد الأسطر
+     * المُرسَلة بالظبط - محاذاة 1:1 مباشرة ومضمونة (الحالة الشائعة السريعة
+     * لصفحات فيها فقرات نص عادية طويلة). لو اختلف العدد - وده بيحصل كتير
+     * في مستندات كثيفة الأسطر القصيرة زي السير الذاتية (كل سطر كلمة أو
+     * اتنين: تاريخ، مسمّى وظيفي، مهارة...) لأن تقسيم جوجل الداخلي للجمل مش
+     * مضمون يطابق كل سطر PDF لوحده - **مفيش تخمين محاذاة هنا خالص**: كل
+     * سطر من الدفعة دي بيتترجم لوحده بطلب مستقل (translateBlocking، وعنده
+     * نفس إعادة المحاولة + المحرّك الاحتياطي أصلًا) فتضمن محاذاة صحيحة
+     * 100% مهما كان طول السطر. ده أبطأ من المحاذاة الجماعية، لكنه اللي
+     * بيمنع فعليًا مشكلة "كلمات أجنبية متروكة وسط نص مترجم" اللي كانت
+     * بتظهر قبل كده لما نستسلم ونرجّع النص الأصلي كما هو.
+     */
+    private static List<String> alignToBatch(List<String> sentences, List<String> originalBatch, String targetLangCode) {
         List<String> aligned = new ArrayList<>(originalBatch.size());
+        boolean matched = sentences.size() == originalBatch.size();
         for (int i = 0; i < originalBatch.size(); i++) {
-            if (i < sentences.size()) {
+            String original = originalBatch.get(i);
+            if (matched) {
                 aligned.add(sentences.get(i));
-            } else {
-                aligned.add(originalBatch.get(i));
+                continue;
+            }
+            try {
+                aligned.add(translateBlocking(original, targetLangCode));
+            } catch (Exception e) {
+                // فشلت حتى المحاولة الفردية (شبكة منقطعة تمامًا مثلًا) -
+                // نرجّع النص الأصلي لهذا السطر تحديدًا بدل ما نوقف الصفحة
+                // كلها؛ TranslatedPdfBuilder.addPage بتسيبه بخلفيته الأصلية
+                // زي ما هو لما الترجمة تطابق الأصل حرفيًا.
+                aligned.add(original);
             }
         }
         return aligned;
