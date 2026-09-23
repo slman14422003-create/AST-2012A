@@ -24,6 +24,8 @@ import android.util.LruCache;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.Menu;
+import android.view.MotionEvent;
+import android.view.ScaleGestureDetector;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.HorizontalScrollView;
@@ -74,8 +76,13 @@ public class PdfViewerActivity extends AppCompatActivity {
     public static final String EXTRA_PATH = "pdf_path";
     public static final String EXTRA_TITLE = "pdf_title";
 
-    /** نسب التكبير المتاحة (% من عرض الشاشة). حد أقصى 200% لتجنّب استهلاك الذاكرة. */
-    private static final int[] ZOOM_PERCENT = {100, 150, 200};
+    /** حدود التكبير المتاحة (% من عرض الشاشة) - أدنى 60% وأقصى 300% لتجنّب
+     *  استهلاك الذاكرة، وخطوة أزرار +/- الثابتة 50% لكل ضغطة. التكبير نفسه
+     *  أصبح قيمة مستمرة (float) بدل درجات ثابتة (100/150/200) حتى يسمح
+     *  بالتكبير/التصغير بحركة إصبعين (Pinch) بأي نسبة بينهم، مش قفزات فقط. */
+    private static final float MIN_ZOOM_PERCENT = 60f;
+    private static final float MAX_ZOOM_PERCENT = 300f;
+    private static final float ZOOM_STEP_PERCENT = 50f;
     private static final int MAX_BITMAP_WIDTH = 2400;
     private static final long INDICATOR_HIDE_DELAY_MS = 1400;
     /** نفس المجلد المُعرَّف في update_file_paths.xml حتى تعمل المشاركة عبر FileProvider. */
@@ -106,7 +113,13 @@ public class PdfViewerActivity extends AppCompatActivity {
     private ParcelFileDescriptor descriptor;
     private float[] ratios = new float[0];
     private File currentFile;
-    private int zoomIndex = 0;
+    private float zoomPercent = 100f;
+    /** آخر نسبة تكبير فعلية اترسمت بيها الصفحات (تتحدّث فقط لما applyZoom
+     *  فعليًا يعيد الرسم) - بيُستخدم أثناء حركة القرص (Pinch) لحساب مقياس
+     *  عرض مؤقت (scaleX/scaleY) بدون إعادة رسم الـ Bitmaps مع كل حركة
+     *  إصبع، فقط عند توقف الحركة. */
+    private float renderedZoomPercent = 100f;
+    private ScaleGestureDetector pinchDetector;
     /** الوضع الليلي لصفحات الـ PDF: يُفعَّل تلقائياً حسب مظهر النظام، ويمكن للمستخدم تبديله يدوياً من القائمة. */
     private boolean nightPagesEnabled;
     private boolean nightPagesUserOverride = false;
@@ -191,6 +204,7 @@ public class PdfViewerActivity extends AppCompatActivity {
         pages.setLayoutManager(layoutManager);
         adapter = new PageAdapter();
         pages.setAdapter(adapter);
+        setupPinchZoom();
         pages.addOnScrollListener(new RecyclerView.OnScrollListener() {
             @Override
             public void onScrolled(@NonNull RecyclerView rv, int dx, int dy) {
@@ -285,11 +299,17 @@ public class PdfViewerActivity extends AppCompatActivity {
 
     // ------------------------------------------------------------------ القائمة
 
-    private void changeZoom(int delta) {
+    private void changeZoom(int direction) {
         if (ratios.length == 0) return;
-        int next = zoomIndex + delta;
-        if (next < 0 || next >= ZOOM_PERCENT.length) return;
-        zoomIndex = next;
+        setZoomPercent(zoomPercent + direction * ZOOM_STEP_PERCENT);
+    }
+
+    /** يضبط نسبة التكبير الفعلية (تُستخدم من أزرار +/- وحركة القرص بإصبعين
+     *  الاتنين) - تُحصر بين MIN/MAX_ZOOM_PERCENT ثم يُعاد رسم الصفحات فورًا. */
+    private void setZoomPercent(float percent) {
+        float clamped = Math.max(MIN_ZOOM_PERCENT, Math.min(MAX_ZOOM_PERCENT, percent));
+        if (Math.abs(clamped - zoomPercent) < 0.01f) return;
+        zoomPercent = clamped;
         applyZoom();
         updateZoomButtonsState();
     }
@@ -298,15 +318,59 @@ public class PdfViewerActivity extends AppCompatActivity {
      *  تركه يبدو فعّالًا وهو بلا تأثير. */
     private void updateZoomButtonsState() {
         if (zoomOutBtn != null) {
-            boolean enabled = zoomIndex > 0;
+            boolean enabled = zoomPercent > MIN_ZOOM_PERCENT + 0.5f;
             zoomOutBtn.setEnabled(enabled);
             zoomOutBtn.setAlpha(enabled ? 1f : 0.35f);
         }
         if (zoomInBtn != null) {
-            boolean enabled = zoomIndex < ZOOM_PERCENT.length - 1;
+            boolean enabled = zoomPercent < MAX_ZOOM_PERCENT - 0.5f;
             zoomInBtn.setEnabled(enabled);
             zoomInBtn.setAlpha(enabled ? 1f : 0.35f);
         }
+    }
+
+    /** يُنشئ كاشف حركة القرص بإصبعين (Pinch-to-zoom) على منطقة عرض الصفحات:
+     *  أثناء الحركة نطبّق مقياس عرض مؤقت (scaleX/scaleY) على pages مباشرة
+     *  للاستجابة الفورية الناعمة بدون أي إعادة رسم فعلي (رخيص جدًا)، وبس
+     *  لما تنتهي حركة الإصبعين (onScaleEnd) نحوّل المقياس المؤقت لنسبة
+     *  تكبير حقيقية عبر setZoomPercent() اللي بتعيد رسم الـ Bitmaps بدقة
+     *  مناسبة للعرض الجديد - بدل ما نعيد الرسم مع كل حدث لمس (بطيء جدًا
+     *  ومكلف للذاكرة مع صفحات PDF عالية الدقة). */
+    private void setupPinchZoom() {
+        pinchDetector = new ScaleGestureDetector(this, new ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            @Override
+            public boolean onScaleBegin(@NonNull ScaleGestureDetector detector) {
+                return ratios.length > 0;
+            }
+
+            @Override
+            public boolean onScale(@NonNull ScaleGestureDetector detector) {
+                float liveScale = pages.getScaleX() * detector.getScaleFactor();
+                float minLive = MIN_ZOOM_PERCENT / renderedZoomPercent;
+                float maxLive = MAX_ZOOM_PERCENT / renderedZoomPercent;
+                liveScale = Math.max(minLive, Math.min(maxLive, liveScale));
+                pages.setPivotX(detector.getFocusX());
+                pages.setPivotY(detector.getFocusY());
+                pages.setScaleX(liveScale);
+                pages.setScaleY(liveScale);
+                return true;
+            }
+
+            @Override
+            public void onScaleEnd(@NonNull ScaleGestureDetector detector) {
+                float finalPercent = renderedZoomPercent * pages.getScaleX();
+                pages.setScaleX(1f);
+                pages.setScaleY(1f);
+                setZoomPercent(finalPercent);
+            }
+        });
+        hScroll.setOnTouchListener((v, event) -> {
+            pinchDetector.onTouchEvent(event);
+            // إصبعان (Pinch) بيتعامل معاهم الكاشف فقط ولا بيوقف تمرير
+            // HorizontalScrollView العادي بإصبع واحد - false يسيب الحدث
+            // يكمل مساره الطبيعي للتمرير.
+            return false;
+        });
     }
 
     /** يعرض قائمة "المزيد" كـ PopupWindow مخصّص (popup_pdf_more_menu) بنفس
@@ -450,7 +514,8 @@ public class PdfViewerActivity extends AppCompatActivity {
         }
         currentFile = file;
         ratios = rt;
-        zoomIndex = 0;
+        zoomPercent = 100f;
+        renderedZoomPercent = 100f;
         generation++;
         cache.evictAll();
 
@@ -476,15 +541,23 @@ public class PdfViewerActivity extends AppCompatActivity {
         }
         int first = layoutManager.findFirstVisibleItemPosition();
         ViewGroup.LayoutParams lp = pages.getLayoutParams();
-        lp.width = base * ZOOM_PERCENT[zoomIndex] / 100;
+        lp.width = Math.round(base * zoomPercent / 100f);
         pages.setLayoutParams(lp);
-        if (zoomIndex == 0) hScroll.scrollTo(0, 0);
+        if (zoomPercent <= 100f) hScroll.scrollTo(0, 0);
 
+        renderedZoomPercent = zoomPercent;
         generation++;
         cache.evictAll();
         adapter.notifyDataSetChanged();
         if (first > 0) layoutManager.scrollToPositionWithOffset(first, 0);
         updateIndicator();
+    }
+
+    /** يجمّع نسبة التكبير المستمرة في "دُرجة" صحيحة لاستخدامها كجزء من
+     *  مفتاح ذاكرة تخزين الصفحات المؤقتة (cacheKey) - يمنع مفاتيح لا نهائية
+     *  مختلفة عند أي تغيّر طفيف، مع بقاء دقة كافية (كل 5%) لإعادة رسم واضحة. */
+    private int zoomBucket() {
+        return Math.round(zoomPercent / 5f);
     }
 
     /**
@@ -497,7 +570,7 @@ public class PdfViewerActivity extends AppCompatActivity {
     private static final int PAGE_CARD_HORIZONTAL_CHROME_DP = 48;
 
     private int pageWidthPx() {
-        int w = hScroll.getWidth() * ZOOM_PERCENT[zoomIndex] / 100 - Ui.dp(this, PAGE_CARD_HORIZONTAL_CHROME_DP);
+        int w = Math.round(hScroll.getWidth() * zoomPercent / 100f) - Ui.dp(this, PAGE_CARD_HORIZONTAL_CHROME_DP);
         return Math.max(1, w);
     }
 
@@ -1106,7 +1179,7 @@ public class PdfViewerActivity extends AppCompatActivity {
                 lp.height = h;
                 holder.image.setLayoutParams(lp);
             }
-            Bitmap cached = cache.get(cacheKey(position, zoomIndex));
+            Bitmap cached = cache.get(cacheKey(position, zoomBucket()));
             if (cached != null) {
                 holder.image.setImageBitmap(cached);
             } else {
@@ -1117,7 +1190,7 @@ public class PdfViewerActivity extends AppCompatActivity {
 
         private void requestRender(PageHolder holder, int page, int w, int h) {
             final int gen = generation;
-            final int zoom = zoomIndex;
+            final int zoom = zoomBucket();
             renderExecutor.execute(() -> {
                 // الصفحة خرجت من الشاشة أو تغيّر التكبير قبل دورها: نتجاهلها
                 if (gen != generation || holder.page != page) return;

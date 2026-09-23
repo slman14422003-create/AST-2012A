@@ -22,15 +22,22 @@ import java.util.List;
  * ورسم ترجمته في نفس مكانه (استبدال حقيقي في مكانه) بدل تجميع كل نص
  * الصفحة في لوحة منفصلة أسفلها فوق كل شيء.
  *
- * الاعتماد على PDFTextStripper.writeString(...): PdfBox بينادي عليها مرة
- * واحدة لكل سطر مُجمَّع طبيعيًا من مواضع الحروف المتجاورة على نفس السطر
- * (بعد تفعيل setSortByPosition حتى يكون الترتيب مطابقًا لترتيب القراءة
- * البصري) - فمفيش حاجة لتجميع يدوي لحروف/كلمات منفصلة هنا.
+ * إصلاح مهم (سبب رئيسي للنص المتراكب/المتداخل في صفحات بتخطيط عمودين أو
+ * جداول): PDFTextStripper.writeString(...) بيجمّع "سطر" واحد بناءً على
+ * تقارب الـ Y بس، فلو عمودين مختلفين (أو خليتين متجاورتين في جدول) وقعوا
+ * على نفس ارتفاع السطر تقريبًا، PdfBox بيدمجهم في سطر واحد عريض يمتد عبر
+ * الصفحة كلها. صندوق إحاطة بهذا العرض كان بيتمسح بالكامل (يمسح عمودين مع
+ * بعض) وتُرسم فيه ترجمة نص العمودين مدموجًا في مكان واحد - وهو بالظبط
+ * الخلل الظاهر في لقطات الشاشة. الحل: نعيد تقسيم كل "سطر" راجع من PdfBox
+ * كل ما فيه فجوة أفقية كبيرة (أكبر من ~7 أضعاف حجم الخط) بين حرفين
+ * متتاليين - فجوة بهذا الاتساع مش مسافة كلمة عادية، غالبًا قفزة لعمود أو
+ * خلية جدول تانية.
  *
- * ملاحظة صادقة عن حدود الحل: صندوق الإحاطة تقريبي (مبني على خط الأساس
- * وارتفاع كل حرف من PdfBox، مش على القياس الحقيقي للحبر المرسوم)، فبيتضاف
- * هامش أمان بسيط حوله عند الاستخدام (TranslatedPdfBuilder) حتى يغطي
- * الأصل بالكامل قبل رسم الترجمة مكانه.
+ * إصلاح تاني: خطوط الأيقونات الرمزية (Icon Fonts) المستخدمة أحيانًا
+ * لرسم أيقونات زي الهلال/اللمبة في بعض الكتب - PdfBox بيستخرجها كنص عادي
+ * قصير غريب (زي "ti" أو "Ie")، فلو اتبعتت للترجمة وانمسح مكانها هتتحول
+ * لنص عشوائي فوق مكان الأيقونة. نتجاهل أي "سطر" أقل من 3 حروف حقيقية
+ * (Unicode Letter) وموش رقم/مدى صفحات، فيفضل مكانه زي ما هو في الخلفية.
  */
 final class PdfLineExtractor {
 
@@ -80,6 +87,13 @@ final class PdfLineExtractor {
         return lines;
     }
 
+    /** أقل عدد "حروف حقيقية" (Unicode Letter) حتى يُعتبر السطر نصًا فعليًا
+     *  بدل رمز أيقونة قصير - انظر الشرح أعلى الكلاس. */
+    private static final int MIN_REAL_LETTERS = 3;
+    /** أكبر فجوة أفقية بين حرفين متتاليين (كمضاعف لحجم الخط) قبل ما نعتبرها
+     *  قفزة لعمود/خلية تانية بدل مسافة كلمة عادية. */
+    private static final float MAX_GAP_FONT_MULTIPLIER = 7f;
+
     private static final class LineCollectingStripper extends PDFTextStripper {
         private final List<Line> out;
 
@@ -90,10 +104,36 @@ final class PdfLineExtractor {
 
         @Override
         protected void writeString(String text, List<TextPosition> textPositions) {
-            if (text == null || text.trim().isEmpty() || textPositions == null || textPositions.isEmpty()) return;
+            if (textPositions == null || textPositions.isEmpty()) return;
+            List<TextPosition> run = new ArrayList<>();
+            float prevEndX = Float.NaN;
+            float prevFontSize = 0f;
+            for (TextPosition tp : textPositions) {
+                float x = tp.getXDirAdj();
+                float fontSize = Math.max(1f, tp.getFontSizeInPt());
+                if (!Float.isNaN(prevEndX)) {
+                    float gap = x - prevEndX;
+                    if (gap > prevFontSize * MAX_GAP_FONT_MULTIPLIER) {
+                        flushRun(run);
+                        run = new ArrayList<>();
+                    }
+                }
+                run.add(tp);
+                float w = tp.getWidthDirAdj() > 0 ? tp.getWidthDirAdj() : tp.getWidth();
+                prevEndX = x + w;
+                prevFontSize = fontSize;
+            }
+            flushRun(run);
+        }
+
+        private void flushRun(List<TextPosition> run) {
+            if (run.isEmpty()) return;
+            StringBuilder sb = new StringBuilder();
             float minX = Float.MAX_VALUE, minY = Float.MAX_VALUE;
             float maxX = -Float.MAX_VALUE, maxY = -Float.MAX_VALUE;
-            for (TextPosition tp : textPositions) {
+            for (TextPosition tp : run) {
+                String u = tp.getUnicode();
+                if (u != null) sb.append(u);
                 float x = tp.getXDirAdj();
                 float y = tp.getYDirAdj();
                 float w = tp.getWidthDirAdj() > 0 ? tp.getWidthDirAdj() : tp.getWidth();
@@ -106,7 +146,21 @@ final class PdfLineExtractor {
                 maxY = Math.max(maxY, y + h * 0.25f);
             }
             if (minX == Float.MAX_VALUE) return;
+            String text = sb.toString();
+            if (!looksLikeRealText(text)) return;
             out.add(new Line(new RectF(minX, minY, maxX, maxY), text));
+        }
+
+        private static boolean looksLikeRealText(String s) {
+            String t = s.trim();
+            if (t.isEmpty()) return false;
+            // أرقام/تواريخ/مدى صفحات لوحدها مقبولة حتى لو قصيرة (146، 149-146).
+            if (t.matches("[0-9\\-\u2013.,:/%\\s]+")) return true;
+            int letters = 0;
+            for (int i = 0; i < t.length(); i++) {
+                if (Character.isLetter(t.charAt(i))) letters++;
+            }
+            return letters >= MIN_REAL_LETTERS;
         }
     }
 }

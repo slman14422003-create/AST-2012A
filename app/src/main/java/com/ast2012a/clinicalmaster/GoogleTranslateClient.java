@@ -4,6 +4,7 @@ import android.os.Handler;
 import android.os.Looper;
 
 import org.json.JSONArray;
+import org.json.JSONObject;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -39,6 +40,9 @@ import java.util.concurrent.Executors;
  *     حتى لا يعتمد كل شيء على مضيف واحد قد يكون محظورًا مؤقتًا.
  *  4) ذاكرة تخزين مؤقت صغيرة (نفس نص الصفحة + نفس اللغة الهدف) حتى لا
  *     تُعاد ترجمة نفس الصفحة مرتين لو رجع المستخدم إليها.
+ *  5) محرّك احتياطي مستقل (MyMemory، مجاني وبدون مفتاح) يُجرَّب تلقائيًا
+ *     لو جوجل فشلت في كل محاولاتها على المضيفين الاتنين - "أكثر من محرّك
+ *     ترجمة" بدل الاعتماد الكلي على جوجل (انظر translateWithMyMemory).
  */
 final class GoogleTranslateClient {
 
@@ -185,7 +189,31 @@ final class GoogleTranslateClient {
                 if (attempt < MAX_ATTEMPTS - 1) sleepQuietly(backoffDelay(attempt));
             }
         }
-        throw lastError != null ? lastError : new IOException("تعذّر الوصول لخدمة الترجمة.");
+        // جوجل رفضت/فشلت في كل المحاولات على المضيفين الاتنين - قبل ما
+        // نستسلم لهذه الدفعة بالكامل، نجرّب محرّك احتياطي مستقل (MyMemory)
+        // كخط دفاع تاني (طلب واحد للنص كله، مش سطر-بسطر - انظر تعليق
+        // translateWithMyMemory)، بدل توقف ترجمة الصفحة دي بالكامل لمجرد
+        // أن جوجل محظور/بطيء مؤقتًا.
+        try {
+            throttleBeforeRequest();
+            String blob = translateWithMyMemory(joined, targetLangCode);
+            return alignToBatch(splitByNewline(blob), batch);
+        } catch (IOException fallbackError) {
+            // فشل المحرّك الاحتياطي كمان - نرجّع خطأ جوجل الأصلي، هو الأوضح.
+            throw lastError != null ? lastError : fallbackError;
+        }
+    }
+
+    /** يقسّم ردًا نصيًا واحدًا من محرّك احتياطي (ما بيرجعش مصفوفة جمل زي
+     *  جوجل) على أسطر جديدة لمحاولة محاذاته مع عدد الأسطر الأصلي - محاذاة
+     *  أفضل الجهد فقط (best-effort)، وalignToBatch بعدها بترجع أي سطر ناقص
+     *  بنصه الأصلي بدل تخمين خاطئ. */
+    private static List<String> splitByNewline(String blob) {
+        if (blob == null) return new ArrayList<>();
+        String[] parts = blob.split("\n");
+        List<String> out = new ArrayList<>(parts.length);
+        for (String p : parts) out.add(p.trim());
+        return out;
     }
 
     private static String joinLines(List<String> lines) {
@@ -300,7 +328,68 @@ final class GoogleTranslateClient {
                 }
             }
         }
-        throw lastError != null ? lastError : new IOException("تعذّر الوصول لخدمة الترجمة.");
+        try {
+            throttleBeforeRequest();
+            return translateWithMyMemory(chunk, targetLangCode);
+        } catch (IOException fallbackError) {
+            throw lastError != null ? lastError : fallbackError;
+        }
+    }
+
+    /**
+     * محرّك ترجمة احتياطي مستقل (MyMemory - https://mymemory.translated.net،
+     * مجاني وبدون مفتاح API) يُستخدم فقط لو جوجل رفضت/فشلت الطلب في كل
+     * محاولاته - "أكثر من محرّك ترجمة" بدل الاعتماد الكامل على جوجل واللي
+     * ممكن يحظر IP مؤقتًا. ملاحظة صادقة: MyMemory (بخلاف واجهة جوجل غير
+     * الرسمية) بيرجّع النص المترجم ككتلة واحدة مش كمصفوفة جمل، فمحاذاته
+     * بالأسطر أضعف (splitByNewline أعلى - أفضل الجهد فقط)، وبيفترض أن لغة
+     * المصدر إنجليزية (langpair=en|<هدف>) لأنه بيحتاج كود لغة مصدر صريح
+     * (بعكس sl=auto في جوجل) - مناسب لمعظم كتب/شرائح المستخدم الإنجليزية،
+     * لكن ممكن يترجم غلط لو المصدر لغة تانية. حد الطول ~500 حرف لكل طلب في
+     * النسخة المجانية، فبنستخدمه هنا على نفس حجم الدفعة/الجزء المرسَل
+     * لجوجل أصلًا (MAX_CHUNK_CHARS = 1800 أكبر من الحد - قد يُقتطع الرد لو
+     * وصل الجزء لأقصى طول، حالة نادرة وأفضل من فشل كامل).
+     */
+    private static String translateWithMyMemory(String text, String targetLangCode) throws IOException {
+        HttpURLConnection conn = null;
+        try {
+            String encoded = URLEncoder.encode(text, "UTF-8");
+            String url = "https://api.mymemory.translated.net/get?q=" + encoded
+                    + "&langpair=en|" + targetLangCode;
+            conn = (HttpURLConnection) new URL(url).openConnection();
+            conn.setRequestMethod("GET");
+            conn.setConnectTimeout(TIMEOUT_MS);
+            conn.setReadTimeout(TIMEOUT_MS);
+            conn.setRequestProperty("User-Agent",
+                    "Mozilla/5.0 (Linux; Android) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Mobile Safari/537.36");
+
+            int status = conn.getResponseCode();
+            if (status == 429 || status >= 500) {
+                throw new IOException("رفض المحرّك الاحتياطي الطلب مؤقتًا (كود " + status + ").");
+            }
+            if (status < 200 || status >= 300) {
+                throw new IOException("طلب ترجمة احتياطي غير ناجح (كود " + status + ").");
+            }
+            String body = readStream(conn.getInputStream());
+            return parseMyMemoryText(body);
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+    }
+
+    /** شكل الرد: {"responseData":{"translatedText":"..."}, "responseStatus":200, ...} */
+    private static String parseMyMemoryText(String json) throws IOException {
+        try {
+            JSONObject root = new JSONObject(json);
+            JSONObject data = root.optJSONObject("responseData");
+            String text = data != null ? data.optString("translatedText", "") : "";
+            if (text.isEmpty()) throw new IOException("رد فاضٍ من المحرّك الاحتياطي.");
+            return text;
+        } catch (IOException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IOException("رد غير متوقع من المحرّك الاحتياطي.", e);
+        }
     }
 
     /** يضمن فاصلًا زمنيًا أدنى بين أي طلبين فعليين للخدمة - حتى لو من إعادة محاولة. */

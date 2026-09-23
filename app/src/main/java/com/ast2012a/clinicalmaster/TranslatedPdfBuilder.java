@@ -161,6 +161,12 @@ final class TranslatedPdfBuilder implements AutoCloseable {
         erase.setColor(fillColor);
         canvas.drawRect(box, erase);
 
+        // نصوص RTL مختلطة بأرقام/كلمات لاتينية (مدى صفحات "146-149" مثلًا)
+        // بترسم بترتيب مقلوب لو اتبعتت مباشرة لـ Canvas.drawText - نفس
+        // المشكلة اللي BidiText.fix() مصمّم لحلها أصلًا لعرض TextView،
+        // وبتنطبق هنا بالظبط لأن نفس محرّك النص (Minikin) بيرسم الاثنين.
+        String bidiSafe = rtl ? BidiText.fix(translated) : translated;
+
         TextPaint tp = new TextPaint(Paint.ANTI_ALIAS_FLAG);
         tp.setColor(textColor);
         float fontSize = Math.max(MIN_REPLACE_FONT_PT, box.height() * 0.72f);
@@ -168,12 +174,12 @@ final class TranslatedPdfBuilder implements AutoCloseable {
         // النص المترجم غالبًا أطول من الأصل (خصوصًا عند الترجمة للعربية) -
         // نقلّل حجم الخط تدريجيًا حتى يتّسع عرضه داخل نفس عرض صندوق السطر
         // الأصلي على سطر واحد، بدل ما يفيض خارج مكانه.
-        while (fontSize > MIN_REPLACE_FONT_PT && tp.measureText(translated) > box.width()) {
+        while (fontSize > MIN_REPLACE_FONT_PT && tp.measureText(bidiSafe) > box.width()) {
             fontSize -= FONT_STEP_PT;
             tp.setTextSize(fontSize);
         }
 
-        String toDraw = translated;
+        String toDraw = bidiSafe;
         if (tp.measureText(toDraw) > box.width()) {
             CharSequence ellipsized = TextUtils.ellipsize(toDraw, tp, box.width(), TextUtils.TruncateAt.END);
             toDraw = ellipsized.toString();
