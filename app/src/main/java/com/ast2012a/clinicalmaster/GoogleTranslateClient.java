@@ -50,6 +50,12 @@ final class GoogleTranslateClient {
         void onDone(String translated, Exception error);
     }
 
+    interface LinesCallback {
+        /** يُستدعى دائمًا على الخيط الرئيسي. عند النجاح translatedLines بنفس
+         *  عدد وترتيب الأسطر المُرسَلة تمامًا (انظر translateLinesAsync). */
+        void onDone(List<String> translatedLines, Exception error);
+    }
+
     private static final String[] HOSTS = {
             "https://translate.googleapis.com",
             "https://translate.google.com",
@@ -97,6 +103,161 @@ final class GoogleTranslateClient {
     private static void postResult(Callback callback, String result, Exception error) {
         if (callback == null) return;
         mainHandler.post(() -> callback.onDone(result, error));
+    }
+
+    /**
+     * يترجم قائمة أسطر مع الحفاظ على المحاذاة سطرًا بسطر (نفس عدد وترتيب
+     * lines بالضبط في النتيجة) - يُستخدم من TranslatedPdfBuilder/
+     * PdfViewerActivity حتى يُرسم كل سطر مترجم في مكان سطره الأصلي بالظبط،
+     * بدل ترجمة نص الصفحة ككتلة واحدة مدموجة في لوحة منفصلة.
+     *
+     * الأسطر بتتبعت في نداء واحد (أو دفعات قليلة لو تجاوز مجموع طولها
+     * الحد الأقصى) مفصولة بسطر جديد "\n" - هذه الواجهة غير الرسمية بترجع
+     * كل سطر كعنصر منفصل في مصفوفة الجمل عند وجود "\n" بين المدخلات (نفس
+     * الأسلوب المُستخدم في أدوات ترجمة ملفات الترجمة المصاحبة SRT)، فبنعتمد
+     * عليه للحصول على محاذاة 1:1. لو اختلف عدد العناصر الراجعة (نادر) -
+     * الأسطر اللي معندناش لها ترجمة مؤكدة المحاذاة بترجع بنصها الأصلي زي
+     * ما هو، بدل تخمين محاذاة ممكن تحط ترجمة في مكان سطر غلط.
+     */
+    static void translateLinesAsync(List<String> lines, String targetLangCode, LinesCallback callback) {
+        if (lines == null || lines.isEmpty()) {
+            postLinesResult(callback, new ArrayList<>(), null);
+            return;
+        }
+        final List<String> copy = new ArrayList<>(lines);
+        queue.execute(() -> {
+            try {
+                List<String> result = translateLinesBlocking(copy, targetLangCode);
+                postLinesResult(callback, result, null);
+            } catch (Exception e) {
+                postLinesResult(callback, null, e);
+            }
+        });
+    }
+
+    private static void postLinesResult(LinesCallback callback, List<String> result, Exception error) {
+        if (callback == null) return;
+        mainHandler.post(() -> callback.onDone(result, error));
+    }
+
+    /** يشتغل فقط على خيط الطابور الداخلي (queue). */
+    private static List<String> translateLinesBlocking(List<String> lines, String targetLangCode) throws IOException {
+        List<String> result = new ArrayList<>(lines.size());
+        for (List<String> batch : splitLinesIntoBatches(lines, MAX_CHUNK_CHARS)) {
+            result.addAll(translateBatchWithRetry(batch, targetLangCode));
+        }
+        return result;
+    }
+
+    /** يجمّع الأسطر في دفعات تحت الحد الأقصى لطول الطلب، بدون تقطيع سطر
+     *  واحد أبدًا بين دفعتين (لو سطر واحد أطول من الحد الأقصى، بيتبعت في
+     *  دفعة لوحده كما هو - حالة نادرة جدًا لسطر PDF عادي). */
+    private static List<List<String>> splitLinesIntoBatches(List<String> lines, int maxLen) {
+        List<List<String>> batches = new ArrayList<>();
+        List<String> current = new ArrayList<>();
+        int currentLen = 0;
+        for (String line : lines) {
+            String safe = line == null ? "" : line;
+            int addLen = safe.length() + 1;
+            if (!current.isEmpty() && currentLen + addLen > maxLen) {
+                batches.add(current);
+                current = new ArrayList<>();
+                currentLen = 0;
+            }
+            current.add(safe);
+            currentLen += addLen;
+        }
+        if (!current.isEmpty()) batches.add(current);
+        return batches;
+    }
+
+    private static List<String> translateBatchWithRetry(List<String> batch, String targetLangCode) throws IOException {
+        String joined = joinLines(batch);
+        IOException lastError = null;
+        for (int attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+            throttleBeforeRequest();
+            String host = HOSTS[attempt % HOSTS.length];
+            try {
+                List<String> sentences = translateBatchOnce(host, joined, targetLangCode);
+                return alignToBatch(sentences, batch);
+            } catch (IOException e) {
+                lastError = e;
+                if (attempt < MAX_ATTEMPTS - 1) sleepQuietly(backoffDelay(attempt));
+            }
+        }
+        throw lastError != null ? lastError : new IOException("تعذّر الوصول لخدمة الترجمة.");
+    }
+
+    private static String joinLines(List<String> lines) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < lines.size(); i++) {
+            if (i > 0) sb.append('\n');
+            sb.append(lines.get(i));
+        }
+        return sb.toString();
+    }
+
+    /** لو عدد الجمل الراجعة من الخدمة طابق عدد الأسطر المُرسَلة - محاذاة
+     *  مضمونة 1:1. لو اختلف (نادر، بيحصل لو دمجت الخدمة سطرين قصيرين
+     *  متتاليين في جملة واحدة) - الأسطر الزايدة اللي معندناش لها ترجمة
+     *  مؤكدة بترجع بنصها الأصلي زي ما هو، بدل تخمين محاذاة قد تكون خاطئة. */
+    private static List<String> alignToBatch(List<String> sentences, List<String> originalBatch) {
+        List<String> aligned = new ArrayList<>(originalBatch.size());
+        for (int i = 0; i < originalBatch.size(); i++) {
+            if (i < sentences.size()) {
+                aligned.add(sentences.get(i));
+            } else {
+                aligned.add(originalBatch.get(i));
+            }
+        }
+        return aligned;
+    }
+
+    private static List<String> translateBatchOnce(String host, String joinedText, String targetLangCode) throws IOException {
+        HttpURLConnection conn = null;
+        try {
+            String encoded = URLEncoder.encode(joinedText, "UTF-8");
+            String url = host + "/translate_a/single?client=gtx&sl=auto&tl="
+                    + targetLangCode + "&dt=t&q=" + encoded;
+            conn = (HttpURLConnection) new URL(url).openConnection();
+            conn.setRequestMethod("GET");
+            conn.setConnectTimeout(TIMEOUT_MS);
+            conn.setReadTimeout(TIMEOUT_MS);
+            conn.setRequestProperty("User-Agent",
+                    "Mozilla/5.0 (Linux; Android) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Mobile Safari/537.36");
+
+            int status = conn.getResponseCode();
+            if (status == 429 || status >= 500) {
+                throw new IOException("رفضت خدمة الترجمة الطلب مؤقتًا (كود " + status + ").");
+            }
+            if (status < 200 || status >= 300) {
+                throw new IOException("طلب ترجمة غير ناجح (كود " + status + ").");
+            }
+
+            String body = readStream(conn.getInputStream());
+            return parseTranslatedSentences(body);
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+    }
+
+    /** نفس شكل رد translate_a/single الموضّح أعلى parseTranslatedText، لكن
+     *  هنا بنرجّع كل "جملة" كعنصر منفصل في القائمة بدل دمجهم في نص واحد -
+     *  هو ده اللي بيدّينا محاذاة سطر-لسطر مع المدخلات المفصولة بـ"\n". */
+    private static List<String> parseTranslatedSentences(String json) throws IOException {
+        try {
+            JSONArray root = new JSONArray(json);
+            JSONArray sentences = root.getJSONArray(0);
+            List<String> out = new ArrayList<>();
+            for (int i = 0; i < sentences.length(); i++) {
+                JSONArray sentence = sentences.optJSONArray(i);
+                if (sentence == null || sentence.isNull(0)) continue;
+                out.add(sentence.getString(0).replace("\n", "").trim());
+            }
+            return out;
+        } catch (Exception e) {
+            throw new IOException("رد غير متوقع من خدمة الترجمة.", e);
+        }
     }
 
     /** يشتغل فقط على خيط الطابور الداخلي (queue) - لا يُستدعى مباشرة من الخارج. */

@@ -11,6 +11,7 @@ import android.graphics.Color;
 import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Paint;
+import android.graphics.drawable.ColorDrawable;
 import android.graphics.pdf.PdfRenderer;
 import android.net.Uri;
 import android.os.Bundle;
@@ -23,12 +24,13 @@ import android.util.LruCache;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.Menu;
-import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.HorizontalScrollView;
+import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.PopupWindow;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -37,7 +39,6 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.appcompat.view.menu.MenuBuilder;
 import androidx.core.content.FileProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -51,6 +52,8 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -87,6 +90,8 @@ public class PdfViewerActivity extends AppCompatActivity {
     private TextView loadingText;
     private View emptyBox;
     private TextView pageIndicator;
+    private ImageButton zoomOutBtn;
+    private ImageButton zoomInBtn;
 
     private final ExecutorService loadExecutor = Executors.newSingleThreadExecutor();
     private final ExecutorService renderExecutor = Executors.newSingleThreadExecutor();
@@ -147,12 +152,22 @@ public class PdfViewerActivity extends AppCompatActivity {
         MaterialToolbar toolbar = findViewById(R.id.toolbar);
         toolbar.setNavigationOnClickListener(v -> finish());
         toolbar.inflateMenu(R.menu.menu_pdf_viewer);
-        // إظهار أيقونات القائمة الإضافية (مخفية افتراضياً في قوائم Toolbar/Popup).
+        // القائمتان مبنيتان بالكامل كـ actionLayout مخصّص (بِسمة التكبير/
+        // التصغير وزر "المزيد") بدل عناصر قائمة Toolbar الافتراضية، فمفيش
+        // داعي لـ onMenuItemClickListener هنا - كل زر بيوصّل حدثه مباشرة.
         Menu menu = toolbar.getMenu();
-        if (menu instanceof MenuBuilder) {
-            ((MenuBuilder) menu).setOptionalIconsVisible(true);
+        View zoomAction = menu.findItem(R.id.action_pdf_zoom).getActionView();
+        if (zoomAction != null) {
+            zoomOutBtn = zoomAction.findViewById(R.id.btn_pdf_zoom_out);
+            zoomInBtn = zoomAction.findViewById(R.id.btn_pdf_zoom_in);
+            if (zoomOutBtn != null) zoomOutBtn.setOnClickListener(v -> changeZoom(-1));
+            if (zoomInBtn != null) zoomInBtn.setOnClickListener(v -> changeZoom(+1));
+            updateZoomButtonsState();
         }
-        toolbar.setOnMenuItemClickListener(this::onMenuItem);
+        View moreAction = menu.findItem(R.id.action_pdf_more).getActionView();
+        if (moreAction != null) {
+            moreAction.setOnClickListener(this::showMoreMenu);
+        }
 
         titleView = findViewById(R.id.pdf_title);
         subtitleView = findViewById(R.id.pdf_subtitle);
@@ -270,49 +285,73 @@ public class PdfViewerActivity extends AppCompatActivity {
 
     // ------------------------------------------------------------------ القائمة
 
-    private boolean onMenuItem(MenuItem item) {
-        int id = item.getItemId();
-        if (id == R.id.action_pdf_zoom_in) {
-            changeZoom(+1);
-            return true;
-        } else if (id == R.id.action_pdf_zoom_out) {
-            changeZoom(-1);
-            return true;
-        } else if (id == R.id.action_pdf_goto) {
-            showGoToPageDialog();
-            return true;
-        } else if (id == R.id.action_pdf_translate) {
-            showTranslateLanguageDialog();
-            return true;
-        } else if (id == R.id.action_pdf_translate_full) {
-            showFullTranslateLanguageDialog();
-            return true;
-        } else if (id == R.id.action_pdf_save_copy) {
-            saveCurrentFileCopy();
-            return true;
-        } else if (id == R.id.action_pdf_open_external) {
-            openExternally();
-            return true;
-        } else if (id == R.id.action_pdf_pick_another) {
-            launchPicker();
-            return true;
-        } else if (id == R.id.action_pdf_night_pages) {
-            nightPagesUserOverride = true;
-            nightPagesEnabled = !nightPagesEnabled;
-            refreshRenderedPages();
-            Toast.makeText(this, nightPagesEnabled ? "تم تفعيل الوضع الليلي للصفحات" : "تم إيقاف الوضع الليلي للصفحات",
-                    Toast.LENGTH_SHORT).show();
-            return true;
-        }
-        return false;
-    }
-
     private void changeZoom(int delta) {
         if (ratios.length == 0) return;
         int next = zoomIndex + delta;
         if (next < 0 || next >= ZOOM_PERCENT.length) return;
         zoomIndex = next;
         applyZoom();
+        updateZoomButtonsState();
+    }
+
+    /** يعكس حدود التكبير/التصغير (أقصى/أدنى نسبة) بإطفاء الزر المعني بدل
+     *  تركه يبدو فعّالًا وهو بلا تأثير. */
+    private void updateZoomButtonsState() {
+        if (zoomOutBtn != null) {
+            boolean enabled = zoomIndex > 0;
+            zoomOutBtn.setEnabled(enabled);
+            zoomOutBtn.setAlpha(enabled ? 1f : 0.35f);
+        }
+        if (zoomInBtn != null) {
+            boolean enabled = zoomIndex < ZOOM_PERCENT.length - 1;
+            zoomInBtn.setEnabled(enabled);
+            zoomInBtn.setAlpha(enabled ? 1f : 0.35f);
+        }
+    }
+
+    /** يعرض قائمة "المزيد" كـ PopupWindow مخصّص (popup_pdf_more_menu) بنفس
+     *  أنماط صفوف الإعدادات (Settings.Row) بدل قائمة Toolbar الافتراضية -
+     *  انظر تعليق menu_pdf_viewer.xml. */
+    private void showMoreMenu(View anchor) {
+        View content = LayoutInflater.from(this).inflate(R.layout.popup_pdf_more_menu, null);
+
+        TextView nightLabel = content.findViewById(R.id.txt_pdf_night_pages);
+        if (nightLabel != null) {
+            nightLabel.setText(nightPagesEnabled ? "إيقاف الوضع الليلي للصفحات" : "تفعيل الوضع الليلي للصفحات");
+        }
+
+        PopupWindow popup = new PopupWindow(content, ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT, true);
+        popup.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        popup.setOutsideTouchable(true);
+        popup.setElevation(Ui.dp(this, 8));
+
+        bindMoreMenuRow(content, popup, R.id.row_pdf_translate_page, this::showTranslateLanguageDialog);
+        bindMoreMenuRow(content, popup, R.id.row_pdf_translate_full, this::showFullTranslateLanguageDialog);
+        bindMoreMenuRow(content, popup, R.id.row_pdf_save_copy, this::saveCurrentFileCopy);
+        bindMoreMenuRow(content, popup, R.id.row_pdf_night_pages, () -> {
+            nightPagesUserOverride = true;
+            nightPagesEnabled = !nightPagesEnabled;
+            refreshRenderedPages();
+            Toast.makeText(this, nightPagesEnabled ? "تم تفعيل الوضع الليلي للصفحات" : "تم إيقاف الوضع الليلي للصفحات",
+                    Toast.LENGTH_SHORT).show();
+        });
+        bindMoreMenuRow(content, popup, R.id.row_pdf_goto, this::showGoToPageDialog);
+        bindMoreMenuRow(content, popup, R.id.row_pdf_open_external, this::openExternally);
+        bindMoreMenuRow(content, popup, R.id.row_pdf_pick_another, this::launchPicker);
+
+        content.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
+        int xOff = anchor.getWidth() - content.getMeasuredWidth();
+        popup.showAsDropDown(anchor, xOff, Ui.dp(this, 4));
+    }
+
+    private void bindMoreMenuRow(View root, PopupWindow popup, int rowId, Runnable action) {
+        View row = root.findViewById(rowId);
+        if (row == null) return;
+        row.setOnClickListener(v -> {
+            popup.dismiss();
+            action.run();
+        });
     }
 
     private void openExternally() {
@@ -798,13 +837,19 @@ public class PdfViewerActivity extends AppCompatActivity {
             boolean rtlOut = "ar".equals(targetLangCode);
             File outFile;
             // إصلاح مهم (طلب المستخدم + خطر تعطّل بالذاكرة): النسخة القديمة
-            // كانت بتستخرج النص بس وتبني صفحة نص بديلة بالكامل، فيضيع تصميم/
-            // شكل الصفحة الأصلية (صور، ألوان، تخطيط) تمامًا حتى لو نجحت
-            // الترجمة. دلوقتي كل صفحة أصلية بترتسم كخلفية (زي PdfRenderer في
-            // القارئ العادي) بأبعادها الحقيقية وتتضاف فورًا (streaming) لملف
-            // الترجمة الناتج بدل ما تتجمّع كل صور الصفحات في الذاكرة أولًا -
-            // كان ده هيسبب تعطّل (OutOfMemoryError) على ملفات كبيرة زي كتب
-            // العلاج الطبيعي (100+ صفحة). صفحة اتفشلت ترجمتها تحديدًا هتفضل
+            // كانت بتستخرج النص بس وتبني لوحة ترجمة منفصلة فوق الصفحة (أو
+            // صفحة نص بديلة بالكامل في نسخة أقدم)، فتصميم الصفحة الأصلية
+            // (صور، ألوان، تخطيط) يفضل زي ما هو لكن الترجمة نفسها بتظهر في
+            // لوحة مجمّعة بدل مكان كل سطر أصلي بالظبط. دلوقتي: كل صفحة أصلية
+            // بترتسم كخلفية (زي PdfRenderer في القارئ العادي) بأبعادها
+            // الحقيقية، وكل سطر نص بيتستخرج بصندوق إحاطة (PdfLineExtractor)
+            // ويتترجم مع الحفاظ على محاذاته سطرًا-بسطر (GoogleTranslateClient
+            // .translateLinesAsync)، فـ TranslatedPdfBuilder يقدر يمسح كل سطر
+            // أصلي ويرسم ترجمته في نفس مكانه بالضبط - استبدال حقيقي بدل لوحة
+            // منفصلة. الصفحة بتتضاف فورًا (streaming) لملف الترجمة الناتج
+            // بدل ما تتجمّع كل صور الصفحات في الذاكرة أولًا - كان ده هيسبب
+            // تعطّل (OutOfMemoryError) على ملفات كبيرة زي كتب العلاج
+            // الطبيعي (100+ صفحة). صفحة اتفشل استخراج/ترجمة نصها هتفضل
             // خلفيتها زي ما هي بدون أي إضافة، بدل ما توقف ترجمة باقي الملف.
             try (TranslatedPdfBuilder builder = new TranslatedPdfBuilder(base, targetLangLabel, total, rtlOut)) {
                 for (int i = 0; i < total; i++) {
@@ -820,20 +865,22 @@ public class PdfViewerActivity extends AppCompatActivity {
                     float pageHeightPt = pointSize != null ? pointSize[1] : 0f;
 
                     updateFullTranslateProgress(pageNum, total, "جارٍ استخراج نص الصفحة " + pageNum + " من " + total);
-                    String extracted = extractPageText(sourceFile, i);
-                    String translated = null;
-                    if (extracted != null && !extracted.trim().isEmpty()) {
+                    List<PdfLineExtractor.Line> lines = PdfLineExtractor.extractLines(getApplicationContext(), sourceFile, i);
+                    List<String> translatedLines = null;
+                    if (!lines.isEmpty()) {
                         if (fullTranslateCancelled) {
                             finishFullTranslateCancelled();
                             return;
                         }
                         updateFullTranslateProgress(pageNum, total, "جارٍ ترجمة الصفحة " + pageNum + " من " + total);
+                        List<String> originals = new ArrayList<>(lines.size());
+                        for (PdfLineExtractor.Line ln : lines) originals.add(ln.text);
                         // لو فشلت ترجمة هذه الصفحة تحديدًا (بترجع null) نسيبها
                         // null هنا - يعني addPage هتسيب خلفية هذه الصفحة "متل
                         // ما هي" بدون أي إضافة.
-                        translated = translateBlockingSync(extracted, targetLangCode);
+                        translatedLines = translateLinesBlockingSync(originals, targetLangCode);
                     }
-                    builder.addPage(pageNum, background, pageWidthPt, pageHeightPt, translated);
+                    builder.addPage(pageNum, background, pageWidthPt, pageHeightPt, lines, translatedLines);
                 }
                 if (fullTranslateCancelled) {
                     finishFullTranslateCancelled();
@@ -891,6 +938,24 @@ public class PdfViewerActivity extends AppCompatActivity {
         final String[] holder = {null};
         CountDownLatch latch = new CountDownLatch(1);
         GoogleTranslateClient.translateAsync(text, targetLangCode, (translated, error) -> {
+            holder[0] = (error == null) ? translated : null;
+            latch.countDown();
+        });
+        try {
+            latch.await();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return holder[0];
+    }
+
+    /** نفس فكرة translateBlockingSync لكن لقائمة أسطر مع الحفاظ على محاذاتها
+     *  (GoogleTranslateClient.translateLinesAsync) - تُستخدم في بناء ملف
+     *  الترجمة الكامل حتى يُستبدل كل سطر بترجمته في مكانه بالضبط. */
+    private List<String> translateLinesBlockingSync(List<String> lines, String targetLangCode) {
+        final List<String>[] holder = new List[]{null};
+        CountDownLatch latch = new CountDownLatch(1);
+        GoogleTranslateClient.translateLinesAsync(lines, targetLangCode, (translated, error) -> {
             holder[0] = (error == null) ? translated : null;
             latch.countDown();
         });
