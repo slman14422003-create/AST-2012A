@@ -20,14 +20,32 @@ import java.util.Locale;
  *   الأصلية (قاعدة بيانات الجهاز أولًا، ثم Physiopedia كخلفية).
  *
  * تحديث v3: اتشالت ويكيبيديا نهائيًا من مسار البحث - المصدر الخارجي
- * الوحيد المسموح بيه دلوقتي هو Physiopedia (مرجع علاج طبيعي متخصص فقط)،
- * وبدون أي بحث احتياطي عام خارج نطاق العلاج الطبيعي لو مفيش نتيجة منه.
+ * الوحيد المسموح بيه كان Physiopedia (مرجع علاج طبيعي متخصص فقط)، بدون
+ * أي بحث احتياطي عام خارج نطاق العلاج الطبيعي لو مفيش نتيجة منه.
+ * [رجعت في v7 تحت - راجع الشرح هناك، الفكرة اختلفت من "بديل" لـ"إضافة".]
  *
  * تحديث v4 (ذاكرة المحادثة): answer() بقى بياخد كمان سجل آخر رسائل نفس
  * الجلسة (List&lt;ChatMessage&gt;)، بيتحول لسياق نصي (AiPrompts.
  * buildHistoryContext) ويترفق مع كل استدعاء (تصنيف، دردشة، أو تأريض)
  * عشان النموذج يفهم إشارات مختصرة زي "بدي مريض" بالرجوع لآخر ما قيل في
  * نفس المحادثة، بدل ما يعامل كل رسالة كأنها معزولة تمامًا.
+ *
+ * تحديث v7 (بحث من أكتر من مصدر موثوق + تركيب/تحليل بدل نقل مصدر واحد):
+ * الاعتماد على مصدر خارجي واحد بس (Physiopedia) كان بيعني إن أي نقص أو
+ * قصور في تغطيته لموضوع معيّن يفضل بلا أي تصحيح أو مقارنة. دلوقتي
+ * runGrounded بتستدعي Physiopedia وWikipediaClient مع بعض (مش واحد بديل
+ * التاني) لما فيه حاجة لتأريض خارجي - Physiopedia يفضل المرجع الأساسي
+ * لأي بروتوكول/تفصيل علاجي متخصص (مراجَع من أخصائيين)، وويكيبيديا مصدر
+ * ثانٍ مستقل مفيد خصوصًا للخلفية الطبية/التشريحية العامة. الاتنين
+ * بيترفقوا لتعليمات النموذج مُعلَّمين بوضوح "مصدر خارجي 1" و"مصدر خارجي
+ * 2"، وAiPrompts (MULTI_SOURCE_SYNTHESIS_GUARDRAIL) بيوجب على النموذج
+ * فعليًا يقارن بينهم - يذكر الاتفاق، ويصرّح صراحة بأي تعارض بدل ما يدمجه
+ * بصمت في إجابة واحدة متجانسة كأن مفيش خلاف، ويرجّح Physiopedia عند
+ * تعارض في تفصيل علاجي متخصص لأنه المرجع الأدق لمجاله. شارة المصدر
+ * المعروضة للمستخدم (sourceLabel) بقت كمان بتذكر الاتنين مع بعض لو
+ * الاتنين رجعوا نتيجة، مش مصدر واحد بس. لو مصدر واحد فشل (شبكة، مفيش
+ * نتيجة، الموقع مش متاح) بيرجع null بأمان زي ما كان دايمًا، والتاني يكمل
+ * لوحده بدون ما يوقف الرد.
  */
 public final class AiOrchestrator {
 
@@ -665,10 +683,18 @@ public final class AiOrchestrator {
         // موثقة من قاعدة بيانات الجهاز تُستخدم كخلفية للنموذج بدل إجابة مباشرة.
         DataManager.GroundingResult grounding = DataManager.buildGroundingContext(ctx, text, 3);
 
-        // المرحلة الثانية: تأريض خارجي - Physiopedia حصرًا (مرجع متخصص في
-        // العلاج الطبيعي فقط، مراجَع من أخصائيين). لا يوجد أي بحث احتياطي
-        // عام (زي ويكيبيديا أو أي محرك بحث آخر) لو مفيش نتيجة منه - بدل
-        // كده بيكمل بمعرفة النموذج العامة فقط، موضّح صراحة في شارة المصدر.
+        // المرحلة الثانية: تأريض خارجي من أكثر من مصدر موثوق مستقل - مش
+        // مصدر واحد بس. Physiopedia (مرجع متخصص في العلاج الطبيعي، مراجَع
+        // من أخصائيين) يبقى المصدر الأساسي لأي بروتوكول أو تفصيل علاجي
+        // متخصص، وبجانبه ويكيبيديا (موسوعة عامة موثوقة، عربي أولًا وإنجليزي
+        // كبديل) كمصدر ثانٍ مستقل - مفيد خصوصًا للخلفية التشريحية/الطبية
+        // العامة اللي Physiopedia ممكن ما يغطيهاش بالتفصيل. الاتنين بيتنفذوا
+        // دايمًا مع بعض (مش واحد بديل التاني) عشان النموذج يقدر فعليًا
+        // يقارن بينهم ويركّب إجابة من أكتر من مصدر بدل الاعتماد على واحد
+        // بس - وده تحديدًا اللي بيوجهه AiPrompts (قاعدة التركيب من مصادر
+        // متعددة) بدل مجرد نقل مصدر واحد كحقيقة نهائية. لو مصدر فشل أو
+        // مالوش نتيجة، بيرجع null بأمان والتاني يكمل لوحده - بدون ما توقف
+        // الرد كله لو مصدر واحد مش متاح مؤقتًا.
         //
         // إصلاح مهم (v5): Physiopedia موقع إنجليزي بالكامل، وكان البحث
         // بيتم دايمًا بنص سؤال المستخدم كما هو (غالبًا عربي) - فكان بيرجع
@@ -677,9 +703,14 @@ public final class AiOrchestrator {
         // جاء من المصنّف (AiClient.classifyIntent + AiPrompts.ROUTER_PROMPT)
         // مترجم من جوهر السؤال - لو موجود بنستخدمه، وإلا نرجع لنص السؤال
         // الأصلي زي السلوك القديم (بدل ما نمنع البحث تمامًا لو مفيش مصطلح).
+        // ويكيبيديا (بعكس Physiopedia) بتدعم البحث العربي مباشرة، فبيتاح لها
+        // نص السؤال الأصلي بالعربي أولًا (وبترجع تلقائيًا للإنجليزي جوه
+        // WikipediaClient نفسه لو مفيش نتيجة عربية) بدل المصطلح الإنجليزي
+        // المترجَم المخصص لـPhysiopedia.
         String physioQuery = (physioTermHint != null && !physioTermHint.trim().isEmpty())
                 ? physioTermHint.trim() : text;
         PhysiopediaClient.Result physio = PhysiopediaClient.search(physioQuery);
+        WikipediaClient.Result wiki = WikipediaClient.search(text);
 
         StringBuilder extraContext = new StringBuilder();
         if (grounding != null) {
@@ -721,9 +752,18 @@ public final class AiOrchestrator {
             }
         }
 
+        // المصدرين الخارجيين بيترفقوا مع بعض (مش واحد بديل التاني) لما
+        // الاتنين يرجعوا نتيجة - عشان النموذج يشوفهم كمصدرين مستقلين
+        // يقدر يقارن بينهم فعليًا (اتفاق أو تعارض) بدل ما يوصله مصدر واحد
+        // بس يعامله كحقيقة نهائية بلا تدقيق.
         if (physio != null) {
-            extraContext.append("خلفية معرفية متخصصة من Physiopedia (مرجع علاج طبيعي، مقالة: ")
-                    .append(physio.title).append("):\n").append(physio.extract);
+            extraContext.append("مصدر خارجي 1 - Physiopedia (مرجع متخصص في العلاج الطبيعي، مقالة: ")
+                    .append(physio.title).append("):\n").append(physio.extract).append("\n\n");
+        }
+        if (wiki != null) {
+            extraContext.append("مصدر خارجي 2 - ويكيبيديا (موسوعة عامة، ")
+                    .append("ar".equals(wiki.lang) ? "نسخة عربية" : "نسخة إنجليزية")
+                    .append(", مقالة: ").append(wiki.title).append("):\n").append(wiki.extract);
         }
 
         final String systemPromptToUse = AiPrompts.buildSystemPrompt(ctx,
@@ -740,23 +780,33 @@ public final class AiOrchestrator {
             @Override
             public void onSuccess(String reply) {
                 String sourceLabel;
-                String sourceUrl = null;
-                String externalTitle = physio != null ? physio.title : null;
-                String externalUrl = physio != null ? physio.sourceUrl : null;
-                String externalName = "Physiopedia";
+                // شارة المصدر الخارجي: الرابط الظاهر للمستخدم بيفضل رابط
+                // Physiopedia (الأدق سريريًا) لو موجود، وإلا رابط ويكيبيديا -
+                // لكن النص الوصفي (externalDesc) بيذكر الاتنين مع بعض لو
+                // الاتنين رجعوا نتيجة، عشان يبان للمستخدم إن الرد اتبنى
+                // فعليًا على مقارنة مصدرين مستقلين مش مصدر واحد.
+                String sourceUrl = physio != null ? physio.sourceUrl : (wiki != null ? wiki.sourceUrl : null);
+                String externalDesc;
+                if (physio != null && wiki != null) {
+                    externalDesc = "Physiopedia (" + physio.title + ") + ويكيبيديا (" + wiki.title + ")";
+                } else if (physio != null) {
+                    externalDesc = "Physiopedia: " + physio.title;
+                } else if (wiki != null) {
+                    externalDesc = "ويكيبيديا: " + wiki.title;
+                } else {
+                    externalDesc = null;
+                }
                 String cloudSuffix = cloudDocsContext != null ? " + مستندات سحابية للمستخدم" : "";
-                if (groundedCount > 0 && externalTitle != null) {
-                    sourceLabel = "إجابة تكميلية عامة (لا يوجد تطابق مباشر) - بروتوكولات قريبة (" + groundedCount + ") + " + externalName + ": " + externalTitle + cloudSuffix;
-                    sourceUrl = externalUrl;
+                if (groundedCount > 0 && externalDesc != null) {
+                    sourceLabel = "إجابة تكميلية عامة (لا يوجد تطابق مباشر) - بروتوكولات قريبة (" + groundedCount + ") + " + externalDesc + cloudSuffix;
                 } else if (groundedCount > 0) {
                     sourceLabel = "إجابة تكميلية عامة - أقرب بروتوكولات في القاعدة (" + groundedCount + ")، بدون تطابق مباشر مؤكد" + cloudSuffix;
-                } else if (externalTitle != null) {
-                    sourceLabel = "إجابة عامة من " + externalName + " (خارج قاعدة بيانات الجهاز): " + externalTitle + cloudSuffix;
-                    sourceUrl = externalUrl;
+                } else if (externalDesc != null) {
+                    sourceLabel = "إجابة عامة من مصادر خارجية (خارج قاعدة بيانات الجهاز) - " + externalDesc + cloudSuffix;
                 } else if (cloudDocsContext != null) {
-                    sourceLabel = "إجابة عامة بالاستناد لمستندات سحابية رفعها المستخدم (بدون تطابق في قاعدة الجهاز أو Physiopedia)";
+                    sourceLabel = "إجابة عامة بالاستناد لمستندات سحابية رفعها المستخدم (بدون تطابق في قاعدة الجهاز أو المصادر الخارجية)";
                 } else {
-                    sourceLabel = "إجابة عامة من معرفة النموذج (بدون مصدر موثّق من الجهاز أو Physiopedia)";
+                    sourceLabel = "إجابة عامة من معرفة النموذج (بدون مصدر موثّق من الجهاز أو المصادر الخارجية)";
                 }
                 callback.onGroundedReply(reply, sourceLabel, sourceUrl);
             }
