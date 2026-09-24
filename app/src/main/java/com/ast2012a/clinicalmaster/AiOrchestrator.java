@@ -522,13 +522,32 @@ public final class AiOrchestrator {
         String[] sentences = line.split("(?<=[.!؟?])\\s+");
         if (sentences.length <= 1) return line;
         StringBuilder kept = new StringBuilder();
+        // إصلاح مهم (جملتين متطابقتين حرفيًا جنب بعض في نفس السطر، زي بلاغ
+        // فعلي وصل: "...يؤدي إلى تقليل الألم والتهاب. ...يؤدي إلى تقليل
+        // الألم والتهاب." اتكررت مرتين متتاليتين في نفس السطر): normAccumulated
+        // فوق ده لقطة ثابتة من الأسطر *السابقة* بس (اتاخدت قبل ما نبدأ نعالج
+        // السطر الحالي - راجع finalizeReply/stripAlreadyCoveredContent اللي
+        // بيستدعوا الدالة دي). يعني لو نفس السطر فيه جملتين متطابقتين، كل
+        // جملة كانت بتتفحص لوحدها مقابل normAccumulated الثابت ده بس - مش
+        // مقابل الجملة الأولى اللي اتقررت فعلًا إنها تتحفظ في kept قبل شوية
+        // - فالجملة التانية المطابقة كانت بتعدي الفحص وتتضاف تاني كتكرار
+        // حرفي جوه نفس السطر بالظبط. الإصلاح: نضيف كل جملة نحتفظ بيها في
+        // kept لمجموعة seenInThisLine كمان أول ما نقررها، ونفحص كل جملة
+        // جديدة مقابل الاتنين (normAccumulated من الأسطر السابقة + seenInThisLine
+        // من نفس السطر) مش مقابل واحد بس.
+        String seenInThisLine = "";
         for (String sentence : sentences) {
             String normSentence = normalizeForCompare(sentence);
-            if (normSentence.length() >= MIN_DUPLICATE_UNIT_LEN && normAccumulated.contains(normSentence)) {
+            boolean dupFromEarlierLines = normSentence.length() >= MIN_DUPLICATE_UNIT_LEN
+                    && normAccumulated.contains(normSentence);
+            boolean dupWithinSameLine = normSentence.length() >= MIN_DUPLICATE_UNIT_LEN
+                    && seenInThisLine.contains(normSentence);
+            if (dupFromEarlierLines || dupWithinSameLine) {
                 continue;
             }
             if (kept.length() > 0) kept.append(' ');
             kept.append(sentence);
+            seenInThisLine = seenInThisLine.isEmpty() ? normSentence : seenInThisLine + " " + normSentence;
         }
         return kept.toString();
     }
