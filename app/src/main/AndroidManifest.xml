@@ -25,8 +25,16 @@
             </intent-filter>
         </activity>
 
+        <!-- configChanges: شاشة البحث الرئيسي فيها "اسأل Phizyo AI" السريع، وممكن
+             يكون في طلب ذكاء اصطناعي طويل شغّال (بما فيه جولات استكمال تلقائي
+             متعددة قد تاخد دقايق). لو الجهاز اتلف (rotation) من غير configChanges،
+             أندرويد بيهدم الشاشة ويعيد إنشاءها من الصفر، وonDestroy بينفذ
+             executor.shutdownNow() اللي بيقاطع نداء الشبكة الجاري فورًا - فيوصل
+             للمستخدم رد ناقص أو من غير رد خالص رغم إن كل منطق منع القطع
+             (AiOrchestrator.sendWithAutoContinue) كان شغال صح. -->
         <activity
             android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize"
             android:exported="false"
             android:label="@string/app_name"
             android:windowSoftInputMode="adjustResize" />
@@ -45,7 +53,10 @@
         <activity android:name=".TreatmentProgramDetailActivity" android:exported="false" />
         <activity android:name=".SettingsActivity" android:exported="false" />
         <activity android:name=".PrivacyPolicyActivity" android:exported="false" />
-        <activity android:name=".AiAssistantActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
+        <!-- configChanges: نفس سبب MainActivity أعلاه بالظبط - شاشة المحادثة الكاملة
+             هي المكان الأكتر عرضة للمشكلة (ردود إكلينيكية طويلة بجولات استكمال
+             متعددة ممكن تاخد وقت، والمستخدم أقرب لتدوير الجهاز أثناء الانتظار). -->
+        <activity android:name=".AiAssistantActivity" android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".CloudStorageActivity" android:exported="false" />
         <activity android:name=".CrashActivity" android:exported="false" />
 
