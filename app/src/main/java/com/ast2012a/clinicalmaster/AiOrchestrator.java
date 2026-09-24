@@ -766,54 +766,166 @@ public final class AiOrchestrator {
                     .append(", مقالة: ").append(wiki.title).append("):\n").append(wiki.extract);
         }
 
-        final String systemPromptToUse = AiPrompts.buildSystemPrompt(ctx,
-                extraContext.length() > 0 ? extraContext.toString() : null, historyContext);
+        // بداية بايبلاين الأدوات المتتالية (v8): المواد الخام اللي جُمعت
+        // فوق (أداة البحث) بتتحول دلوقتي لسلسلة نداءات نموذج منفصلة -
+        // تجميع ثم تحليل ثم تطابق ثم صياغة نهائية - بدل نداء واحد يحاول
+        // يعمل الأربعة مع بعض. راجع التعليق الكبير فوق ROUTER_PROMPT في
+        // AiPrompts.java لشرح كامل لسبب التقسيم ده.
+        final String rawSourcesBlock = extraContext.length() > 0 ? extraContext.toString() : null;
         final int groundedCount = grounding != null ? grounding.caseCount : 0;
-
-        if (stages != null) stages.onThinking();
-
-        // فلتر اختيار النموذج: المسار الإكلينيكي (تأريض + توصيات/موانع
-        // استطباب فعلية) بيستخدم دايمًا أقوى نموذج متاح لتقليل احتمال
-        // الهلوسة في سياق طبي حسّاس (راجع AiModelSelector.forClinical).
+        final String cloudSuffixFinal = cloudDocsContext != null ? " + مستندات سحابية للمستخدم" : "";
         String clinicalModel = AiModelSelector.forClinical();
-        sendWithAutoContinue(systemPromptToUse, text, text, "", clinicalModel, 0, new AiClient.Callback() {
+
+        // شارة المصدر النهائية بتتحدد من نفس المتغيرات دي بغض النظر عن
+        // نتيجة كل مرحلة لاحقة - علشان تعكس المواد الخام الفعلية اللي
+        // اتجمعت، مش تفاصيل داخلية عن نجاح/فشل مرحلة تجميع أو تحليل معينة.
+        final String sourceUrl = physio != null ? physio.sourceUrl : (wiki != null ? wiki.sourceUrl : null);
+        final String externalDesc;
+        if (physio != null && wiki != null) {
+            externalDesc = "Physiopedia (" + physio.title + ") + ويكيبيديا (" + wiki.title + ")";
+        } else if (physio != null) {
+            externalDesc = "Physiopedia: " + physio.title;
+        } else if (wiki != null) {
+            externalDesc = "ويكيبيديا: " + wiki.title;
+        } else {
+            externalDesc = null;
+        }
+        final String sourceLabel;
+        if (groundedCount > 0 && externalDesc != null) {
+            sourceLabel = "إجابة تكميلية عامة (لا يوجد تطابق مباشر) - بروتوكولات قريبة (" + groundedCount + ") + " + externalDesc + cloudSuffixFinal;
+        } else if (groundedCount > 0) {
+            sourceLabel = "إجابة تكميلية عامة - أقرب بروتوكولات في القاعدة (" + groundedCount + ")، بدون تطابق مباشر مؤكد" + cloudSuffixFinal;
+        } else if (externalDesc != null) {
+            sourceLabel = "إجابة عامة من مصادر خارجية (خارج قاعدة بيانات الجهاز) - " + externalDesc + cloudSuffixFinal;
+        } else if (cloudDocsContext != null) {
+            sourceLabel = "إجابة عامة بالاستناد لمستندات سحابية رفعها المستخدم (بدون تطابق في قاعدة الجهاز أو المصادر الخارجية)";
+        } else {
+            sourceLabel = "إجابة عامة من معرفة النموذج (بدون مصدر موثّق من الجهاز أو المصادر الخارجية)";
+        }
+
+        // لو مفيش أي مادة خام فعلية أصلًا (مفيش تأريض محلي ولا خارجي ولا
+        // مستند سحابي)، مفيش داعي نعدي على مراحل تجميع/تحليل/تطابق على
+        // مصدر فاضٍ - بنروح مباشرة لمرحلة الصياغة بمعرفة النموذج العامة
+        // (زي ما كان يحصل قبل v8 برضو في الحالة دي بالضبط).
+        if (rawSourcesBlock == null) {
+            runFormulationStage(ctx, text, null, historyContext, clinicalModel, stages,
+                    reply -> callback.onGroundedReply(reply, sourceLabel, sourceUrl), callback::onError);
+            return;
+        }
+
+        // مرحلة 2: التجميع - استخراج الحقائق ذات الصلة من كل مصدر خام
+        // على حدة (بدون تحليل أو دمج).
+        String aggregationPrompt = AiPrompts.buildAggregationPrompt(text, rawSourcesBlock);
+        AiClient.sendMessage(aggregationPrompt, "جمّع الحقائق ذات الصلة من كل مصدر أعلاه.", clinicalModel,
+                new AiClient.Callback() {
             @Override
-            public void onSuccess(String reply) {
-                String sourceLabel;
-                // شارة المصدر الخارجي: الرابط الظاهر للمستخدم بيفضل رابط
-                // Physiopedia (الأدق سريريًا) لو موجود، وإلا رابط ويكيبيديا -
-                // لكن النص الوصفي (externalDesc) بيذكر الاتنين مع بعض لو
-                // الاتنين رجعوا نتيجة، عشان يبان للمستخدم إن الرد اتبنى
-                // فعليًا على مقارنة مصدرين مستقلين مش مصدر واحد.
-                String sourceUrl = physio != null ? physio.sourceUrl : (wiki != null ? wiki.sourceUrl : null);
-                String externalDesc;
-                if (physio != null && wiki != null) {
-                    externalDesc = "Physiopedia (" + physio.title + ") + ويكيبيديا (" + wiki.title + ")";
-                } else if (physio != null) {
-                    externalDesc = "Physiopedia: " + physio.title;
-                } else if (wiki != null) {
-                    externalDesc = "ويكيبيديا: " + wiki.title;
-                } else {
-                    externalDesc = null;
-                }
-                String cloudSuffix = cloudDocsContext != null ? " + مستندات سحابية للمستخدم" : "";
-                if (groundedCount > 0 && externalDesc != null) {
-                    sourceLabel = "إجابة تكميلية عامة (لا يوجد تطابق مباشر) - بروتوكولات قريبة (" + groundedCount + ") + " + externalDesc + cloudSuffix;
-                } else if (groundedCount > 0) {
-                    sourceLabel = "إجابة تكميلية عامة - أقرب بروتوكولات في القاعدة (" + groundedCount + ")، بدون تطابق مباشر مؤكد" + cloudSuffix;
-                } else if (externalDesc != null) {
-                    sourceLabel = "إجابة عامة من مصادر خارجية (خارج قاعدة بيانات الجهاز) - " + externalDesc + cloudSuffix;
-                } else if (cloudDocsContext != null) {
-                    sourceLabel = "إجابة عامة بالاستناد لمستندات سحابية رفعها المستخدم (بدون تطابق في قاعدة الجهاز أو المصادر الخارجية)";
-                } else {
-                    sourceLabel = "إجابة عامة من معرفة النموذج (بدون مصدر موثّق من الجهاز أو المصادر الخارجية)";
-                }
-                callback.onGroundedReply(reply, sourceLabel, sourceUrl);
+            public void onSuccess(String aggregated) {
+                runAnalysisAndBeyond(ctx, text, aggregated, historyContext, patientId,
+                        clinicalModel, stages, callback, sourceLabel, sourceUrl);
             }
 
             @Override
             public void onError(String message) {
-                callback.onError(message);
+                // فشلت مرحلة التجميع (شبكة مثلًا) - نتخطى تحليل/تطابق
+                // (محتاجين تجميع كمدخل) ونروح مباشرة للصياغة بالمواد
+                // الخام الأصلية نفسها، بدل ما نوقف الرد كله على المستخدم.
+                runFormulationStage(ctx, text, rawSourcesBlock, historyContext, clinicalModel, stages,
+                        reply -> callback.onGroundedReply(reply, sourceLabel, sourceUrl), callback::onError);
+            }
+        });
+    }
+
+    /** مرحلة 3 (تحليل) ثم مرحلة 4 (تطابق) ثم مرحلة 5 (صياغة) - مفصولة في
+     *  ميثود مستقلة عشان runGrounded ما تبقاش طويلة أوي، ومُستدعاة من
+     *  نجاح مرحلة التجميع بس (aggregated مش null هنا أبدًا). */
+    private static void runAnalysisAndBeyond(Context ctx, String text, String aggregated,
+            String historyContext, String patientId, String clinicalModel,
+            StageListener stages, ResultCallback callback, String sourceLabel, String sourceUrl) {
+        String analysisPrompt = AiPrompts.buildAnalysisPrompt(text, aggregated, historyContext);
+        AiClient.sendMessage(analysisPrompt, "حلّل التجميع أعلاه بالخطوات المطلوبة.", clinicalModel,
+                new AiClient.Callback() {
+            @Override
+            public void onSuccess(String analysis) {
+                if (stages != null) stages.onThinking(); // من هنا بقينا فعليًا في مرحلة تحليل/تطابق/صياغة
+                String patientCtxForMatching = (patientId != null && !patientId.trim().isEmpty())
+                        ? PatientManager.buildRedactedPatientContext(ctx, patientId) : null;
+                String matchingPrompt = AiPrompts.buildMatchingPrompt(text, analysis, historyContext, patientCtxForMatching);
+                AiClient.sendMessage(matchingPrompt, "دقّق التحليل أعلاه بالخطوات المطلوبة.", clinicalModel,
+                        new AiClient.Callback() {
+                    @Override
+                    public void onSuccess(String matched) {
+                        runFormulationStage(ctx, text, buildFormulationContext(matched), historyContext,
+                                clinicalModel, stages,
+                                reply -> callback.onGroundedReply(reply, sourceLabel, sourceUrl), callback::onError);
+                    }
+
+                    @Override
+                    public void onError(String message) {
+                        // فشلت مرحلة التطابق - نستخدم التحليل نفسه (قبل
+                        // التدقيق الأخير) كمدخل مباشر للصياغة، بدل ما نضيّع
+                        // مرحلتي التجميع والتحليل اللي نجحوا فعلًا.
+                        runFormulationStage(ctx, text, buildFormulationContext(analysis), historyContext,
+                                clinicalModel, stages,
+                                reply -> callback.onGroundedReply(reply, sourceLabel, sourceUrl), callback::onError);
+                    }
+                });
+            }
+
+            @Override
+            public void onError(String message) {
+                if (stages != null) stages.onThinking();
+                // فشلت مرحلة التحليل - نستخدم التجميع نفسه (قبل التحليل)
+                // كمدخل للصياغة، بدل ما نضيّع مرحلة التجميع اللي نجحت.
+                runFormulationStage(ctx, text, buildFormulationContext(aggregated), historyContext,
+                        clinicalModel, stages,
+                        reply -> callback.onGroundedReply(reply, sourceLabel, sourceUrl), callback::onError);
+            }
+        });
+    }
+
+    /** يغلّف ناتج مرحلة سابقة (تجميع/تحليل/تطابق) بتسمية واضحة قبل ما
+     *  يترفق كـextraContext لمرحلة الصياغة - عشان AiPrompts.
+     *  buildSystemPrompt (المستخدَمة في runFormulationStage) توضح للنموذج
+     *  إن ده مُخرَج مرحلة سابقة مُدقَّقة، مش مصدر خام لسه محتاج تحليل. */
+    private static String buildFormulationContext(String analyzedOrMatchedText) {
+        if (analyzedOrMatchedText == null || analyzedOrMatchedText.trim().isEmpty()) return null;
+        return "تحليل مُدقَّق جاهز (نتيجة مراحل بحث وتجميع وتحليل سابقة - استخدمه كأساس ردك، " +
+                "مش كمصدر خام لازم تحلله من الصفر تاني):\n" + analyzedOrMatchedText.trim();
+    }
+
+    /** واجهة داخلية بسيطة (بدل استيراد java.util.function.Consumer عشان
+     *  توافق أوسع مع مستويات Android API الأقدم) لتمرير رد الصياغة
+     *  النهائي الناجح لـrunFormulationStage. */
+    private interface StringConsumer {
+        void accept(String value);
+    }
+
+    /** واجهة داخلية مماثلة لتمرير رسالة خطأ. */
+    private interface ErrorConsumer {
+        void accept(String message);
+    }
+
+    /** مرحلة 5 (الأخيرة): الصياغة النهائية - نفس AiPrompts.buildSystemPrompt
+     *  القديم (بكل قواعده: الهوية، FORMAT_RULES، الحراس الأربعة، الأسلوب)
+     *  لكن matchedContext هنا بقى تحليل مُدقَّق جاهز (أو null لو مفيش أي
+     *  مادة خام أصلًا) بدل مصادر خام - فمهمة هذا النداء الوحيدة هي الصياغة
+     *  النهائية المنسقة، مش إعادة التحليل. بيستخدم sendWithAutoContinue
+     *  (مش AiClient.sendMessage المباشر زي باقي المراحل) لأن ده المحتوى
+     *  الوحيد اللي فعليًا بيوصل للمستخدم وممكن يطول ويتقطع. */
+    private static void runFormulationStage(Context ctx, String text, String matchedContext,
+            String historyContext, String clinicalModel, StageListener stages,
+            StringConsumer onSuccess, ErrorConsumer onError) {
+        if (stages != null) stages.onThinking();
+        String systemPromptToUse = AiPrompts.buildSystemPrompt(ctx, matchedContext, historyContext);
+        sendWithAutoContinue(systemPromptToUse, text, text, "", clinicalModel, 0, new AiClient.Callback() {
+            @Override
+            public void onSuccess(String reply) {
+                onSuccess.accept(reply);
+            }
+
+            @Override
+            public void onError(String message) {
+                onError.accept(message);
             }
         });
     }
