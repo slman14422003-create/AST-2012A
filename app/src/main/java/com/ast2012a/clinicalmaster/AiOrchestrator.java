@@ -212,6 +212,7 @@ public final class AiOrchestrator {
     // ================================================================
     private static String finalizeReply(String text) {
         if (text == null || text.trim().isEmpty()) return text;
+        text = stripLeakedContinuationMeta(text);
         String[] lines = text.split("\n", -1);
         StringBuilder result = new StringBuilder();
         StringBuilder seenSoFar = new StringBuilder();
@@ -222,6 +223,56 @@ public final class AiOrchestrator {
             if (!kept.trim().isEmpty()) seenSoFar.append(' ').append(kept);
         }
         return result.toString().trim();
+    }
+
+    // ================================================================
+    // طبقة أمان أخيرة (بلاغ فعلي خطير): حتى مع تحديث تعليمات continueSystem
+    // فوق (تمنع صراحة أي كلام عن عملية الاستكمال نفسها)، مفيش ضمان 100%
+    // إن نموذج أضعف (زي النموذج السريع المستخدم أحيانًا في مسار الدردشة)
+    // هيلتزم دايمًا - البلاغ الفعلي اللي وصل فيه النموذج كتب جوه الرد
+    // النهائي نفسه جمل زي "و أنا لا أزال متوقف عند النقطة التي تكررت فيها
+    // نفس الجملة... سأكمّل الإجابة من حيث توقفت بالضبط، بدون إعادة أي جزء
+    // سابق." - ده كلام عن *عملية* الرد نفسه، مش محتوى إكلينيكي، وممنوع
+    // يوصل للمستخدم بأي حال. الدالة دي فحص أخير على الرد *النهائي بالكامل*
+    // (بعد كل جولات الاستكمال) بيشيل أي جملة تطابق نفس النمط - سطر بسطر،
+    // جملة بجملة (نفس تقسيم stripDuplicateSentencesInLine)، فما بيمسحش أي
+    // محتوى إكلينيكي حقيقي جنب الجملة المسربة في نفس السطر.
+    // ================================================================
+    private static final String[] LEAKED_META_MARKERS = {
+            "من حيث توقفت", "بدون إعادة أي جزء سابق", "لا أزال متوقف", "ما زلت متوقف",
+            "سأكمل الإجابة", "سأكمّل الإجابة", "سأكمل من", "سأكمّل من", "هذا استكمال لرد سابق",
+            "آخر جزء فعلي من الرد السابق", "المقطع المقتبس", "كما طلبت أعلاه", "بناءً على طلبك بالاستكمال"
+    };
+
+    private static String stripLeakedContinuationMeta(String text) {
+        if (text == null || text.trim().isEmpty()) return text;
+        String[] lines = text.split("\n", -1);
+        StringBuilder result = new StringBuilder();
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i];
+            if (i > 0) result.append('\n');
+            if (line.trim().isEmpty() || NUMBERED_LIST_ITEM.matcher(line).matches()) {
+                result.append(line);
+                continue;
+            }
+            String[] sentences = line.split("(?<=[.!؟?])\\s+");
+            StringBuilder kept = new StringBuilder();
+            for (String sentence : sentences) {
+                if (sentenceLeaksContinuationMeta(sentence)) continue;
+                if (kept.length() > 0) kept.append(' ');
+                kept.append(sentence);
+            }
+            result.append(kept);
+        }
+        return result.toString();
+    }
+
+    private static boolean sentenceLeaksContinuationMeta(String sentence) {
+        if (sentence == null || sentence.trim().isEmpty()) return false;
+        for (String marker : LEAKED_META_MARKERS) {
+            if (sentence.contains(marker)) return true;
+        }
+        return false;
     }
 
     private static void sendWithAutoContinue(String systemContext, String userMessage,
@@ -302,17 +353,40 @@ public final class AiOrchestrator {
 
                 if (willContinue) {
                     String tailForNext = lastCharsAtWordBoundary(combined, 700);
-                    String continueSystem = systemContext + "\n\n---\nملحوظة مهمة: هذا استكمال " +
-                            "لرد سابق على نفس السؤال الأصلي (\"" + originalQuestion + "\") انقطع " +
-                            "في المنتصف. فيما يلي آخر جزء منه فعلًا، أكمل منه مباشرة بدون تكرار " +
-                            "أي كلمة منه ولا أي مقدمة جديدة، فقط الجزء الناقص لحد ما تخلص الفكرة " +
-                            "بالكامل. ممنوع تعيد كتابة أي كلمة من المقطع المقتبس ده تاني في ردك، " +
-                            "وممنوع كمان تعيد أي فكرة أو نقطة سبق ذكرها في الإجابة كلها من أولها " +
-                            "(مش بس المقطع المقتبس ده) حتى لو بصياغة مختلفة أو ترتيب مختلف - لو " +
-                            "حسّيت إنك هتكرر فكرة سبق قولها، انتقل مباشرة للنقطة الجديدة اللي لسه " +
-                            "ما اتقالتش، أو اختم ردك لو مفيش حاجة جديدة فعلًا تضيفها:" +
+                    // إصلاح مهم (بلاغ فعلي خطير): بلاغ وصل فيه إن النموذج كتب حرفيًا
+                    // جوه الرد النهائي اللي وصل للمستخدم جمل زي "...و أنا لا أزال
+                    // متوقف عند النقطة اللي تكررت فيها نفس الجملة... سأكمّل الإجابة
+                    // من حيث توقفت بالضبط، بدون إعادة أي جزء سابق." - يعني النموذج
+                    // مش بس بيكمل المحتوى الإكلينيكي، ده كان بيعلّق على *عملية
+                    // الاستكمال نفسها* وبيشرح إنه "واقف عند نقطة معينة" و"هيكمل من
+                    // غير ما يكرر" - وده فعليًا صدى/بارافريز لتعليمات continueSystem
+                    // ورسالة المستخدم القديمة "أكمل من حيث توقفت بالضبط، بدون إعادة
+                    // أي جزء سابق" تحت مباشرة. السبب الجذري: التعليمات القديمة كانت
+                    // مكتوبة بصيغة "احكي عن نفسك وعن كونك بتكمل" (خطاب مباشر للنموذج
+                    // عن العملية) - فبعض النماذج الأضعف بتقلد نفس أسلوب الخطاب ده
+                    // وتحطه جوه ردها هي نفسها بدل ما تنفذه بصمت. الإصلاح: 1) صياغة
+                    // التعليمات هنا بقت تمنع صراحة وبشكل منفصل أي جملة تتكلم عن
+                    // "الاستكمال" أو "التوقف" أو "التكرار" كموضوع - ممنوع إن أي جزء
+                    // من الرد النهائي يكون تعليقًا على عملية الكتابة نفسها. 2) رسالة
+                    // المستخدم المرسَلة للنموذج بقت مباشرة (طلب المحتوى نفسه) من غير
+                    // أي عبارة "من حيث توقفت" ممكن ينسخها كما هي. 3) طبقة أمان
+                    // إضافية أخيرة: stripLeakedContinuationMeta تحت بتفحص الرد
+                    // النهائي (finalizeReply) وتشيل أي جملة تطابق نفس الأنماط دي لو
+                    // فلتت من كل الدفاعات فوق.
+                    String continueSystem = systemContext + "\n\n---\nهذا استدعاء استكمال داخلي (النظام، مش " +
+                            "المستخدم، هو اللي طلبه) لرد سابق على نفس السؤال الأصلي (\"" + originalQuestion +
+                            "\") انقطع في المنتصف. اكتب فقط تكملة المحتوى الإكلينيكي الفعلي - ممنوع نهائيًا " +
+                            "أي جملة أو عبارة تتكلم عن عملية الاستكمال نفسها (زي \"سأكمل من حيث توقفت\"، " +
+                            "\"لا أزال متوقفًا عند\"، \"بدون إعادة أي جزء سابق\"، \"كما طلبت\"، أو أي إشارة " +
+                            "مباشرة أو غير مباشرة لكون هذا الرد استكمالًا أو لوجود انقطاع سابق) - ابدأ " +
+                            "مباشرة بأول كلمة من المحتوى الإكلينيكي الجديد نفسه، من غير أي مقدمة عن نفسه. " +
+                            "ممنوع تعيد كتابة أي كلمة من المقطع المقتبس أدناه، وممنوع تعيد أي فكرة أو نقطة " +
+                            "سبق ذكرها في الإجابة كلها من أولها (مش بس المقطع المقتبس) حتى لو بصياغة أو " +
+                            "ترتيب مختلف - لو حسّيت إنك هتكرر فكرة سبق قولها، انتقل مباشرة للنقطة الجديدة " +
+                            "اللي لسه ما اتقالتش، أو اختم ردك بصمت لو مفيش حاجة جديدة فعلًا تضيفها. آخر " +
+                            "جزء فعلي من الرد السابق (للسياق فقط - لا تكرره ولا تعلّق عليه):" +
                             "\n\"\"\"\n" + tailForNext + "\n\"\"\"";
-                    sendWithAutoContinue(continueSystem, "أكمل من حيث توقفت بالضبط، بدون إعادة أي جزء سابق.",
+                    sendWithAutoContinue(continueSystem, "تابع كتابة الموضوع نفسه مباشرة.",
                             originalQuestion, combined, model, effectiveFirstChunk, tailForNext, attempt + 1, finalCallback);
                 } else {
                     finalCallback.onSuccess(finalizeReply(combined));
