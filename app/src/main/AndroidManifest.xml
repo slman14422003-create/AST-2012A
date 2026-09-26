@@ -44,6 +44,7 @@
         <activity android:name=".MyCasesActivity" android:exported="false" />
         <activity android:name=".FavoritesActivity" android:exported="false" />
         <activity android:name=".EncyclopediaActivity" android:exported="false" />
+        <activity android:name=".UserGuideActivity" android:exported="false" />
         <activity android:name=".AnatomyActivity" android:exported="false" />
         <activity android:name=".PatientsActivity" android:exported="false" />
         <activity android:name=".AddEditPatientActivity" android:exported="false" />
