@@ -14,6 +14,9 @@ import java.util.List;
 public class CaseItem {
     public String id;          // فارغ/null للحالات المدمجة، معرّف فريد للحالات المخصصة
     public boolean custom;
+    // true لحالة ثابتة (مدمجة) عدّلها المستخدم محليًا؛ العنوان (title) يبقى
+    // كما هو دائمًا لأنه مفتاح الربط مع نص الدليل الأصلي في clinical_database.json
+    public boolean overridden;
     public List<String> keywords = new ArrayList<>();
     public String title = "";
     public String mode = "";
@@ -30,6 +33,7 @@ public class CaseItem {
         CaseItem c = new CaseItem();
         c.id = o.optString("id", null);
         c.custom = o.optBoolean("custom", false);
+        c.overridden = o.optBoolean("overridden", false);
         c.keywords = jsonArrayToList(o.optJSONArray("keywords"));
         c.title = o.optString("title", "");
         c.mode = o.optString("mode", "");
@@ -48,6 +52,7 @@ public class CaseItem {
         JSONObject o = new JSONObject();
         if (id != null) o.put("id", id);
         o.put("custom", custom);
+        if (overridden) o.put("overridden", true);
         o.put("keywords", new JSONArray(keywords));
         o.put("title", title);
         o.put("mode", mode);

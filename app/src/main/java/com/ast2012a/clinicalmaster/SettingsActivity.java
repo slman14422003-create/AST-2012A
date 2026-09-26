@@ -23,6 +23,7 @@ import com.google.android.material.textfield.TextInputEditText;
 
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -47,6 +48,7 @@ public class SettingsActivity extends AppCompatActivity {
     private TextView notifStatus;
     private TextView updateStatus;
     private TextView instructionsStatus;
+    private TextView builtinOverridesStatus;
     private MaterialSwitch notifSwitch;
     private MaterialSwitch cloudAutoBackupSwitch;
     private TextView cloudStatus;
@@ -97,6 +99,8 @@ public class SettingsActivity extends AppCompatActivity {
         // البيانات
         findViewById(R.id.btn_export).setOnClickListener(v -> exportBackup());
         findViewById(R.id.btn_clear_all).setOnClickListener(v -> confirmClearAll());
+        builtinOverridesStatus = findViewById(R.id.builtin_overrides_status);
+        findViewById(R.id.btn_manage_builtin_cases).setOnClickListener(v -> showManageBuiltinCasesDialog());
 
         // النسخ السحابي
         cloudAutoBackupSwitch = findViewById(R.id.switch_cloud_auto_backup);
@@ -130,6 +134,7 @@ public class SettingsActivity extends AppCompatActivity {
         refreshNotifRow();
         refreshInstructionsRow();
         refreshCloudRows();
+        refreshBuiltinOverridesRow();
     }
 
     // -----------------------------------------------------------------
@@ -332,6 +337,63 @@ public class SettingsActivity extends AppCompatActivity {
                 .setPositiveButton("مسح الكل", (dialog, which) -> {
                     DataManager.clearAllCustomCases(this);
                     Toast.makeText(this, "تم مسح كل الحالات المخصصة.", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("إلغاء", null)
+                .show();
+    }
+
+    // -----------------------------------------------------------------
+    // إدارة تعديلات المستخدم على "الحالات الثابتة" (المدمجة من دليل الجهاز)
+    // -----------------------------------------------------------------
+
+    private void refreshBuiltinOverridesRow() {
+        int count = DataManager.countBuiltinOverrides(this);
+        builtinOverridesStatus.setText(count == 0
+                ? "لا توجد تعديلات على حالات الجهاز الأساسية"
+                : count + (count == 1 ? " حالة معدَّلة" : " حالات معدَّلة") + " عن نص الدليل الأصلي");
+    }
+
+    private void showManageBuiltinCasesDialog() {
+        List<String> titles = DataManager.listOverriddenTitles(this);
+        if (titles.isEmpty()) {
+            new ClaudeDialog(this)
+                    .setTitle("الحالات الأساسية المعدَّلة")
+                    .setMessage("كل حالات الجهاز الأساسية المدمجة مع التطبيق لا تزال بنصها الأصلي من دليل الجهاز الرسمي. لتعديل أي حالة، افتحها من شاشة التفاصيل واضغط \"تعديل\".")
+                    .setPositiveButton("حسنًا", null)
+                    .show();
+            return;
+        }
+        final String[] items = titles.toArray(new String[0]);
+        new ClaudeDialog(this)
+                .setTitle("الحالات الأساسية المعدَّلة (" + items.length + ")")
+                .setMessage("اضغط على أي حالة لاستعادة نصها الأصلي من دليل الجهاز.")
+                .setItems(items, (dialog, which) -> confirmRestoreSingleBuiltinCase(items[which]))
+                .setNeutralButton("استعادة الكل", (dialog, which) -> confirmRestoreAllBuiltinCases())
+                .setNegativeButton("إغلاق", null)
+                .show();
+    }
+
+    private void confirmRestoreSingleBuiltinCase(String title) {
+        new ClaudeDialog(this)
+                .setTitle("استعادة النسخة الأصلية")
+                .setMessage("استعادة \"" + title + "\" لنصها الأصلي من دليل الجهاز، والتراجع عن تعديلك؟")
+                .setPositiveButton("استعادة", (dialog, which) -> {
+                    DataManager.resetBuiltinCaseOverride(this, title);
+                    refreshBuiltinOverridesRow();
+                    Toast.makeText(this, "تم استعادة النص الأصلي.", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("إلغاء", null)
+                .show();
+    }
+
+    private void confirmRestoreAllBuiltinCases() {
+        new ClaudeDialog(this)
+                .setTitle("استعادة كل الحالات الأساسية")
+                .setMessage("سيتم التراجع عن كل التعديلات على حالات الجهاز الأساسية والعودة لنص الدليل الأصلي في كل واحدة منها. متأكد؟")
+                .setPositiveButton("استعادة الكل", (dialog, which) -> {
+                    DataManager.resetAllBuiltinOverrides(this);
+                    refreshBuiltinOverridesRow();
+                    Toast.makeText(this, "تم استعادة كل حالات الجهاز الأساسية.", Toast.LENGTH_SHORT).show();
                 })
                 .setNegativeButton("إلغاء", null)
                 .show();

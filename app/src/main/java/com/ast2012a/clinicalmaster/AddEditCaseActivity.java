@@ -21,6 +21,9 @@ public class AddEditCaseActivity extends AppCompatActivity {
     private TextView submitBtn;
 
     private String editingCaseId = null;
+    // لو غير null: بنعدّل حالة ثابتة (مدمجة من دليل الجهاز) مش حالة مخصصة -
+    // العنوان هنا هو "مفتاح الربط" الأصلي، ويبقى للقراءة فقط طول شاشة التعديل.
+    private String editingBuiltinTitle = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -50,13 +53,48 @@ public class AddEditCaseActivity extends AppCompatActivity {
         cancelBtn.setOnClickListener(v -> finish());
 
         editingCaseId = getIntent().getStringExtra("edit_case_id");
+        editingBuiltinTitle = getIntent().getStringExtra("edit_builtin_title");
         if (editingCaseId != null) {
             loadForEdit(editingCaseId);
+        } else if (editingBuiltinTitle != null) {
+            loadBuiltinForEdit(editingBuiltinTitle);
         } else {
             toolbar.setTitle("إضافة حالة جديدة");
             submitBtn.setText("حفظ الحالة");
             applyPrefillFromAi();
         }
+    }
+
+    /** يحمّل حقول حالة ثابتة (مدمجة من دليل الجهاز، بما فيها أي تعديل سابق
+     *  محفوظ) للتعديل. العنوان معطَّل لأنه مفتاح الربط بنص الدليل الأصلي. */
+    private void loadBuiltinForEdit(String title) {
+        CaseItem item = null;
+        for (CaseItem c : DataManager.loadBuiltinDatabase(this)) {
+            if (title.equals(c.title)) { item = c; break; }
+        }
+        if (item == null) {
+            Toast.makeText(this, "تعذر العثور على الحالة المطلوب تعديلها.", Toast.LENGTH_SHORT).show();
+            finish();
+            return;
+        }
+
+        toolbar.setTitle("تعديل حالة أساسية من دليل الجهاز");
+        submitBtn.setText("حفظ التعديل محليًا");
+
+        fKeywords.setText(String.join(", ", item.keywords));
+        fTitle.setText(item.title);
+        fTitle.setEnabled(false);
+        fTitle.setAlpha(0.6f);
+        fMode.setText(item.mode);
+        fFreq.setText(item.freq);
+        fChannel.setText(item.channel);
+        fDuration.setText(item.duration);
+        fPolePos.setText(item.poles.size() > 0 ? item.poles.get(0) : "");
+        fPoleNeg.setText(item.poles.size() > 1 ? item.poles.get(1) : "");
+        fExplanation.setText(item.explanation);
+        fSymptoms.setText(item.symptoms);
+        fSessionsPlan.setText(item.sessionsPlan);
+        fTip.setText(item.tip);
     }
 
     /**
@@ -141,6 +179,10 @@ public class AddEditCaseActivity extends AppCompatActivity {
         if (editingCaseId != null) {
             DataManager.updateCustomCase(this, editingCaseId, fields);
             Toast.makeText(this, "تم حفظ التعديلات وتحديث محرك البحث فوراً.", Toast.LENGTH_SHORT).show();
+        } else if (editingBuiltinTitle != null) {
+            fields.title = editingBuiltinTitle; // العنوان معطَّل في الشاشة أصلًا، وهذا تأكيد إضافي
+            DataManager.saveBuiltinCaseOverride(this, editingBuiltinTitle, fields);
+            Toast.makeText(this, "تم حفظ تعديلك على حالة الجهاز الأساسية. يمكن استعادة نص الدليل الأصلي في أي وقت من صفحة الحالة أو من الإعدادات.", Toast.LENGTH_LONG).show();
         } else {
             DataManager.addCustomCase(this, fields);
             Toast.makeText(this, "تم حفظ الحالة وربطها بمحرك البحث فوراً.", Toast.LENGTH_SHORT).show();

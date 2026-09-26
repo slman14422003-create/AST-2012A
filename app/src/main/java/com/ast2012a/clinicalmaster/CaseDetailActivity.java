@@ -173,6 +173,11 @@ public class CaseDetailActivity extends AppCompatActivity {
             custom.setTextDirection(View.TEXT_DIRECTION_RTL);
             custom.setBackgroundResource(R.drawable.bg_source_chip);
             custom.setTextColor(getColor(R.color.m3_on_primary_container));
+        } else if (currentCase.overridden) {
+            TextView edited = addBadge(badges, "معدَّلة محليًا", "");
+            edited.setTextDirection(View.TEXT_DIRECTION_RTL);
+            edited.setBackgroundResource(R.drawable.bg_source_chip);
+            edited.setTextColor(getColor(R.color.m3_on_primary_container));
         }
         if (badges.getChildCount() == 0) badges.setVisibility(View.GONE);
 
@@ -454,10 +459,33 @@ public class CaseDetailActivity extends AppCompatActivity {
                     "https://pubmed.ncbi.nlm.nih.gov/?term=", term));
         }
 
+        View customRow = actions.findViewById(R.id.custom_row);
+        TextView deleteBtn = actions.findViewById(R.id.btn_delete_case);
         if (currentCase.custom) {
-            actions.findViewById(R.id.custom_row).setVisibility(View.VISIBLE);
+            // حالة مخصصة أضافها المستخدم بنفسه: تعديل كامل + حذف نهائي.
+            customRow.setVisibility(View.VISIBLE);
             actions.findViewById(R.id.btn_edit_case).setOnClickListener(v -> editCase());
-            actions.findViewById(R.id.btn_delete_case).setOnClickListener(v -> confirmDelete());
+            deleteBtn.setVisibility(View.VISIBLE);
+            deleteBtn.setText("حذف");
+            deleteBtn.setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_trash, 0, 0, 0);
+            deleteBtn.setCompoundDrawableTintList(android.content.res.ColorStateList.valueOf(getColor(R.color.accent_red)));
+            deleteBtn.setTextColor(getColor(R.color.accent_red));
+            deleteBtn.setOnClickListener(v -> confirmDelete());
+        } else {
+            // حالة ثابتة (مدمجة من دليل الجهاز): التعديل متاح دائمًا، بلا حذف
+            // نهائي - وبدلًا منه زر "استعادة الأصل" يظهر فقط لو كانت معدَّلة.
+            customRow.setVisibility(View.VISIBLE);
+            actions.findViewById(R.id.btn_edit_case).setOnClickListener(v -> editBuiltinCase());
+            if (currentCase.overridden) {
+                deleteBtn.setVisibility(View.VISIBLE);
+                deleteBtn.setText("استعادة الأصل");
+                deleteBtn.setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_refresh, 0, 0, 0);
+                deleteBtn.setCompoundDrawableTintList(android.content.res.ColorStateList.valueOf(getColor(R.color.text_secondary)));
+                deleteBtn.setTextColor(getColor(R.color.text_secondary));
+                deleteBtn.setOnClickListener(v -> confirmRestoreOriginal());
+            } else {
+                deleteBtn.setVisibility(View.GONE);
+            }
         }
         container.addView(actions);
     }
@@ -515,6 +543,27 @@ public class CaseDetailActivity extends AppCompatActivity {
                 .setPositiveButton("حذف", (dialog, which) -> {
                     DataManager.deleteCustomCase(this, currentCase.id);
                     finish();
+                })
+                .setNegativeButton("إلغاء", null)
+                .show();
+    }
+
+    /** تعديل حالة ثابتة (مدمجة من دليل الجهاز) - يُحفظ كتعديل محلي فوق نص
+     *  الدليل الأصلي، وليس حذفًا أو استبدالًا لملف قاعدة البيانات نفسه. */
+    private void editBuiltinCase() {
+        Intent i = new Intent(this, AddEditCaseActivity.class);
+        i.putExtra("edit_builtin_title", currentCase.title);
+        startActivity(i);
+        overridePendingTransition(R.anim.slide_up_in, R.anim.fade_out);
+    }
+
+    private void confirmRestoreOriginal() {
+        new ClaudeDialog(this)
+                .setTitle("استعادة النسخة الأصلية")
+                .setMessage("هل تريد التراجع عن تعديلك والعودة لنص دليل الجهاز الرسمي لـ \"" + currentCase.title + "\"؟")
+                .setPositiveButton("استعادة", (dialog, which) -> {
+                    DataManager.resetBuiltinCaseOverride(this, currentCase.title);
+                    loadCaseFromIntent();
                 })
                 .setNegativeButton("إلغاء", null)
                 .show();

@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -35,14 +36,20 @@ public class DataManager {
     private static List<CaseItem> builtinCache;
     private static List<JSONObject> modesCache;
     private static List<JSONObject> anatomyCache;
+    private static List<JSONObject> userGuideCache;
     // ملحوظة إصلاح "لاج" مربع البحث الرئيسي: allCases() كان يقرأ ملف
     // custom_cases.json من القرص (فتح ملف + قراءة + تحليل JSON) في كل مرة،
     // أي مع كل حرف يكتبه المستخدم في البحث، لأنه يعمل على UI thread. الحل:
     // كاش بسيط بالذاكرة يُحدَّث فقط عند فعلي تغيير (إضافة/تعديل/حذف/مسح)،
     // فبيقرأ القرص مرة واحدة فقط ثم يُعاد استخدامه.
     private static List<CaseItem> customCasesCache;
+    // كاش تعديلات المستخدم على "الحالات الثابتة" (المدمجة من clinical_database.json):
+    // خريطة "عنوان الحالة الأصلي" -> JSONObject بالحقول المعدَّلة، محفوظة على القرص
+    // (case_overrides.json) ومُطبَّقة فوق القاعدة المدمجة عند كل loadBuiltinDatabase.
+    private static Map<String, JSONObject> overridesCache;
 
     private static final String CUSTOM_FILE = "custom_cases.json";
+    private static final String OVERRIDES_FILE = "case_overrides.json";
 
     // -----------------------------------------------------------------
     // تحميل / حفظ
@@ -50,17 +57,36 @@ public class DataManager {
 
     public static List<CaseItem> loadBuiltinDatabase(Context ctx) {
         if (builtinCache != null) return builtinCache;
-        builtinCache = new ArrayList<>();
+        List<CaseItem> list = new ArrayList<>();
         try {
             String json = readAsset(ctx, "clinical_database.json");
             JSONArray arr = new JSONArray(json);
             for (int i = 0; i < arr.length(); i++) {
-                builtinCache.add(CaseItem.fromJson(arr.getJSONObject(i)));
+                list.add(CaseItem.fromJson(arr.getJSONObject(i)));
             }
         } catch (Exception e) {
             e.printStackTrace();
         }
+        applyBuiltinOverrides(ctx, list);
+        builtinCache = list;
         return builtinCache;
+    }
+
+    /** يستبدل أي حالة ثابتة (مدمجة) بنسختها المعدَّلة محليًا لو المستخدم عدّلها
+     *  من قبل، بدون المساس بملف clinical_database.json الأصلي داخل الـ assets. */
+    private static void applyBuiltinOverrides(Context ctx, List<CaseItem> list) {
+        Map<String, JSONObject> overrides = loadCaseOverridesRaw(ctx);
+        if (overrides.isEmpty()) return;
+        for (int i = 0; i < list.size(); i++) {
+            CaseItem original = list.get(i);
+            JSONObject ov = overrides.get(original.title);
+            if (ov == null) continue;
+            CaseItem merged = CaseItem.fromJson(ov);
+            merged.title = original.title; // العنوان هو مفتاح الربط، يبقى ثابتًا دائمًا
+            merged.custom = false;
+            merged.overridden = true;
+            list.set(i, merged);
+        }
     }
 
     public static List<JSONObject> loadModesEncyclopedia(Context ctx) {
@@ -93,6 +119,23 @@ public class DataManager {
             e.printStackTrace();
         }
         return anatomyCache;
+    }
+
+    /** يحمّل دليل استخدام الجهاز (مبني من دليل المستخدم الرسمي AST-2012A) -
+     *  مرجع ذاتي بالكامل داخل التطبيق (assets)، بدون الحاجة لاتصال إنترنت. */
+    public static List<JSONObject> loadUserGuide(Context ctx) {
+        if (userGuideCache != null) return userGuideCache;
+        userGuideCache = new ArrayList<>();
+        try {
+            String json = readAsset(ctx, "user_guide.json");
+            JSONArray arr = new JSONArray(json);
+            for (int i = 0; i < arr.length(); i++) {
+                userGuideCache.add(arr.getJSONObject(i));
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return userGuideCache;
     }
 
     private static String readAsset(Context ctx, String name) throws IOException {
@@ -190,6 +233,88 @@ public class DataManager {
 
     public static void clearAllCustomCases(Context ctx) {
         saveCustomCases(ctx, new ArrayList<>());
+    }
+
+    // -----------------------------------------------------------------
+    // تعديل "الحالات الثابتة" (المدمجة من clinical_database.json): بعكس
+    // الحالات المخصصة، هذه لا تُحفظ كملف مستقل بل كـ"تعديلات" (overrides)
+    // فوق النسخة الأصلية المدمجة مع التطبيق - نص الدليل الرسمي الأصلي يبقى
+    // سليمًا دائمًا، والمستخدم يقدر يستعيده وقتما شاء (لحالة واحدة أو للكل
+    // معًا) من شاشة تفاصيل الحالة أو من الإعدادات ← "الحالات الأساسية المعدَّلة".
+    // -----------------------------------------------------------------
+
+    public static Map<String, JSONObject> loadCaseOverridesRaw(Context ctx) {
+        if (overridesCache != null) return overridesCache;
+        Map<String, JSONObject> map = new HashMap<>();
+        File f = new File(ctx.getFilesDir(), OVERRIDES_FILE);
+        if (f.exists()) {
+            try {
+                StringBuilder sb = new StringBuilder();
+                BufferedReader reader = new BufferedReader(new InputStreamReader(
+                        ctx.openFileInput(OVERRIDES_FILE), StandardCharsets.UTF_8));
+                String line;
+                while ((line = reader.readLine()) != null) sb.append(line);
+                reader.close();
+                JSONObject obj = new JSONObject(sb.toString());
+                Iterator<String> keys = obj.keys();
+                while (keys.hasNext()) {
+                    String key = keys.next();
+                    map.put(key, obj.getJSONObject(key));
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+        overridesCache = map;
+        return overridesCache;
+    }
+
+    private static void saveCaseOverridesRaw(Context ctx, Map<String, JSONObject> map) {
+        try {
+            JSONObject obj = new JSONObject();
+            for (Map.Entry<String, JSONObject> e : map.entrySet()) obj.put(e.getKey(), e.getValue());
+            FileOutputStream fos = ctx.openFileOutput(OVERRIDES_FILE, Context.MODE_PRIVATE);
+            fos.write(obj.toString(2).getBytes(StandardCharsets.UTF_8));
+            fos.close();
+            overridesCache = new HashMap<>(map);
+        } catch (IOException | JSONException e) {
+            e.printStackTrace();
+        }
+        builtinCache = null; // إجبار loadBuiltinDatabase على إعادة الدمج في المرة القادمة
+    }
+
+    /** يحفظ تعديل المستخدم على حالة ثابتة (originalTitle هو مفتاح الربط، لا يتغيّر أبدًا). */
+    public static void saveBuiltinCaseOverride(Context ctx, String originalTitle, CaseItem fields) {
+        Map<String, JSONObject> map = new HashMap<>(loadCaseOverridesRaw(ctx));
+        try {
+            fields.title = originalTitle;
+            fields.custom = false;
+            fields.overridden = true;
+            map.put(originalTitle, fields.toJson());
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+        saveCaseOverridesRaw(ctx, map);
+    }
+
+    /** يتراجع عن تعديل حالة ثابتة واحدة، ويعيدها لنص دليل الجهاز الأصلي. */
+    public static void resetBuiltinCaseOverride(Context ctx, String originalTitle) {
+        Map<String, JSONObject> map = new HashMap<>(loadCaseOverridesRaw(ctx));
+        map.remove(originalTitle);
+        saveCaseOverridesRaw(ctx, map);
+    }
+
+    /** يتراجع عن كل تعديلات الحالات الثابتة دفعة واحدة. */
+    public static void resetAllBuiltinOverrides(Context ctx) {
+        saveCaseOverridesRaw(ctx, new HashMap<>());
+    }
+
+    public static int countBuiltinOverrides(Context ctx) {
+        return loadCaseOverridesRaw(ctx).size();
+    }
+
+    public static List<String> listOverriddenTitles(Context ctx) {
+        return new ArrayList<>(loadCaseOverridesRaw(ctx).keySet());
     }
 
     // -----------------------------------------------------------------

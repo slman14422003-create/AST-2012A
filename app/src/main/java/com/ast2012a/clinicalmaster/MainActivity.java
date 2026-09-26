@@ -125,6 +125,9 @@ public class MainActivity extends AppCompatActivity {
         TextView encyclopediaBtn = findViewById(R.id.btn_encyclopedia);
         encyclopediaBtn.setOnClickListener(v -> navigateTo(EncyclopediaActivity.class));
 
+        TextView userGuideBtn = findViewById(R.id.btn_user_guide);
+        userGuideBtn.setOnClickListener(v -> navigateTo(UserGuideActivity.class));
+
         TextView anatomyBtn = findViewById(R.id.btn_anatomy);
         anatomyBtn.setOnClickListener(v -> navigateTo(AnatomyActivity.class));
 
@@ -143,7 +146,7 @@ public class MainActivity extends AppCompatActivity {
 
         // تحسين انميشن: كبسولات التنقل السفلية بقت تدي إحساس ضغط فعلي
         // (تصغير خفيف + نبضة رجوع) بدل ما تعتمد بس على تغيير لون الخلفية.
-        for (View chip : new View[]{favoritesBtn, myCasesBtn, encyclopediaBtn, anatomyBtn,
+        for (View chip : new View[]{favoritesBtn, myCasesBtn, encyclopediaBtn, userGuideBtn, anatomyBtn,
                 patientsBtn, treatmentProgramsBtn, pdfReaderBtn, aiBtn}) {
             Ui.applyPressFeedback(chip);
         }
