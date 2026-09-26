@@ -365,6 +365,52 @@
                             android:textColor="@color/accent_red" />
                     </LinearLayout>
                 </LinearLayout>
+
+                <View
+                    style="@style/Settings.Divider"
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp" />
+
+                <!-- إدارة تعديلات المستخدم على "الحالات الثابتة" (المدمجة من دليل
+                     الجهاز الرسمي) - يفتح قائمة الحالات المعدَّلة مع خيار استعادة
+                     كل واحدة على حدة أو استعادة الكل دفعة واحدة. -->
+                <LinearLayout
+                    android:id="@+id/btn_manage_builtin_cases"
+                    style="@style/Settings.Row"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                    <ImageView
+                        style="@style/Settings.RowIcon"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_edit" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/Settings.RowTitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="الحالات الأساسية المعدَّلة" />
+
+                        <TextView
+                            android:id="@+id/builtin_overrides_status"
+                            style="@style/Settings.RowSubtitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="لا توجد تعديلات على حالات الجهاز الأساسية" />
+                    </LinearLayout>
+
+                    <ImageView
+                        style="@style/Settings.RowChevron"
+                        android:layout_width="20dp"
+                        android:layout_height="20dp" />
+                </LinearLayout>
             </LinearLayout>
 
             <!-- ============== النسخ السحابي (Firebase Firestore) ============== -->
