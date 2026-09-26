@@ -30,6 +30,17 @@ import java.nio.charset.StandardCharsets;
  * هو تمامًا (توافق كامل مع الووركر الحالي حتى لو مش قاريه). النداءات
  * القديمة اللي مفيهاش النسخة الجديدة (بدون model) اتسابت كما هي كتوافق
  * خلفي، وبتستدعي داخليًا النسخة الجديدة بـmodel = null.
+ *
+ * تحديث v9 (متانة الاتصال - إعادة محاولة تلقائية واحدة): كان أي فشل
+ * شبكة لحظي (Timeout، انقطاع واي فاي/بيانات لحظي، إلخ) بيوصل مباشرة
+ * كخطأ نهائي للمستخدم من أول محاولة، رغم إن نسبة كبيرة من هذه الأخطاء
+ * عابرة وتنجح لو اتكررت بعد لحظة بسيطة. دلوقتي sendViaWorker بتعيد
+ * المحاولة مرة واحدة تلقائيًا (بعد تأخير قصير) لو فشل الاتصال بالشبكة
+ * نفسه *قبل* ما يوصل أي رد من السيرفر أصلًا - لو المحاولة التانية فشلت
+ * برضو، يرجع الخطأ الحقيقي زي ما كان. مهم: الإعادة دي لا تحصل أبدًا لو
+ * فعليًا وصل رد من السيرفر (حتى لو كان خطأ HTTP أو شكل JSON غير متوقع) -
+ * ده مش خطأ شبكة، وإعادة نداء نموذج ذكاء اصطناعي كامل تاني في الحالة دي
+ * هدر وقت وتكلفة بلا أي فايدة حقيقية.
  */
 public class AiClient {
 
@@ -93,6 +104,22 @@ public class AiClient {
      * معروف لا تكسر أي ووركر حالي (بيتجاهله بأمان)، فده توسيع تراكمي بحت.
      */
     private static void sendViaWorker(String workerUrl, String systemContext, String userMessage, String model, Callback callback) {
+        sendViaWorker(workerUrl, systemContext, userMessage, model, callback, true);
+    }
+
+    /** عدد المللي ثانية اللي بنستناها قبل إعادة المحاولة التلقائية الوحيدة
+     *  بعد فشل اتصال شبكة لحظي - كافي لعبور معظم انقطاعات الشبكة العابرة
+     *  (تبديل واي فاي/بيانات، رجّة تغطية لحظية) بدون ما نطوّل انتظار
+     *  المستخدم بشكل محسوس. */
+    private static final int RETRY_DELAY_MS = 800;
+
+    /** نفس sendViaWorker الأصلية، مع allowRetry بيتحكم في إعادة المحاولة
+     *  التلقائية الواحدة (v9 - متانة الاتصال، راجع تعليق v9 فوق تعريف
+     *  الكلاس): true في أول نداء دايمًا، وبتنادي نفسها بـfalse لو فشلت
+     *  المحاولة الأولى بسبب خطأ شبكة (مش رد فعلي من السيرفر) عشان تمنع أي
+     *  محاولة تالتة. */
+    private static void sendViaWorker(String workerUrl, String systemContext, String userMessage,
+            String model, Callback callback, boolean allowRetry) {
         HttpURLConnection conn = null;
         try {
             URL url = new URL(workerUrl);
@@ -117,6 +144,8 @@ public class AiClient {
             os.write(body.toString().getBytes(StandardCharsets.UTF_8));
             os.close();
 
+            // من هنا فصاعدًا فعليًا وصل رد من السيرفر (حتى لو خطأ HTTP) -
+            // أي فشل بعد النقطة دي مش خطأ شبكة، فممنوع تُعاد المحاولة عليه.
             int status = conn.getResponseCode();
             InputStream is = status >= 200 && status < 300 ? conn.getInputStream() : conn.getErrorStream();
             String responseBody = readStream(is);
@@ -141,6 +170,19 @@ public class AiClient {
             callback.onSuccess(sanitizeMarkdown(reply.trim()));
 
         } catch (Exception e) {
+            // فشل قبل وصول أي رد فعلي من السيرفر (Timeout، تعذّر فتح
+            // الاتصال، انقطاع لحظي...) - نعتبره خطأ شبكة عابر ونعيد
+            // المحاولة مرة واحدة بس (لو allowRetry لسه true) قبل ما نبلّغ
+            // المستخدم بفشل نهائي.
+            if (allowRetry) {
+                try {
+                    Thread.sleep(RETRY_DELAY_MS);
+                } catch (InterruptedException ignored) {
+                    Thread.currentThread().interrupt();
+                }
+                sendViaWorker(workerUrl, systemContext, userMessage, model, callback, false);
+                return;
+            }
             callback.onError("تعذر الوصول لرابط الووركر: " + (e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()));
         } finally {
             if (conn != null) conn.disconnect();

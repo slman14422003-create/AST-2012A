@@ -46,6 +46,21 @@ import java.util.Locale;
  * الاتنين رجعوا نتيجة، مش مصدر واحد بس. لو مصدر واحد فشل (شبكة، مفيش
  * نتيجة، الموقع مش متاح) بيرجع null بأمان زي ما كان دايمًا، والتاني يكمل
  * لوحده بدون ما يوقف الرد.
+ *
+ * تحديث v9 (مصدر علمي ثالث + متانة الاتصال): بناءً على طلب توسيع البحث
+ * لمصادر علمية موثوقة إضافية، انضم PubMedClient (فهرس NCBI للأبحاث
+ * والدراسات الطبية المحكّمة - Peer-reviewed) كمصدر خارجي ثالث مستقل جنب
+ * Physiopedia وويكيبيديا (مش بديل عن أي منهما) - بيتنفذ دايمًا مع
+ * الاتنين، بنفس مصطلح البحث الإنجليزي (physioQuery) المستخدم مع
+ * Physiopedia لأن PubMed غالبيته إنجليزي. AiPrompts.MULTI_SOURCE_
+ * SYNTHESIS_GUARDRAIL اتحدّث ليوضح ترتيب الترجيح بين الثلاثة: PubMed
+ * أعلى دليل علمي لأسئلة الفعالية/الأدلة السريرية، Physiopedia أدق
+ * للتفاصيل العملية للبروتوكول، وويكيبيديا للخلفية العامة فقط - مع بقاء
+ * قاعدة السلامة فوق أي مصدر منفرد عند التعارض. بجانب كده، AiClient بقى
+ * يعيد محاولة نداء الووركر مرة واحدة تلقائيًا لو فشل الاتصال بالشبكة
+ * نفسه (Timeout/انقطاع لحظي) قبل ما يوصل لأي رد من السيرفر - "متانة"
+ * إضافية ضد تقلبات شبكة الموبايل العادية، بدون إعادة محاولة أبدًا لو
+ * وصل فعليًا رد (ولو كان خطأ) من السيرفر نفسه.
  */
 public final class AiOrchestrator {
 
@@ -707,10 +722,23 @@ public final class AiOrchestrator {
         // نص السؤال الأصلي بالعربي أولًا (وبترجع تلقائيًا للإنجليزي جوه
         // WikipediaClient نفسه لو مفيش نتيجة عربية) بدل المصطلح الإنجليزي
         // المترجَم المخصص لـPhysiopedia.
+        //
+        // v9: PubMed (PubMedClient) بقى مصدر خارجي ثالث، بيتنفذ دايمًا مع
+        // الاتنين فوق (مش بديل عن أي منهما) - بنفس مصطلح physioQuery
+        // الإنجليزي زي Physiopedia بالظبط، لأن PubMed مصدر إنجليزي أساسًا
+        // برضو. راجع تعليق v9 فوق تعريف الكلاس لتفاصيل دوره كأعلى دليل علمي
+        // متاح (أبحاث محكّمة) مقابل Physiopedia (تفاصيل عملية) وويكيبيديا
+        // (خلفية عامة).
         String physioQuery = (physioTermHint != null && !physioTermHint.trim().isEmpty())
                 ? physioTermHint.trim() : text;
         PhysiopediaClient.Result physio = PhysiopediaClient.search(physioQuery);
         WikipediaClient.Result wiki = WikipediaClient.search(text);
+        // مصدر خارجي ثالث (v9): PubMed - فهرس أبحاث علمية محكّمة (راجع
+        // PubMedClient وتعليق v9 فوق تعريف الكلاس لتفاصيل السبب). بيستخدم
+        // نفس المصطلح الإنجليزي المستخدم مع Physiopedia لأن PubMed مصدر
+        // إنجليزي أساسًا. لو فشل أو مفيش نتيجة، بيرجع null بأمان زي باقي
+        // المصادر الخارجية - بدون ما يوقف الرد أو يأثر على المصدرين التانيين.
+        PubMedClient.Result pubmed = PubMedClient.search(physioQuery);
 
         StringBuilder extraContext = new StringBuilder();
         if (grounding != null) {
@@ -763,7 +791,12 @@ public final class AiOrchestrator {
         if (wiki != null) {
             extraContext.append("مصدر خارجي 2 - ويكيبيديا (موسوعة عامة، ")
                     .append("ar".equals(wiki.lang) ? "نسخة عربية" : "نسخة إنجليزية")
-                    .append(", مقالة: ").append(wiki.title).append("):\n").append(wiki.extract);
+                    .append(", مقالة: ").append(wiki.title).append("):\n").append(wiki.extract).append("\n\n");
+        }
+        if (pubmed != null) {
+            extraContext.append("مصدر خارجي 3 - PubMed (فهرس أبحاث ودراسات طبية محكّمة Peer-reviewed، ")
+                    .append("أعلى دليل علمي متاح لأسئلة الفعالية/الأدلة السريرية، مقالة: ")
+                    .append(pubmed.title).append("):\n").append(pubmed.extract);
         }
 
         // بداية بايبلاين الأدوات المتتالية (v8): المواد الخام اللي جُمعت
@@ -779,17 +812,22 @@ public final class AiOrchestrator {
         // شارة المصدر النهائية بتتحدد من نفس المتغيرات دي بغض النظر عن
         // نتيجة كل مرحلة لاحقة - علشان تعكس المواد الخام الفعلية اللي
         // اتجمعت، مش تفاصيل داخلية عن نجاح/فشل مرحلة تجميع أو تحليل معينة.
-        final String sourceUrl = physio != null ? physio.sourceUrl : (wiki != null ? wiki.sourceUrl : null);
-        final String externalDesc;
-        if (physio != null && wiki != null) {
-            externalDesc = "Physiopedia (" + physio.title + ") + ويكيبيديا (" + wiki.title + ")";
-        } else if (physio != null) {
-            externalDesc = "Physiopedia: " + physio.title;
-        } else if (wiki != null) {
-            externalDesc = "ويكيبيديا: " + wiki.title;
-        } else {
-            externalDesc = null;
+        final String sourceUrl = physio != null ? physio.sourceUrl
+                : (wiki != null ? wiki.sourceUrl : (pubmed != null ? pubmed.sourceUrl : null));
+        // بُنيت بـStringBuilder (مش String.join) عمدًا: minSdk الحالي 24 وString.
+        // join(CharSequence, Iterable) متاحة من API 26 بس - وده يوسع بسهولة
+        // لأي عدد مصادر خارجية مستقبلية بدون قيد على عددها.
+        String externalDescBuilder0 = "";
+        if (physio != null) externalDescBuilder0 = "Physiopedia (" + physio.title + ")";
+        if (wiki != null) {
+            externalDescBuilder0 = externalDescBuilder0.isEmpty() ? "ويكيبيديا (" + wiki.title + ")"
+                    : externalDescBuilder0 + " + ويكيبيديا (" + wiki.title + ")";
         }
+        if (pubmed != null) {
+            externalDescBuilder0 = externalDescBuilder0.isEmpty() ? "PubMed (" + pubmed.title + ")"
+                    : externalDescBuilder0 + " + PubMed (" + pubmed.title + ")";
+        }
+        final String externalDesc = externalDescBuilder0.isEmpty() ? null : externalDescBuilder0;
         final String sourceLabel;
         if (groundedCount > 0 && externalDesc != null) {
             sourceLabel = "إجابة تكميلية عامة (لا يوجد تطابق مباشر) - بروتوكولات قريبة (" + groundedCount + ") + " + externalDesc + cloudSuffixFinal;
