@@ -49,9 +49,12 @@
         </LinearLayout>
     </com.google.android.material.appbar.MaterialToolbar>
 
-    <!-- بانر سياق المريض (ai_patient_context_banner): يظهر فقط لما الشاشة
-         تُفتح من زر "اسأل Phizyo AI عن هذا المريض" في ملف مريض محدد، تأكيدًا
-         للمستخدم إن ملف المريض (بدون اسم/هاتف) مرفق تلقائيًا مع كل سؤال هنا. -->
+    <!-- بانر سياق مرفق (ai_patient_context_banner): يظهر فقط لما الشاشة
+         تُفتح إما من زر "اسأل Phizyo AI عن هذا المريض" في ملف مريض محدد،
+         أو من زر "اسأل الذكاء الاصطناعي عن هذا الملف" في قارئ PDF (v12) -
+         تأكيدًا للمستخدم إن سياقًا (ملف مريض بدون اسم/هاتف، أو مستند PDF
+         مفتوح) مرفق تلقائيًا مع كل سؤال هنا. النص والأيقونة يتغيّروا برمجيًا
+         حسب نوع السياق المرفق (انظر bindContextBanner في الكود). -->
     <LinearLayout
         android:id="@+id/ai_patient_context_banner"
         android:layout_width="match_parent"
@@ -69,6 +72,7 @@
         android:visibility="gone">
 
         <ImageView
+            android:id="@+id/ai_context_banner_icon"
             android:layout_width="15dp"
             android:layout_height="15dp"
             android:layout_marginEnd="8dp"
@@ -77,6 +81,7 @@
             android:tint="@color/claude_orange" />
 
         <TextView
+            android:id="@+id/ai_context_banner_text"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"

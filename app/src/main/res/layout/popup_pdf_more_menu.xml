@@ -15,6 +15,30 @@
     android:paddingBottom="6dp">
 
     <LinearLayout
+        android:id="@+id/row_pdf_ask_ai"
+        style="@style/Settings.Row"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="52dp">
+
+        <ImageView
+            style="@style/Settings.RowIcon"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:tint="@color/claude_orange"
+            android:src="@drawable/ic_sparkle" />
+
+        <TextView
+            style="@style/Settings.RowTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="اسأل الذكاء الاصطناعي عن هذا الملف"
+            android:textSize="14.5sp" />
+    </LinearLayout>
+
+    <View style="@style/Settings.Divider" />
+
+    <LinearLayout
         android:id="@+id/row_pdf_translate_page"
         style="@style/Settings.Row"
         android:layout_width="match_parent"
