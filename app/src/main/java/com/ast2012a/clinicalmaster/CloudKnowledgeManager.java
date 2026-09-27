@@ -18,7 +18,6 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -242,24 +241,42 @@ final class CloudKnowledgeManager {
     }
 
     /** يفكّك سؤال المستخدم لكلمات دالة (3 حروف فأكثر) بالعربي والإنجليزي،
-     *  متجاهلًا علامات الترقيم الشائعة - أساس تطابق بسيط بدون أي مكتبة NLP. */
+     *  متجاهلًا علامات الترقيم الشائعة.
+     *
+     *  تحديث (v2 - توحيد محرك البحث مع باقي التطبيق): كانت بتستخدم
+     *  toLowerCase(Locale.ROOT) بس، اللي مالوش أي تأثير على النص العربي
+     *  (مش زي الإنجليزي)، فسؤال بـ"الرقبه" (بالهاء) كان ما بيطابقش مستند
+     *  مكتوب فيه "الرقبة" (بالتاء المربوطة) أو "الرّقبة" بالهمزات المختلفة
+     *  لـ"أ/إ/آ"، ومفيش أي وعي بالمرادفات العربي/الإنجليزي أصلًا. دلوقتي
+     *  بتستخدم بالظبط نفس محرك التطبيع (DataManager.normalize) والمرادفات
+     *  الطبية/العلاجية (DataManager.expandWithSynonyms) المستخدَمين في بحث
+     *  قاعدة بيانات الحالات - يعني بحث مستندات السحابة بقى بنفس جودة ودقة
+     *  بحث بقية التطبيق تمامًا، مش محرك منفصل أضعف. */
     private static List<String> significantWords(String query) {
-        List<String> out = new ArrayList<>();
-        if (query == null) return out;
-        String[] parts = query.toLowerCase(Locale.ROOT)
+        Set<String> out = new LinkedHashSet<>();
+        if (query == null) return new ArrayList<>(out);
+        String[] parts = DataManager.normalize(query)
                 .split("[\\s,.;:!؟،؛\\-()\\[\\]\"'/\\\\]+");
         for (String p : parts) {
-            if (p.length() >= 3) out.add(p);
+            if (p.length() < 3) continue;
+            out.add(p);
+            // نفس نمط الاستخدام بالظبط في DataManager.search: تطبيع كل
+            // مرادف راجع من expandWithSynonyms قبل إضافته (المرادفات
+            // بتتكتب يدويًا في القاموس ومش مضمون دايمًا إنها متطبَّعة).
+            for (String v : DataManager.expandWithSynonyms(p)) {
+                String nv = DataManager.normalize(v);
+                if (nv.length() >= 3) out.add(nv);
+            }
         }
-        return out;
+        return new ArrayList<>(out);
     }
 
     private static int scoreText(String text, List<String> words) {
-        String lower = text.toLowerCase(Locale.ROOT);
+        String normalized = DataManager.normalize(text);
         int score = 0;
         for (String w : words) {
             int idx = 0;
-            while ((idx = lower.indexOf(w, idx)) != -1) {
+            while ((idx = normalized.indexOf(w, idx)) != -1) {
                 score++;
                 idx += w.length();
             }
@@ -268,12 +285,16 @@ final class CloudKnowledgeManager {
     }
 
     /** يرجّع مقطع من النص حوالين أقرب تطابق لكلمات السؤال (بدل أول
-     *  MAX_CHARS_PER_DOC_IN_CONTEXT حرف بشكل عشوائي مفيش له علاقة بالسؤال). */
+     *  MAX_CHARS_PER_DOC_IN_CONTEXT حرف بشكل عشوائي مفيش له علاقة بالسؤال).
+     *  البحث عن موضع التطابق بيتم على نسخة مُطبَّعة من النص (Arabic-aware)،
+     *  لكن المقطع المعروض فعليًا بيتقطع من النص الأصلي بحروفه وتشكيله
+     *  الحقيقي - التطبيع بيستبدل حرف بحرف فبيحافظ على نفس أطوال/مواضع
+     *  النص الأصلي بالظبط، فالمواضع صالحة للاستخدام على النص الأصلي مباشرة. */
     private static String bestSnippet(String text, List<String> words, int maxChars) {
-        String lower = text.toLowerCase(Locale.ROOT);
+        String normalized = DataManager.normalize(text);
         int bestIdx = -1;
         for (String w : words) {
-            int idx = lower.indexOf(w);
+            int idx = normalized.indexOf(w);
             if (idx != -1 && (bestIdx == -1 || idx < bestIdx)) bestIdx = idx;
         }
         if (bestIdx == -1) bestIdx = 0;

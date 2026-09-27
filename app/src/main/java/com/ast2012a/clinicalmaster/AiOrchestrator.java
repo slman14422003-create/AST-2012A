@@ -61,6 +61,29 @@ import java.util.Locale;
  * نفسه (Timeout/انقطاع لحظي) قبل ما يوصل لأي رد من السيرفر - "متانة"
  * إضافية ضد تقلبات شبكة الموبايل العادية، بدون إعادة محاولة أبدًا لو
  * وصل فعليًا رد (ولو كان خطأ) من السيرفر نفسه.
+ *
+ * تحديث v12 (وصول أشمل لملفات التطبيق + دمج قارئ PDF + إدراك أوسع):
+ * 1) "الحالات": المرحلة صفر (تطابق فوري) ومرحلة التأريض المحلي
+ *    (DataManager.buildGroundingContext) كانوا بيقروا بس من قاعدة البيانات
+ *    المدمجة مع التطبيق (loadBuiltinDatabase) - أي حالة أضافها المستخدم
+ *    بنفسه من شاشة "حالاتي" (المخصّصة، custom=true) كانت غير مرئية تمامًا
+ *    للمساعد الذكي رغم إنها فعليًا "ملف" حقيقي في التطبيق. دلوقتي الاتنين
+ *    بيستخدموا DataManager.allCases(ctx) (المدمجة + المخصّصة مع بعض).
+ * 2) دمج قارئ PDF مباشرة: زر جديد "اسأل الذكاء الاصطناعي عن هذا الملف" في
+ *    قائمة "المزيد" بقارئ PDF (PdfViewerActivity) بيستخرج نص الملف المفتوح
+ *    فعليًا (نفس DocumentTextExtractor المستخدم لمكتبة السحابة) ويفتح شاشة
+ *    المحادثة (AiAssistantActivity) مع تمرير اسم الملف ونصه. answer() بقى
+ *    ليها Overload جديد ياخد documentName/documentText - لو موجودين، بنتخطى
+ *    التصنيف (Router) بالكامل ونروح مباشرة لـrunGrounded (المسار الإكلينيكي
+ *    الأدق) مع إرفاق نص الملف كمصدر أساسي مُعلَّم بوضوح، ونتخطى إجابة
+ *    "المرحلة صفر" الفورية (مصممة لتطابق حالة جهاز، مش لتحليل مستند خارجي).
+ * 3) نظرة عامة على "برامج العلاج" (TreatmentProgramManager) لما السؤال
+ *    يتكلم عنها عمومًا (زي "برامجي" أو "خطة العلاج") - نفس فكرة
+ *    mentionsPatientsGenerally لكن لبرامج العلاج بدل المرضى.
+ * 4) بحث مكتبة مستندات السحابة (CloudKnowledgeManager) بقى يستخدم نفس
+ *    محرك التطبيع والمرادفات المستخدم أصلًا في DataManager (تفصيل كامل في
+ *    تعليق الكود بأول CloudKnowledgeManager) بدل تطابق نصي بسيط بلا وعي
+ *    بصيغ العربي المختلفة - نفس جودة البحث في كل مصادر المساعد.
  */
 public final class AiOrchestrator {
 
@@ -111,8 +134,34 @@ public final class AiOrchestrator {
      */
     public static void answer(Context ctx, String text, String patientId,
             java.util.List<ChatMessage> history, StageListener stages, ResultCallback callback) {
+        answer(ctx, text, patientId, null, null, history, stages, callback);
+    }
+
+    /**
+     * @param documentName  اسم ملف PDF مفتوح حاليًا في قارئ الملفات داخل
+     *                      التطبيق (لو الشاشة اتفتحت من زر "اسأل الذكاء
+     *                      الاصطناعي عن هذا الملف") - يُستخدم فقط للعرض في
+     *                      شارة السياق ولتوضيح اسم الملف للنموذج.
+     * @param documentText  النص الكامل (أو المستخرج، حتى حد معيّن) لنفس
+     *                      الملف - عبر DocumentTextExtractor. مرّر null
+     *                      للاتنين لو مفيش مستند مرتبط بهذه المحادثة.
+     */
+    public static void answer(Context ctx, String text, String patientId,
+            String documentName, String documentText,
+            java.util.List<ChatMessage> history, StageListener stages, ResultCallback callback) {
         if (stages != null) stages.onClassifying();
         final String historyContext = AiPrompts.buildHistoryContext(history);
+
+        // v12: لو مرفق مستند PDF من قارئ الملفات، بنتخطى التصنيف (Router)
+        // بالكامل ونروح مباشرة لمسار التأريض الكامل - عشان أي سؤال عن
+        // الملف (حتى "لخصلي الملف" اللي مش بشكلها الظاهري سؤال "بحث") ياخد
+        // فعليًا نص الملف كمصدر أساسي، بدل ما يعتمد قرار التصنيف (المصمم
+        // أصلًا لتحديد الحاجة لبحث قاعدة الجهاز/مصادر خارجية) على حالة مش
+        // متعلقة أصلًا بوجود مستند مرفق.
+        if (documentText != null && !documentText.trim().isEmpty()) {
+            runGrounded(ctx, text, patientId, historyContext, null, documentName, documentText, stages, callback);
+            return;
+        }
 
         AiClient.classifyIntent(text, historyContext, new AiClient.Callback() {
             @Override
@@ -123,7 +172,7 @@ public final class AiOrchestrator {
                     // مش موجود (رد قديم الشكل أو فضّل يسيبه فاضي)، runGrounded
                     // بترجع تلقائيًا لنص السؤال الأصلي زي السلوك القديم.
                     String physioTermHint = AiPrompts.extractSearchTerm(decision);
-                    runGrounded(ctx, text, patientId, historyContext, physioTermHint, stages, callback);
+                    runGrounded(ctx, text, patientId, historyContext, physioTermHint, null, null, stages, callback);
                 } else {
                     runChat(ctx, text, historyContext, stages, callback);
                 }
@@ -134,7 +183,7 @@ public final class AiOrchestrator {
                 // فشل التصنيف نفسه (مشكلة شبكة مثلًا) - نرجع للسلوك الآمن
                 // الأصلي (تأريض كامل) بدل ما نوقف الرد على المستخدم. مفيش
                 // مصطلح بحث جاهز هنا فـrunGrounded هتستخدم نص السؤال كما هو.
-                runGrounded(ctx, text, patientId, historyContext, null, stages, callback);
+                runGrounded(ctx, text, patientId, historyContext, null, null, null, stages, callback);
             }
         });
     }
@@ -676,22 +725,51 @@ public final class AiOrchestrator {
         return false;
     }
 
+    /** كلمات دالة على إن السؤال يتكلم عن "برامج العلاج" اللي بناها المستخدم
+     *  بنفسه (TreatmentProgramManager) بشكل عام - نفس فكرة
+     *  PATIENT_OVERVIEW_HINTS فوق لكن لبرامج العلاج بدل المرضى، عشان
+     *  المساعد "يفهم" جزء برامج العلاج في التطبيق برضو، مش بس قاعدة
+     *  البروتوكولات وملفات المرضى. */
+    private static final String[] PROGRAM_OVERVIEW_HINTS = {
+            "برنامجي", "برامجي", "برامج العلاج", "البرنامج العلاجي", "برامج علاجية",
+            "خطة العلاج", "خططي العلاجية", "برامج التأهيل"
+    };
+
+    private static boolean mentionsProgramsGenerally(String text) {
+        if (text == null) return false;
+        String t = text.trim();
+        for (String hint : PROGRAM_OVERVIEW_HINTS) {
+            if (t.contains(hint)) return true;
+        }
+        return false;
+    }
+
     private static void runGrounded(Context ctx, String text, String patientId,
-            String historyContext, String physioTermHint, StageListener stages, ResultCallback callback) {
+            String historyContext, String physioTermHint, String documentName, String documentText,
+            StageListener stages, ResultCallback callback) {
         if (stages != null) stages.onSearching();
 
-        // المرحلة صفر: هل يوجد تطابق مباشر وواثق في قاعدة بيانات الجهاز؟
-        // لو أه، نجاوب فورًا من البيانات الموثقة نفسها - بدون إنترنت وبدون
-        // أي نموذج ذكاء اصطناعي خارجي - إجابة مضمونة الدقة 100%.
-        DataManager.SearchResult direct = DataManager.search(text, DataManager.loadBuiltinDatabase(ctx));
-        if (!direct.items.isEmpty() && !direct.isFallback) {
-            CaseItem top = direct.items.get(0);
-            String reply = DataManager.buildLocalAnswer(top);
-            if (direct.items.size() > 1) {
-                reply += "\n\nتوجد " + (direct.items.size() - 1) + " حالة أخرى مطابقة أيضًا في القاعدة يمكن مراجعتها من شاشة البحث الرئيسية.";
+        boolean hasDocument = documentText != null && !documentText.trim().isEmpty();
+
+        // المرحلة صفر: هل يوجد تطابق مباشر وواثق في قاعدة بيانات الجهاز
+        // (المدمجة + حالات المستخدم المخصّصة معًا - v12)؟ لو أه، نجاوب فورًا
+        // من البيانات الموثقة نفسها - بدون إنترنت وبدون أي نموذج ذكاء
+        // اصطناعي خارجي - إجابة مضمونة الدقة 100%. تُتخطى هذه المرحلة تمامًا
+        // لو مرفق مستند PDF (hasDocument): إجابة "مطابقة حالة جهاز" الفورية
+        // مصممة لسؤال عن بروتوكول جهاز، مش لتحليل محتوى مستند خارجي مرفق
+        // عمدًا - تخطيها هنا يضمن إن سؤال المستخدم عن ملفه يتجاوب فعليًا
+        // بالرجوع لمحتوى الملف، مش بإجابة جهاز غير متعلقة بيه بالغلط.
+        if (!hasDocument) {
+            DataManager.SearchResult direct = DataManager.search(text, DataManager.allCases(ctx));
+            if (!direct.items.isEmpty() && !direct.isFallback) {
+                CaseItem top = direct.items.get(0);
+                String reply = DataManager.buildLocalAnswer(top);
+                if (direct.items.size() > 1) {
+                    reply += "\n\nتوجد " + (direct.items.size() - 1) + " حالة أخرى مطابقة أيضًا في القاعدة يمكن مراجعتها من شاشة البحث الرئيسية.";
+                }
+                callback.onGroundedReply(reply, "قاعدة بيانات الجهاز الموثقة (إجابة فورية بدون إنترنت)", null);
+                return;
             }
-            callback.onGroundedReply(reply, "قاعدة بيانات الجهاز الموثقة (إجابة فورية بدون إنترنت)", null);
-            return;
         }
 
         // المرحلة الأولى: تأريض محلي أوسع (تطابق جزئي/تقريبي) - بروتوكولات
@@ -741,6 +819,21 @@ public final class AiOrchestrator {
         PubMedClient.Result pubmed = PubMedClient.search(physioQuery);
 
         StringBuilder extraContext = new StringBuilder();
+
+        // مستند PDF مفتوح حاليًا في قارئ الملفات (v12 - راجع تعليق answer()
+        // وتعليق v12 فوق تعريف الكلاس): يُرفق أولًا وبأوضح تعليم ممكن لأنه
+        // غالبًا المصدر المقصود تحديدًا من سؤال المستخدم في هذا المسار
+        // (السؤال جاء أصلًا من زر "اسأل الذكاء الاصطناعي عن هذا الملف").
+        if (hasDocument) {
+            extraContext.append("مستند PDF مفتوح حاليًا في قارئ الملفات داخل التطبيق")
+                    .append(documentName != null && !documentName.trim().isEmpty()
+                            ? " (اسم الملف: \"" + documentName.trim() + "\")" : "")
+                    .append(" - هذا هو المصدر الأساسي المقصود من سؤال المستخدم لو كان يتكلم عن " +
+                            "\"هذا الملف\" أو \"المستند\" أو طلب تلخيصه/شرحه/تحليله؛ رجّحه على أي " +
+                            "مصدر آخر عند التعارض معه ما لم يخالف قاعدة سلامة معروفة وثابتة:\n")
+                    .append(documentText.trim()).append("\n\n");
+        }
+
         if (grounding != null) {
             extraContext.append("بروتوكولات موثقة ذات صلة من قاعدة بيانات الجهاز:\n")
                     .append(grounding.contextText).append("\n\n");
@@ -780,6 +873,17 @@ public final class AiOrchestrator {
             }
         }
 
+        // برامج العلاج (v12): نفس فكرة نظرة المرضى العامة فوق لكن لبرامج
+        // العلاج المتكاملة اللي بناها المستخدم بنفسه (TreatmentProgramManager) -
+        // تُرفق فقط لو سؤال المستخدم بيتكلم عنها بشكل عام، مش مع كل سؤال
+        // إكلينيكي عادي (تجنبًا لتضخيم كل طلب ببيانات غير ذات صلة).
+        if (mentionsProgramsGenerally(text)) {
+            String programsOverview = TreatmentProgramManager.buildProgramsOverviewContext(ctx);
+            if (programsOverview != null) {
+                extraContext.append(programsOverview).append("\n\n");
+            }
+        }
+
         // المصدرين الخارجيين بيترفقوا مع بعض (مش واحد بديل التاني) لما
         // الاتنين يرجعوا نتيجة - عشان النموذج يشوفهم كمصدرين مستقلين
         // يقدر يقارن بينهم فعليًا (اتفاق أو تعارض) بدل ما يوصله مصدر واحد
@@ -807,6 +911,7 @@ public final class AiOrchestrator {
         final String rawSourcesBlock = extraContext.length() > 0 ? extraContext.toString() : null;
         final int groundedCount = grounding != null ? grounding.caseCount : 0;
         final String cloudSuffixFinal = cloudDocsContext != null ? " + مستندات سحابية للمستخدم" : "";
+        final String documentSuffixFinal = hasDocument ? " + مستند PDF مفتوح حاليًا" : "";
         String clinicalModel = AiModelSelector.forClinical();
 
         // شارة المصدر النهائية بتتحدد من نفس المتغيرات دي بغض النظر عن
@@ -830,11 +935,20 @@ public final class AiOrchestrator {
         final String externalDesc = externalDescBuilder0.isEmpty() ? null : externalDescBuilder0;
         final String sourceLabel;
         if (groundedCount > 0 && externalDesc != null) {
-            sourceLabel = "إجابة تكميلية عامة (لا يوجد تطابق مباشر) - بروتوكولات قريبة (" + groundedCount + ") + " + externalDesc + cloudSuffixFinal;
+            sourceLabel = "إجابة تكميلية عامة (لا يوجد تطابق مباشر) - بروتوكولات قريبة (" + groundedCount + ") + " + externalDesc + cloudSuffixFinal + documentSuffixFinal;
         } else if (groundedCount > 0) {
-            sourceLabel = "إجابة تكميلية عامة - أقرب بروتوكولات في القاعدة (" + groundedCount + ")، بدون تطابق مباشر مؤكد" + cloudSuffixFinal;
+            sourceLabel = "إجابة تكميلية عامة - أقرب بروتوكولات في القاعدة (" + groundedCount + ")، بدون تطابق مباشر مؤكد" + cloudSuffixFinal + documentSuffixFinal;
         } else if (externalDesc != null) {
-            sourceLabel = "إجابة عامة من مصادر خارجية (خارج قاعدة بيانات الجهاز) - " + externalDesc + cloudSuffixFinal;
+            sourceLabel = "إجابة عامة من مصادر خارجية (خارج قاعدة بيانات الجهاز) - " + externalDesc + cloudSuffixFinal + documentSuffixFinal;
+        } else if (hasDocument) {
+            // v12: مفيش تطابق بروتوكولات ولا مصدر خارجي، لكن فيه مستند PDF
+            // مرفق فعليًا - ده غالبًا هو الحال الشائع لسؤال جاي من قارئ PDF
+            // (تلخيص/شرح محتوى الملف نفسه)، فلازم شارة المصدر تعكسه بدل ما
+            // تقع في الفرع الأخير المضلِّل ("بدون مصدر موثّق").
+            sourceLabel = "إجابة مبنية على مستند PDF مفتوح حاليًا في قارئ الملفات"
+                    + (documentName != null && !documentName.trim().isEmpty()
+                            ? " (\"" + documentName.trim() + "\")" : "")
+                    + cloudSuffixFinal;
         } else if (cloudDocsContext != null) {
             sourceLabel = "إجابة عامة بالاستناد لمستندات سحابية رفعها المستخدم (بدون تطابق في قاعدة الجهاز أو المصادر الخارجية)";
         } else {

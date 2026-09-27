@@ -390,6 +390,7 @@ public class PdfViewerActivity extends AppCompatActivity {
         popup.setOutsideTouchable(true);
         popup.setElevation(Ui.dp(this, 8));
 
+        bindMoreMenuRow(content, popup, R.id.row_pdf_ask_ai, this::askAiAboutThisFile);
         bindMoreMenuRow(content, popup, R.id.row_pdf_translate_page, this::showTranslateLanguageDialog);
         bindMoreMenuRow(content, popup, R.id.row_pdf_translate_full, this::showFullTranslateLanguageDialog);
         bindMoreMenuRow(content, popup, R.id.row_pdf_save_copy, this::saveCurrentFileCopy);
@@ -434,6 +435,45 @@ public class PdfViewerActivity extends AppCompatActivity {
         } catch (Exception e) {
             Toast.makeText(this, "تعذّر فتح الملف بتطبيق آخر.", Toast.LENGTH_SHORT).show();
         }
+    }
+
+    // ------------------------------------------------------------------ دمج المساعد الذكي (v12)
+
+    /**
+     * "اسأل الذكاء الاصطناعي عن هذا الملف": بتستخرج نص الملف المفتوح حاليًا
+     * في القارئ (بنفس DocumentTextExtractor المستخدم أصلًا لمكتبة المستندات
+     * السحابية - نفس الجودة وبدون تكرار منطق استخراج جديد) على Thread منفصل
+     * (استخراج PDFBox لملف كامل ممكن ياخد وقت مع ملفات كبيرة)، وبعدين تفتح
+     * شاشة المحادثة (AiAssistantActivity) مع تمرير اسم الملف ونصه كسياق
+     * أساسي - راجع AiOrchestrator.answer(documentName, documentText, ...)
+     * وتعليق v12 هناك لتفاصيل إزاي المساعد بيتعامل مع المستند المرفق.
+     */
+    private void askAiAboutThisFile() {
+        if (currentFile == null || !currentFile.exists()) {
+            Toast.makeText(this, "لا يوجد ملف مفتوح.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        final File file = currentFile;
+        final String title = titleView.getText() != null ? titleView.getText().toString().trim() : "";
+        Toast.makeText(this, "جارٍ تجهيز الملف للمساعد الذكي...", Toast.LENGTH_SHORT).show();
+        textExecutor.execute(() -> {
+            String text = DocumentTextExtractor.extractText(getApplicationContext(), file, "pdf");
+            runOnUiThread(() -> {
+                if (isFinishing() || isDestroyed()) return;
+                if (text == null || text.trim().isEmpty()) {
+                    Toast.makeText(this,
+                            "تعذّر استخراج نص من هذا الملف (قد يكون صورة ممسوحة ضوئيًا بدون طبقة نص قابلة للقراءة).",
+                            Toast.LENGTH_LONG).show();
+                    return;
+                }
+                Intent i = new Intent(this, AiAssistantActivity.class);
+                i.putExtra("document_name", title.isEmpty() ? "مستند PDF" : title);
+                i.putExtra("document_text", text);
+                i.putExtra("prefill_query", "لخّصلي أهم النقاط في هذا الملف.");
+                startActivity(i);
+                overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
+            });
+        });
     }
 
     // ------------------------------------------------------------------ تحميل الملف

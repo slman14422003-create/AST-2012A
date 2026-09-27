@@ -75,4 +75,52 @@ public class TreatmentProgramManager {
         for (TreatmentProgram t : list) if (!id.equals(t.id)) filtered.add(t);
         savePrograms(ctx, filtered);
     }
+
+    /** حد أقصى لعدد البرامج المُرفَقة في النظرة العامة، بنفس فكرة
+     *  PatientManager.MAX_PATIENTS_IN_OVERVIEW - تجنبًا لتضخيم الطلب لو
+     *  المستخدم عنده عدد كبير من البرامج المحفوظة. */
+    private static final int MAX_PROGRAMS_IN_OVERVIEW = 15;
+
+    /**
+     * نظرة عامة على كل برامج العلاج اللي بناها المستخدم بنفسه - تُستخدم من
+     * AiOrchestrator لما سؤال المستخدم يتكلم عن "برامجه" أو "برامج العلاج"
+     * بشكل عام (مش عن حالة/بروتوكول جهاز واحد). بعكس ملف المريض، برامج
+     * العلاج مالهاش بيانات تعريفية شخصية أصلًا (تشخيص وخطة علاج فقط) فمفيش
+     * داعي لأي إخفاء هوية هنا. يرجع null لو مفيش أي برنامج محفوظ أصلًا.
+     */
+    public static String buildProgramsOverviewContext(Context ctx) {
+        List<TreatmentProgram> all = loadPrograms(ctx);
+        if (all.isEmpty()) return null;
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("نظرة عامة على برامج العلاج المتكاملة التي بناها المستخدم بنفسه (من شاشة \"برامج العلاج\" ")
+          .append("داخل التطبيق - كل برنامج أوسع من حالة/بروتوكول جهاز واحد، وقد يكون مرتبطًا بأكثر من مريض):\n");
+
+        int shown = Math.min(MAX_PROGRAMS_IN_OVERVIEW, all.size());
+        for (int i = 0; i < shown; i++) {
+            TreatmentProgram t = all.get(i);
+            sb.append("• ").append(t.title.trim().isEmpty() ? "(بدون عنوان)" : t.title.trim());
+            List<String> parts = new ArrayList<>();
+            if (!t.diagnosis.trim().isEmpty()) parts.add("التشخيص: " + t.diagnosis.trim());
+            if (!t.goals.trim().isEmpty()) parts.add("الأهداف: " + t.goals.trim());
+            if (!t.phases.trim().isEmpty()) parts.add("المراحل: " + t.phases.trim());
+            if (!t.precautions.trim().isEmpty()) parts.add("الاحتياطات: " + t.precautions.trim());
+            if (!parts.isEmpty()) {
+                // StringBuilder بدل String.join(CharSequence, Iterable) عمدًا:
+                // minSdk الحالي 24 والدالة دي متاحة من API 26 بس (نفس القيد
+                // الموثّق في تعليق AiOrchestrator.buildFormulationContext).
+                StringBuilder joined = new StringBuilder();
+                for (int j = 0; j < parts.size(); j++) {
+                    if (j > 0) joined.append(" | ");
+                    joined.append(parts.get(j));
+                }
+                sb.append(" — ").append(joined);
+            }
+            sb.append("\n");
+        }
+        if (all.size() > shown) {
+            sb.append("(يوجد ").append(all.size() - shown).append(" برنامج إضافي لم يُعرض هنا لتقليل الحجم.)\n");
+        }
+        return sb.toString().trim();
+    }
 }

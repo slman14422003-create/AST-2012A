@@ -382,7 +382,11 @@ public class DataManager {
         return text;
     }
 
-    private static Set<String> expandWithSynonyms(String term) {
+    /** كانت private - بقت مرئية على مستوى الحزمة (Package-private) عشان
+     *  CloudKnowledgeManager يقدر يستخدم نفس منطق المرادفات الطبية/العلاجية
+     *  ده في بحث مستندات السحابة كمان، بدل ما يفضل بحث تطابق نصي بسيط بلا
+     *  وعي بالمرادفات - نفس محرك البحث في كل أنحاء التطبيق. */
+    static Set<String> expandWithSynonyms(String term) {
         Set<String> expanded = new HashSet<>();
         expanded.add(term);
         for (Map.Entry<String, String[]> e : SYNONYMS.entrySet()) {
@@ -664,9 +668,18 @@ public class DataManager {
         public int caseCount;
     }
 
+    /**
+     * إصلاح مهم (وصول المساعد الذكي لملفات ناقص): كانت بتأرض بس من
+     * loadBuiltinDatabase (131 بروتوكول المدمجة مع التطبيق)، من غير أي
+     * وعي بـ"الحالات" المخصّصة اللي المستخدم أضافها بنفسه من شاشة "حالاتي"
+     * (MyCasesActivity/AddEditCaseActivity) - فكان المساعد يجاوب وكأن
+     * حالات المستخدم دي مش موجودة أصلًا. دلوقتي بتستخدم allCases(ctx)
+     * (المدمجة + المخصّصة مع بعض) عشان أي حالة أضافها المستخدم بنفسه
+     * تبقى فعليًا مصدر تأريض زي أي بروتوكول رسمي بالظبط.
+     */
     public static GroundingResult buildGroundingContext(Context ctx, String userQuery, int maxCases) {
-        List<CaseItem> builtin = loadBuiltinDatabase(ctx);
-        SearchResult result = search(userQuery, builtin);
+        List<CaseItem> all = allCases(ctx);
+        SearchResult result = search(userQuery, all);
         if (result.items.isEmpty()) return null;
 
         GroundingResult g = new GroundingResult();

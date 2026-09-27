@@ -7,6 +7,7 @@ import android.view.MenuItem;
 import android.view.View;
 import android.view.animation.AnimationUtils;
 import android.view.animation.LayoutAnimationController;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -57,6 +58,13 @@ public class AiAssistantActivity extends AppCompatActivity {
      *  بيتخزن معرّفه هنا عشان كل سؤال في المحادثة (بما فيها إعادة المحاولة)
      *  يفضل مرفق معاه ملخص المريض المُعرَّف (بدون اسم/هاتف) تلقائيًا. */
     private String contextPatientId;
+
+    /** لو الشاشة اتفتحت من زر "اسأل الذكاء الاصطناعي عن هذا الملف" في قارئ
+     *  PDF (v12)، بيتخزنوا اسم الملف ونصه المستخرَج هنا عشان كل سؤال في
+     *  المحادثة يفضل مرفق معاه محتوى الملف تلقائيًا - راجع
+     *  AiOrchestrator.answer(documentName, documentText, ...). */
+    private String contextDocumentName;
+    private String contextDocumentText;
 
     private static final String[] QUICK_PROMPTS = {
             "اشرحلي الفرق بين TENS و EMS",
@@ -112,17 +120,37 @@ public class AiAssistantActivity extends AppCompatActivity {
         }
 
         contextPatientId = getIntent().getStringExtra("patient_id");
-        bindPatientContextBanner();
+        contextDocumentName = getIntent().getStringExtra("document_name");
+        contextDocumentText = getIntent().getStringExtra("document_text");
+        bindContextBanner();
     }
 
-    /** لو الشاشة مرتبطة بمريض محدد، نعرض شريط توضيحي صغير أعلى المحادثة
-     *  (نفس فكرة شارة المصدر) يفهم المستخدم إن المساعد شايف ملف المريض -
-     *  بدون ذكر اسمه بالطبع، مجرد تأكيد إن السياق مرفق. */
-    private void bindPatientContextBanner() {
+    /** لو الشاشة مرتبطة بمريض محدد أو بمستند PDF مفتوح من القارئ (v12)،
+     *  بنعرض شريط توضيحي صغير أعلى المحادثة (نفس فكرة شارة المصدر) يفهم
+     *  المستخدم إن المساعد شايف سياق إضافي - بدون ذكر اسم المريض بالطبع،
+     *  مجرد تأكيد إن السياق مرفق. الحالتين متبادلتين (الشاشة بتتفتح إما من
+     *  ملف مريض أو من قارئ PDF، مش الاتنين مع بعض)، فبانر واحد قابل لإعادة
+     *  الاستخدام كفاية بدل تكرار Layout كامل لكل حالة. */
+    private void bindContextBanner() {
         View banner = findViewById(R.id.ai_patient_context_banner);
         if (banner == null) return;
-        banner.setVisibility(contextPatientId != null && !contextPatientId.isEmpty()
-                ? View.VISIBLE : View.GONE);
+        boolean hasPatient = contextPatientId != null && !contextPatientId.isEmpty();
+        boolean hasDocument = contextDocumentText != null && !contextDocumentText.trim().isEmpty();
+
+        ImageView icon = findViewById(R.id.ai_context_banner_icon);
+        TextView text = findViewById(R.id.ai_context_banner_text);
+        if (hasDocument) {
+            if (icon != null) icon.setImageResource(R.drawable.ic_pdf);
+            if (text != null) {
+                String name = contextDocumentName != null && !contextDocumentName.trim().isEmpty()
+                        ? contextDocumentName.trim() : "مستند PDF";
+                text.setText("مستند \"" + name + "\" مرفق بهذه المحادثة");
+            }
+        } else if (hasPatient) {
+            if (icon != null) icon.setImageResource(R.drawable.ic_users);
+            if (text != null) text.setText("ملف المريض مرفق بهذه المحادثة (بدون الاسم أو رقم الهاتف)");
+        }
+        banner.setVisibility(hasDocument || hasPatient ? View.VISIBLE : View.GONE);
     }
 
     /** دوران مستمر بطيء لنجمة مؤشر التفكير (مثل نجمة Claude وهي تفكر). */
@@ -226,7 +254,8 @@ public class AiAssistantActivity extends AppCompatActivity {
 
         setTypingStage(0);
 
-        executor.execute(() -> AiOrchestrator.answer(this, text, contextPatientId, historySnapshot,
+        executor.execute(() -> AiOrchestrator.answer(this, text, contextPatientId,
+                contextDocumentName, contextDocumentText, historySnapshot,
                 new AiOrchestrator.StageListener() {
                     @Override public void onClassifying() { runOnUiThread(() -> setTypingStage(0)); }
                     @Override public void onSearching() { runOnUiThread(() -> setTypingStage(1)); }
