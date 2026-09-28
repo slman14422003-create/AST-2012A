@@ -29,13 +29,37 @@ final class SpeechPrep {
     }
 
     /** النص المنطوق + خريطة كل حرف منه إلى موضع الكلمة الأصلية (نسبةً لبداية النص المُدخل). */
+    /** مقطع من النص المنطوق بلغة واحدة (ar / en / fr / tr) - لاختيار الصوت الأدق لكل جزء. */
+    static final class Run {
+        final int start;
+        final int end;
+        final String lang;
+
+        Run(int start, int end, String lang) {
+            this.start = start;
+            this.end = end;
+            this.lang = lang;
+        }
+    }
+
     static final class Spoken {
         final String text;
         final int[] map;
+        /** null = لغة واحدة. غير ذلك: مقاطع متتالية تغطي النص كله بلغات مختلفة (عربي داخل إنجليزي وبالعكس). */
+        final List<Run> runs;
 
         Spoken(String text, int[] map) {
+            this(text, map, null);
+        }
+
+        Spoken(String text, int[] map, List<Run> runs) {
             this.text = text;
             this.map = map;
+            this.runs = runs;
+        }
+
+        boolean isMixed() {
+            return runs != null && runs.size() > 1;
         }
 
         int toOriginal(int spokenOffset) {
@@ -49,6 +73,23 @@ final class SpeechPrep {
     // ------------------------------------------------------------------ نقطة الدخول
 
     static Spoken prepare(String src, String lang) {
+        return prepare(src, lang, null, false);
+    }
+
+    /**
+     * latinLang = لغة الكلمات اللاتينية في الملف (en/fr/tr) عندما يكون المقطع عربيًا؛
+     * mixed = true يُنتج runs لتبديل الصوت عند كل كلمة بلغة مختلفة.
+     */
+    static Spoken prepare(String src, String lang, String latinLang, boolean mixed) {
+        LATIN.set(latinLang);
+        try {
+            return prepareImpl(src, lang, latinLang, mixed);
+        } finally {
+            LATIN.set(null);
+        }
+    }
+
+    private static Spoken prepareImpl(String src, String lang, String latinLang, boolean mixed) {
         if (src == null || src.isEmpty()) return new Spoken("", new int[0]);
         final boolean ar = "ar".equals(lang);
         int n = src.length();
@@ -97,12 +138,21 @@ final class SpeechPrep {
         String prevBare = "";
         boolean prevNum = false;
         boolean first = true;
+        final List<Integer> runS = new ArrayList<>();
+        final List<String> runL = new ArrayList<>();
+        final List<Boolean> runU = new ArrayList<>();
         for (int t = 0; t < toks.size(); t++) {
             String tok = toks.get(t);
             int s = starts.get(t);
             String sp;
             try {
                 sp = speakToken(tok, lang, first, prevBare, prevNum);
+                // "بال" / "وال" منفصلة قبل كلمة لاتينية (بالـ TENS): تُنطق al لا "با ل"
+                if (t + 1 < toks.size() && startsLatin(clean(toks.get(t + 1)))) {
+                    String cb = bareOf(clean(tok));
+                    String cl = AL_ONLY.contains(cb) ? ArabicPhonetics.clitic(cb) : null;
+                    if (cl != null) sp = cl;
+                }
             } catch (RuntimeException e) {
                 sp = tok; // أي خطأ غير متوقع: ننطق الكلمة كما هي
             }
@@ -131,6 +181,11 @@ final class SpeechPrep {
                 map[mlen++] = s;
             }
             map = ensure(map, mlen + sp.length());
+            if (mixed) {
+                runS.add(out.length());
+                runL.add(tokLang(sp, lang, latinLang));
+                runU.add(U_EN.containsKey(bareOf(sp).toLowerCase(Locale.ROOT)));
+            }
             for (int k = 0; k < sp.length(); k++) {
                 out.append(sp.charAt(k));
                 map[mlen++] = s;
@@ -143,7 +198,61 @@ final class SpeechPrep {
             map[mlen] = map[Math.max(0, mlen - 1)];
             mlen++;
         }
-        return new Spoken(out.toString(), Arrays.copyOf(map, mlen));
+        List<Run> runs = mixed ? buildRuns(runS, runL, runU, out.length(), lang) : null;
+        return new Spoken(out.toString(), Arrays.copyOf(map, mlen), runs);
+    }
+
+    private static final ThreadLocal<String> LATIN = new ThreadLocal<>();
+
+    private static boolean isArabicScript(char c) {
+        return (c >= 0x0600 && c <= 0x06FF) || (c >= 0x0750 && c <= 0x077F);
+    }
+
+    /** لغة الكلمة المنطوقة: عربية لو حروفها عربية، وإلا لغة المقطع (أو لغة الملف اللاتينية لو المقطع عربي). null = أرقام/رموز. */
+    private static String tokLang(String sp, String chunkLang, String latinLang) {
+        int ar = 0, lat = 0;
+        for (int i = 0; i < sp.length(); i++) {
+            char c = sp.charAt(i);
+            if (!Character.isLetter(c)) continue;
+            if (isArabicScript(c)) ar++;
+            else lat++;
+        }
+        if (ar == 0 && lat == 0) return null;
+        if (ar >= lat) return "ar";
+        if ("ar".equals(chunkLang)) return latinLang != null ? latinLang : "en";
+        return chunkLang;
+    }
+
+    private static List<Run> buildRuns(List<Integer> starts, List<String> langs, List<Boolean> unit, int total, String def) {
+        int n = starts.size();
+        if (n == 0) return null;
+        String[] eff = new String[n];
+        for (int i = 0; i < n; i++) {
+            String l = langs.get(i);
+            if (l == null) {
+                if (i + 1 < n && langs.get(i + 1) != null && unit.get(i + 1) && !"ar".equals(langs.get(i + 1))) {
+                    l = langs.get(i + 1); // 20 Hz: الرقم مع وحدته
+                } else if (i > 0) {
+                    l = eff[i - 1];
+                } else {
+                    for (int k = 1; k < n && l == null; k++) l = langs.get(k);
+                }
+                if (l == null) l = def;
+            }
+            eff[i] = l;
+        }
+        List<Run> runs = new ArrayList<>();
+        int runStart = 0;
+        String cur = eff[0];
+        for (int i = 1; i < n; i++) {
+            if (!eff[i].equals(cur)) {
+                runs.add(new Run(runStart, starts.get(i), cur));
+                runStart = starts.get(i);
+                cur = eff[i];
+            }
+        }
+        runs.add(new Run(runStart, total, cur));
+        return runs.size() > 1 ? runs : null;
     }
 
     /** 0 = لا دمج، 1 = دمج عادي (ال / حرف عطف)، 2 = دمج حروف متباعدة. */
@@ -253,10 +362,238 @@ final class SpeechPrep {
         String pre = keepSyms(t.substring(0, a));
         String core = t.substring(a, b);
         String tail = t.substring(b);
-        String body = faithfulCore(core, lang);
-        if (ar) body = arabicWords(body, "");
+        String body = speakCore(core, lang, !lastPunctIn(tail).isEmpty());
         String res = pre + body + keepSyms(tail);
         return res + lastPunctIn(tail);
+    }
+
+    // ------------------------------------------------------------------ خيارات قابلة للتعديل (من إعدادات القراءة)
+
+    /** تشكيل ذكي للكلمات العربية غير المشكولة (قاموس + وقف بالسكون للنص المشكول). */
+    private static volatile boolean assist = true;
+    /** نطق الاختصارات اللاتينية (EMG, MRI...) حرفًا حرفًا. */
+    private static volatile boolean spellAcronyms = true;
+    private static volatile Map<String, String> userLex = new HashMap<>();
+
+    static void setArabicAssist(boolean v) {
+        assist = v;
+    }
+
+    static void setSpellAcronyms(boolean v) {
+        spellAcronyms = v;
+    }
+
+    /** أسطر بصيغة: كلمة=نطقها  (أو  كلمة=>نطقها). النطق يمكن أن يكون بحروف عربية لكلمة أجنبية. */
+    static void setUserLexicon(String text) {
+        Map<String, String> m = new HashMap<>();
+        if (text != null) {
+            for (String line : text.split("\\r?\\n")) {
+                String l = line.trim();
+                if (l.isEmpty() || l.startsWith("#")) continue;
+                int k = l.indexOf("=>");
+                int len = 2;
+                if (k < 0) {
+                    k = l.indexOf('=');
+                    len = 1;
+                }
+                if (k <= 0) continue;
+                String key = lexKey(l.substring(0, k).trim());
+                String val = l.substring(k + len).trim();
+                if (!key.isEmpty() && !val.isEmpty()) m.put(key, val);
+            }
+        }
+        userLex = m;
+    }
+
+    private static String lexKey(String s) {
+        StringBuilder sb = new StringBuilder(s.length());
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (ArabicPhonetics.isMark(c)) continue;
+            sb.append(Character.toLowerCase(c));
+        }
+        return ArabicPhonetics.normalize(sb.toString());
+    }
+
+    private static String speakCore(String core, String lang, boolean pausal) {
+        String ul = userLex.get(lexKey(core));
+        if (ul != null) return ul;
+        boolean hasAr = ArabicPhonetics.hasArabic(core);
+        if (hasAr && hasLatinOrDigit(core)) {
+            String mixedScript = speakMixedScript(core, lang, pausal);
+            if (mixedScript != null) return mixedScript;
+        }
+        return polish(greekWords(faithfulCore(core, lang), "ar".equals(lang)), lang, pausal);
+    }
+
+    private static boolean startsLatin(String s) {
+        String b = bareOf(s);
+        if (b.isEmpty()) return false;
+        char c = b.charAt(0);
+        return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+    }
+
+    private static boolean hasLatinOrDigit(String s) {
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) return true;
+        }
+        return false;
+    }
+
+    /**
+     * كلمة تخلط الكتابتين: "الـMRI" / "بالـTENS" / "3جلسات". نفصلها لجزأين حتى ينطق كل جزء بلغته
+     * ("ال" تُنطق al لا "ألف لام"). لو الجزء العربي حرف واحد (ج2، م2) نتركها كما هي.
+     */
+    private static String speakMixedScript(String core, String lang, boolean pausal) {
+        List<String> segs = new ArrayList<>();
+        List<Boolean> isAr = new ArrayList<>();
+        StringBuilder cur = new StringBuilder();
+        Boolean curAr = null;
+        for (int i = 0; i < core.length(); i++) {
+            char c = core.charAt(i);
+            Boolean a = null;
+            if (isArabicScript(c) && (Character.isLetter(c) || ArabicPhonetics.isMark(c))) a = Boolean.TRUE;
+            else if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) a = Boolean.FALSE;
+            if (a != null && curAr != null && a != curAr) {
+                segs.add(cur.toString());
+                isAr.add(curAr);
+                cur.setLength(0);
+            }
+            if (a != null) curAr = a;
+            cur.append(c);
+        }
+        if (cur.length() > 0 && curAr != null) {
+            segs.add(cur.toString());
+            isAr.add(curAr);
+        }
+        if (segs.size() < 2) return null;
+        for (int i = 0; i < segs.size(); i++) {
+            if (!isAr.get(i)) continue;
+            int letters = 0;
+            String sg = segs.get(i);
+            for (int k = 0; k < sg.length(); k++) if (isArabicScript(sg.charAt(k)) && Character.isLetter(sg.charAt(k))) letters++;
+            if (letters < 2) return null;
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < segs.size(); i++) {
+            String sg = segs.get(i);
+            boolean last = i == segs.size() - 1;
+            String part;
+            if (isAr.get(i)) {
+                String cl = (!last && isPlainArabicWord(sg)) ? ArabicPhonetics.clitic(sg) : null;
+                part = cl != null ? cl : polish(faithfulCore(sg, lang), lang, pausal && last);
+            } else {
+                part = polish(greekWords(faithfulCore(sg, lang), "ar".equals(lang)), lang, false);
+            }
+            if (part.isEmpty()) continue;
+            if (sb.length() > 0) sb.append(' ');
+            sb.append(part);
+        }
+        return sb.toString();
+    }
+
+    /** لكل كلمة: عربية -> تشكيل/وقف؛ لاتينية -> اختصارات تُنطق بشكلها الصحيح. */
+    private static String polish(String body, String lang, boolean pausal) {
+        if (body.isEmpty()) return body;
+        String[] parts = body.split(" ");
+        StringBuilder sb = new StringBuilder(body.length() + 16);
+        for (int k = 0; k < parts.length; k++) {
+            if (k > 0) sb.append(' ');
+            String w = parts[k];
+            if (ArabicPhonetics.hasArabic(w)) {
+                w = diacritize(w);
+                if (assist && pausal && k == parts.length - 1) w = ArabicPhonetics.pausal(w);
+            } else if (spellAcronyms && englishContext(lang)) {
+                w = acronym(w);
+            }
+            sb.append(w);
+        }
+        return sb.toString();
+    }
+
+    private static boolean englishContext(String lang) {
+        if ("en".equals(lang)) return true;
+        if ("ar".equals(lang)) {
+            String l = LATIN.get();
+            return l == null || "en".equals(l);
+        }
+        return false;
+    }
+
+    private static final Set<String> ACRO_WORD = new HashSet<>(Arrays.asList(
+            "TENS", "NASA", "DOMS", "COVID", "AIDS", "RICE", "PRICE", "LASER", "BOSU", "SARS", "NICE", "SWOT"));
+    private static final Set<String> ACRO_SPELL = new HashSet<>(Arrays.asList(
+            "EMG", "MRI", "CT", "ROM", "VAS", "ACL", "PCL", "MCL", "LCL", "ASIS", "PNF", "CPM", "ADL", "ICU", "BMI",
+            "HIV", "DNA", "RNA", "USA", "UK", "ECG", "EKG", "EEG", "NCV", "TMJ", "SI", "OA", "RA", "MS", "ALS", "ADHD",
+            "CPR", "BP", "HR", "PT", "OT", "DVT", "COPD", "WHO", "CNS", "PNS", "IV", "IM", "PRP", "EMS", "NMES", "FES",
+            "PDF", "AI", "ER", "OR", "WBC", "RBC", "CRP", "ESR", "SLR", "MMT", "GCS", "TUG", "FIM", "DASH", "ODI"));
+
+    /** EMG -> "E M G"، TENS -> "Tens"، NSAID -> "en said"؛ غير ذلك كما هو. */
+    private static String acronym(String w) {
+        int n = w.length();
+        if (n < 2 || n > 7) return w;
+        boolean plural = n >= 3 && w.charAt(n - 1) == 's';
+        String base = plural ? w.substring(0, n - 1) : w;
+        for (int i = 0; i < base.length(); i++) {
+            char c = base.charAt(i);
+            if (c < 'A' || c > 'Z') return w;
+        }
+        if (base.equals("NSAID")) return "en said" + (plural ? "s" : "");
+        if (ACRO_WORD.contains(base)) return base.charAt(0) + base.substring(1).toLowerCase(Locale.ROOT) + (plural ? "s" : "");
+        boolean vowel = false;
+        for (int i = 0; i < base.length(); i++) {
+            if ("AEIOUY".indexOf(base.charAt(i)) >= 0) vowel = true;
+        }
+        if (!ACRO_SPELL.contains(base) && (vowel || base.length() > 5)) return w;
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < base.length(); i++) {
+            if (i > 0) sb.append(' ');
+            sb.append(base.charAt(i));
+        }
+        if (plural) sb.append('s');
+        return sb.toString();
+    }
+
+    private static final String GREEK_EN[] = {"alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta",
+            "iota", "kappa", "lambda", "mu", "nu", "xi", "omicron", "pi", "rho", "sigma", "sigma", "tau", "upsilon",
+            "phi", "chi", "psi", "omega"};
+    private static final String GREEK_AR[] = {"\u0623\u0644\u0641\u0627", "\u0628\u064A\u062A\u0627", "\u062C\u0627\u0645\u0627",
+            "\u062F\u0644\u062A\u0627", "\u0625\u0628\u0633\u0644\u0648\u0646", "\u0632\u064A\u062A\u0627", "\u0625\u064A\u062A\u0627",
+            "\u062B\u064A\u062A\u0627", "\u0623\u064A\u0648\u062A\u0627", "\u0643\u0627\u0628\u0627", "\u0644\u0627\u0645\u062F\u0627",
+            "\u0645\u064A\u0648", "\u0646\u064A\u0648", "\u0643\u0633\u064A", "\u0623\u0648\u0645\u064A\u0643\u0631\u0648\u0646",
+            "\u0628\u0627\u064A", "\u0631\u0648", "\u0633\u064A\u063A\u0645\u0627", "\u0633\u064A\u063A\u0645\u0627",
+            "\u062A\u0648", "\u0623\u0628\u0633\u0644\u0648\u0646", "\u0641\u0627\u064A", "\u0643\u0627\u064A",
+            "\u0628\u0633\u0627\u064A", "\u0623\u0648\u0645\u064A\u063A\u0627"};
+
+    /** α β μ Δ Ω ... تُنطق باسمها (المحركات غالبًا تتجاهلها). */
+    private static String greekWords(String s, boolean ar) {
+        boolean any = false;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if ((c >= 0x0391 && c <= 0x03C9) || c == 0x00B5) {
+                any = true;
+                break;
+            }
+        }
+        if (!any) return s;
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            int idx = -1;
+            if (c == 0x00B5) idx = 11;
+            else if (c >= 0x0391 && c <= 0x03A9) idx = c - 0x0391;
+            else if (c >= 0x03B1 && c <= 0x03C9) idx = c - 0x03B1;
+            if (idx >= 0 && idx < GREEK_EN.length) {
+                String name = c == 0x00B5 ? (ar ? "\u0645\u0627\u064A\u0643\u0631\u0648" : "micro") : (ar ? GREEK_AR[idx] : GREEK_EN[idx]);
+                if (sb.length() > 0 && sb.charAt(sb.length() - 1) != ' ') sb.append(' ');
+                sb.append(name);
+                if (i + 1 < s.length()) sb.append(' ');
+            } else {
+                sb.append(c);
+            }
+        }
+        return sb.toString().replaceAll("\\s+", " ").trim();
     }
 
     /** يُبقي حروف الكلمة وأرقامها فقط، والرموز الداخلية (شرطة، شرطة مائلة، أقواس...) تصير فراغًا. */
@@ -350,7 +687,7 @@ final class SpeechPrep {
         } else {
             body = coreToSpoken(core, lang, first, prevNum);
         }
-        if (ar) body = arabicWords(body, prevBare);
+        body = polish(body, lang, false);
 
         boolean pct = false, deg = false;
         StringBuilder sym = new StringBuilder();
@@ -764,17 +1101,6 @@ final class SpeechPrep {
         d("أيضا", "أَيْضًا", false);
     }
 
-    private static String arabicWords(String body, String prevBare) {
-        if (body.isEmpty() || !hasArabic(body)) return body;
-        String[] parts = body.split(" ");
-        StringBuilder sb = new StringBuilder(body.length() + 16);
-        for (int k = 0; k < parts.length; k++) {
-            if (k > 0) sb.append(' ');
-            sb.append(diacritize(parts[k]));
-        }
-        return sb.toString();
-    }
-
     private static boolean hasArabic(String s) {
         for (int i = 0; i < s.length(); i++) {
             char c = s.charAt(i);
@@ -793,7 +1119,12 @@ final class SpeechPrep {
 
     private static String diacritize(String p) {
         if (p.length() < 2 || !isPlainArabicWord(p)) return p;
-        return hamzaAfterAl(p.length() <= 14 ? diacritizeCore(p) : p);
+        String r = p.length() <= 14 ? diacritizeCore(p) : p;
+        if (assist && r.equals(p)) {
+            String lx = ArabicPhonetics.lookup(p); // مصطلحات طبية/علاجية بتشكيل كامل
+            if (lx != null) r = lx;
+        }
+        return hamzaAfterAl(r);
     }
 
     /** الأعصاب / الإصابة / بالألم: سكون على لام "ال" ليُنطق الهمز بوضوح (الْأعصاب) لا "ال أ" مفصولة. */
@@ -884,6 +1215,6 @@ final class SpeechPrep {
             else if (c == 0x066C) c = ',';
             sb.append(c);
         }
-        return sb.toString();
+        return ArabicPhonetics.normalize(sb.toString());
     }
 }

@@ -83,6 +83,15 @@ final class PdfSpeaker {
     private static final String PREFS = "pdf_tts";
     private static final String KEY_RATE = "rate";
     private static final String KEY_ENGINE = "engine"; // cloud | device
+    private static final String KEY_PROFILE = "profile";   // 0 طبيعي، 1 واضح (افتراضي)، 2 دراسة
+    private static final String KEY_PITCH = "pitch_idx";
+    private static final String KEY_MIXED = "mixed_voices";
+    private static final String KEY_ASSIST = "arabic_assist";
+    private static final String KEY_ACRO = "spell_acronyms";
+    private static final String KEY_LEXICON = "user_lexicon";
+    private static final int[] PITCH_HZ = {0, 8, 16, -8, -16};
+    private static final String[] PITCH_LABELS = {"عادية", "أعلى قليلًا", "أعلى", "أخفض قليلًا", "أخفض"};
+    private static final String[] PROFILE_LABELS = {"طبيعي", "واضح (مُوصى به)", "دراسة (بطيء مع وقفات)"};
     private static final int POLL_MS = 40;
     /** تأخير الصوت الفعلي عن موضع التشغيل (مخزن المخرج/البلوتوث): نؤخّر التظليل بمقداره حتى لا يسبق الكلمة. */
     private static final int CLOUD_LAG_MS = 190;
@@ -100,6 +109,12 @@ final class PdfSpeaker {
             {"ar", "ar-JO-TaimNeural", "تيم · أردني · ذكر"},
             {"ar", "ar-LB-LaylaNeural", "ليلى · لبنانية · أنثى"},
             {"ar", "ar-LB-RamiNeural", "رامي · لبناني · ذكر"},
+            {"ar", "ar-AE-FatimaNeural", "فاطمة · إماراتية · أنثى"},
+            {"ar", "ar-AE-HamdanNeural", "حمدان · إماراتي · ذكر"},
+            {"ar", "ar-QA-AmalNeural", "أمل · قطرية · أنثى"},
+            {"ar", "ar-QA-MoazNeural", "معاذ · قطري · ذكر"},
+            {"ar", "ar-KW-NouraNeural", "نورة · كويتية · أنثى"},
+            {"ar", "ar-KW-FahedNeural", "فهد · كويتي · ذكر"},
             {"en", "en-US-EmmaMultilingualNeural", "Emma · أمريكية · أنثى"},
             {"en", "en-US-AndrewMultilingualNeural", "Andrew · أمريكي · ذكر"},
             {"en", "en-US-AvaMultilingualNeural", "Ava · أمريكية · أنثى"},
@@ -214,6 +229,9 @@ final class PdfSpeaker {
         this.rate = Math.max(0.5f, Math.min(2.5f, prefs.getFloat(KEY_RATE, 1.0f)));
         this.cacheDir = new File(app.getCacheDir(), "tts_cloud");
         cleanCacheDir();
+        SpeechPrep.setArabicAssist(isArabicAssist());
+        SpeechPrep.setSpellAcronyms(isSpellAcronyms());
+        SpeechPrep.setUserLexicon(getUserLexicon());
         initTts();
     }
 
@@ -238,7 +256,7 @@ final class PdfSpeaker {
                             .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                             .build());
                     tts.setSpeechRate(rate);
-                    tts.setPitch(1.0f);
+                    tts.setPitch(devicePitch());
                 } catch (Throwable ignored) {
                 }
                 tts.setOnUtteranceProgressListener(progressListener);
@@ -573,6 +591,120 @@ final class PdfSpeaker {
             setState(State.LOADING);
             speakChunk(resumeChunk, resumeShift);
         }
+    }
+
+    // ------------------------------------------------------------------ مرونة النطق (أسلوب، طبقة، خيارات، قاموس)
+
+    int getProfile() {
+        return Math.max(0, Math.min(2, prefs.getInt(KEY_PROFILE, 1)));
+    }
+
+    String getProfileLabel() {
+        return PROFILE_LABELS[getProfile()];
+    }
+
+    void cycleProfile() {
+        prefs.edit().putInt(KEY_PROFILE, (getProfile() + 1) % 3).apply();
+        onSpeechSettingChanged();
+    }
+
+    int getPitchIndex() {
+        return Math.max(0, Math.min(PITCH_HZ.length - 1, prefs.getInt(KEY_PITCH, 0)));
+    }
+
+    String getPitchLabel() {
+        return PITCH_LABELS[getPitchIndex()];
+    }
+
+    void cyclePitch() {
+        prefs.edit().putInt(KEY_PITCH, (getPitchIndex() + 1) % PITCH_HZ.length).apply();
+        try {
+            if (ttsReady) tts.setPitch(devicePitch());
+        } catch (Throwable ignored) {
+        }
+        onSpeechSettingChanged();
+    }
+
+    private float devicePitch() {
+        return Math.max(0.6f, Math.min(1.5f, 1f + PITCH_HZ[getPitchIndex()] / 40f));
+    }
+
+    /** تبديل الصوت تلقائيًا للكلمات الأجنبية داخل الجملة العربية (والعكس). */
+    boolean isMixedVoices() {
+        return prefs.getBoolean(KEY_MIXED, true);
+    }
+
+    void setMixedVoices(boolean v) {
+        prefs.edit().putBoolean(KEY_MIXED, v).apply();
+        onSpeechSettingChanged();
+    }
+
+    /** تشكيل ذكي (قاموس مصطلحات + وقف بالسكون للنص المشكول). */
+    boolean isArabicAssist() {
+        return prefs.getBoolean(KEY_ASSIST, true);
+    }
+
+    void setArabicAssist(boolean v) {
+        prefs.edit().putBoolean(KEY_ASSIST, v).apply();
+        SpeechPrep.setArabicAssist(v);
+        onSpeechSettingChanged();
+    }
+
+    boolean isSpellAcronyms() {
+        return prefs.getBoolean(KEY_ACRO, true);
+    }
+
+    void setSpellAcronyms(boolean v) {
+        prefs.edit().putBoolean(KEY_ACRO, v).apply();
+        SpeechPrep.setSpellAcronyms(v);
+        onSpeechSettingChanged();
+    }
+
+    String getUserLexicon() {
+        return prefs.getString(KEY_LEXICON, "");
+    }
+
+    void setUserLexicon(String text) {
+        String t = text == null ? "" : text;
+        prefs.edit().putString(KEY_LEXICON, t).apply();
+        SpeechPrep.setUserLexicon(t);
+        onSpeechSettingChanged();
+    }
+
+    /** أي تغيير في النطق يُبطل الأصوات المجهّزة مسبقًا ويعيد القراءة من الموضع الحالي. */
+    private void onSpeechSettingChanged() {
+        resetCloud();
+        if (state != State.IDLE) restartFromCurrentPoint();
+    }
+
+    private EdgeTtsClient.Style cloudStyle() {
+        switch (getProfile()) {
+            case 0:
+                return new EdgeTtsClient.Style(0, PITCH_HZ[getPitchIndex()], 0, 0);
+            case 2:
+                return new EdgeTtsClient.Style(-12, PITCH_HZ[getPitchIndex()], 350, 140);
+            default:
+                return new EdgeTtsClient.Style(-5, PITCH_HZ[getPitchIndex()], 150, 60);
+        }
+    }
+
+    private static boolean isMaleVoice(String voiceName) {
+        for (String[] v : CLOUD_VOICES) {
+            if (v[1].equals(voiceName)) return v[2].contains("ذكر");
+        }
+        return false;
+    }
+
+    /** صوت الجزء الأجنبي: اختيار المستخدم للغة إن وُجد، وإلا أول صوت بنفس جنس الصوت الأساسي. */
+    private String runVoice(String runLang, String chunkLang, String baseVoice) {
+        if (runLang.equals(chunkLang)) return baseVoice;
+        String saved = prefs.getString("cvoice_" + runLang, null);
+        if (saved != null && !badCloudVoices.contains(saved)) return saved;
+        boolean male = isMaleVoice(baseVoice);
+        for (String[] v : CLOUD_VOICES) {
+            if (v[0].equals(runLang) && !badCloudVoices.contains(v[1]) && v[2].contains("ذكر") == male) return v[1];
+        }
+        return cloudVoiceFor(runLang);
     }
 
     // ------------------------------------------------------------------ اختيار المحرك والأصوات
@@ -936,7 +1068,7 @@ final class PdfSpeaker {
         int s = Math.min(c.end, c.start + Math.max(0, shift));
         String rawText = currentText.text.substring(s, c.end);
         if (rawText.trim().isEmpty()) return false;
-        SpeechPrep.Spoken spoken = SpeechPrep.prepare(EdgeTtsClient.sanitize(rawText), c.lang);
+        SpeechPrep.Spoken spoken = SpeechPrep.prepare(EdgeTtsClient.sanitize(rawText), c.lang, currentText.latin, false);
         String text = spoken.text;
         if (text.trim().isEmpty()) return false; // رموز فقط
         deviceSpoken = spoken;
@@ -1022,9 +1154,19 @@ final class PdfSpeaker {
         final String voice = cloudVoiceFor(c.lang);
         final String key = cloudKey(voice, pt.pageIndex, idx);
         if (cloudReady.containsKey(key) || cloudPending.contains(key)) return key;
+        final boolean mix = isMixedVoices();
         final SpeechPrep.Spoken spoken = SpeechPrep.prepare(
-                EdgeTtsClient.sanitize(pt.text.substring(c.start, c.end)), c.lang);
+                EdgeTtsClient.sanitize(pt.text.substring(c.start, c.end)), c.lang, pt.latin, mix);
         final String sent = spoken.text;
+        final EdgeTtsClient.Style style = cloudStyle();
+        List<EdgeTtsClient.Run> runList = null;
+        if (mix && spoken.isMixed()) {
+            runList = new ArrayList<>();
+            for (SpeechPrep.Run r : spoken.runs) {
+                runList.add(new EdgeTtsClient.Run(r.start, r.end, runVoice(r.lang, c.lang, voice)));
+            }
+        }
+        final List<EdgeTtsClient.Run> runs = runList;
         final int gen = cloudGen;
         cloudPending.add(key);
         try {
@@ -1035,7 +1177,8 @@ final class PdfSpeaker {
                     if (sent.trim().isEmpty()) { // مقطع كله رموز: لا يوجد ما يُنطق - نتخطاه بدون اتصال
                         r = new EdgeTtsClient.Result(new byte[0], new int[0], new int[0]);
                     } else {
-                        r = EdgeTtsClient.synthesize(sent, voice);
+                        r = runs != null ? EdgeTtsClient.synthesizeRuns(sent, runs, voice, style)
+                                : EdgeTtsClient.synthesize(sent, voice, style);
                     }
                 } catch (Throwable t) {
                     err = t;

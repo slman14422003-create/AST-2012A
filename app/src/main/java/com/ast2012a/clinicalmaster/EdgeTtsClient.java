@@ -77,6 +77,39 @@ final class EdgeTtsClient {
         }
     }
 
+    /** أسلوب النطق: سرعة العربي (نسبة)، طبقة الصوت (Hz)، وقفات إضافية بعد الجمل/الفواصل (ms). */
+    static final class Style {
+        static final Style DEFAULT = new Style(0, 0, 0, 0);
+        final int arRatePct;
+        final int pitchHz;
+        final int sentencePauseMs;
+        final int commaPauseMs;
+
+        Style(int arRatePct, int pitchHz, int sentencePauseMs, int commaPauseMs) {
+            this.arRatePct = arRatePct;
+            this.pitchHz = pitchHz;
+            this.sentencePauseMs = sentencePauseMs;
+            this.commaPauseMs = commaPauseMs;
+        }
+    }
+
+    /** جزء من النص (مواضع داخل النص المُرسَل) يُنطق بصوت معيّن - لتبديل الصوت عند الكلمات الأجنبية. */
+    static final class Run {
+        final int start;
+        final int end;
+        final String voice;
+
+        Run(int start, int end, String voice) {
+            this.start = start;
+            this.end = end;
+            this.voice = voice;
+        }
+    }
+
+    /** جودة 96kbps أولًا؛ لو رفضها الخادم نثبّت 48kbps لبقية الجلسة. */
+    private static volatile boolean hqBroken = false;
+    private static volatile int mixedFails = 0;
+
     /** يستبدل أي محرف تحكّم بمسافة (بنفس الطول تمامًا حتى تبقى مواضع الكلمات صحيحة). */
     static String sanitize(String s) {
         char[] a = s.toCharArray();
@@ -125,13 +158,41 @@ final class EdgeTtsClient {
 
     /** ينطق نصًا واحدًا (جملة/مقطع قصير) بالصوت المحدد. يُستدعى من خيط خلفي فقط (يحجب حتى ينتهي). */
     static Result synthesize(String text, String voice) throws IOException {
+        return synthesize(text, voice, Style.DEFAULT);
+    }
+
+    static Result synthesize(String text, String voice, Style style) throws IOException {
+        return doSynth(text, buildSsml(text, null, voice, style), voice, false);
+    }
+
+    /**
+     * ينطق نصًا متعدد اللغات بصوت مختلف لكل جزء (عربي بصوت عربي، إنجليزي بصوت إنجليزي) في طلب واحد
+     * وبتوقيت كلمات متصل. لو الخادم رفض تعدد الأصوات نرجع تلقائيًا لصوت واحد للنص كله.
+     */
+    static Result synthesizeRuns(String text, List<Run> runs, String baseVoice, Style style) throws IOException {
+        if (runs == null || runs.size() < 2 || mixedFails >= 2) return synthesize(text, baseVoice, style);
+        try {
+            Result r = doSynth(text, buildSsml(text, runs, baseVoice, style), baseVoice, true);
+            mixedFails = 0;
+            return r;
+        } catch (ServiceException e) {
+            if (e.httpCode != 0) throw e;
+            mixedFails++;
+            return synthesize(text, baseVoice, style);
+        }
+    }
+
+    private static Result doSynth(String text, String ssml, String voice, boolean mixed) throws IOException {
         long skewMs = 0;
         IOException last = null;
+        boolean hq = !hqBroken;
+        boolean hqFellBack = false;
         for (int attempt = 0; attempt < 3; attempt++) {
-            Attempt a = new Attempt(text, voice, skewMs);
+            Attempt a = new Attempt(text, ssml, voice, skewMs, hq);
             try {
                 Result r = a.run();
                 lastError = "";
+                if (hqFellBack) hqBroken = true; // 48kbps نجح بعد فشل 96kbps
                 return r;
             } catch (IOException e) {
                 last = e;
@@ -139,6 +200,13 @@ final class EdgeTtsClient {
                 // 403 غالبًا بسبب فرق ساعة الجهاز عن الخادم: نصحّح الفرق ونعيد المحاولة
                 if (a.httpCode == 403 && a.serverDateMs > 0) {
                     skewMs = a.serverDateMs - System.currentTimeMillis();
+                } else if (e instanceof ServiceException && a.httpCode == 0) {
+                    if (hq) { // ربما الصيغة عالية الجودة غير مدعومة: نجرّب العادية فورًا
+                        hq = false;
+                        hqFellBack = true;
+                        continue;
+                    }
+                    if (mixed) throw e;
                 } else if (isNetworkFailure(e) && !(e.getMessage() != null && e.getMessage().contains("timeout"))) {
                     break; // لا إنترنت أصلًا - لا فائدة من التكرار
                 }
@@ -155,15 +223,19 @@ final class EdgeTtsClient {
 
     private static final class Attempt {
         final String text;
+        final String ssml;
         final String voice;
         final long skewMs;
+        final boolean hq;
         volatile int httpCode = 0;
         volatile long serverDateMs = 0;
 
-        Attempt(String text, String voice, long skewMs) {
+        Attempt(String text, String ssml, String voice, long skewMs, boolean hq) {
             this.text = text;
+            this.ssml = ssml;
             this.voice = voice;
             this.skewMs = skewMs;
+            this.hq = hq;
         }
 
         Result run() throws IOException {
@@ -193,8 +265,8 @@ final class EdgeTtsClient {
             WebSocketListener listener = new WebSocketListener() {
                 @Override
                 public void onOpen(WebSocket ws, Response response) {
-                    ws.send(configMessage());
-                    ws.send(ssmlMessage(text, voice));
+                    ws.send(configMessage(hq));
+                    ws.send(ssmlMessage(ssml));
                 }
 
                 @Override
@@ -306,26 +378,72 @@ final class EdgeTtsClient {
         return f.format(new Date()) + " GMT+0000 (Coordinated Universal Time)";
     }
 
-    private static String configMessage() {
+    private static String configMessage(boolean hq) {
         return "X-Timestamp:" + timestamp() + "\r\n"
                 + "Content-Type:application/json; charset=utf-8\r\n"
                 + "Path:speech.config\r\n\r\n"
                 + "{\"context\":{\"synthesis\":{\"audio\":{\"metadataoptions\":{"
                 + "\"sentenceBoundaryEnabled\":\"false\",\"wordBoundaryEnabled\":\"true\"},"
-                + "\"outputFormat\":\"audio-24khz-48kbitrate-mono-mp3\"}}}}\r\n";
+                + "\"outputFormat\":\"" + (hq ? "audio-24khz-96kbitrate-mono-mp3" : "audio-24khz-48kbitrate-mono-mp3")
+                + "\"}}}}\r\n";
     }
 
-    private static String ssmlMessage(String text, String voice) {
-        String[] vp = voice.split("-");
-        String xmlLang = vp.length >= 2 ? vp[0] + "-" + vp[1] : "en-US"; // لغة الصوت الفعلية (ar-SA...) لا en-US ثابتة
-        String ssml = "<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='" + xmlLang + "'>"
-                + "<voice name='" + longVoiceName(voice) + "'>"
-                + "<prosody pitch='+0Hz' rate='+0%' volume='+0%'>" + xmlEscape(text) + "</prosody>"
-                + "</voice></speak>";
+    private static String ssmlMessage(String ssml) {
         return "X-RequestId:" + randomHex() + "\r\n"
                 + "Content-Type:application/ssml+xml\r\n"
                 + "X-Timestamp:" + timestamp() + "Z\r\n"
                 + "Path:ssml\r\n\r\n" + ssml;
+    }
+
+    private static String localeOf(String voice) {
+        String[] vp = voice.split("-");
+        return vp.length >= 2 ? vp[0] + "-" + vp[1] : "en-US"; // لغة الصوت الفعلية (ar-SA...) لا en-US ثابتة
+    }
+
+    private static String buildSsml(String text, List<Run> runs, String baseVoice, Style st) {
+        StringBuilder sb = new StringBuilder(text.length() + 256);
+        sb.append("<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='")
+                .append(localeOf(baseVoice)).append("'>");
+        if (runs == null || runs.size() < 2) {
+            sb.append(voiceElement(baseVoice, text, st));
+        } else {
+            for (Run r : runs) {
+                int a = Math.max(0, Math.min(text.length(), r.start));
+                int b = Math.max(a, Math.min(text.length(), r.end));
+                String piece = text.substring(a, b).trim();
+                if (piece.isEmpty()) continue;
+                sb.append(voiceElement(r.voice, piece, st));
+            }
+        }
+        return sb.append("</speak>").toString();
+    }
+
+    private static String voiceElement(String voice, String piece, Style st) {
+        int rate = voice.startsWith("ar-") ? st.arRatePct : 0;
+        return "<voice name='" + longVoiceName(voice) + "'><prosody pitch='" + signed(st.pitchHz) + "Hz' rate='"
+                + signed(rate) + "%' volume='+0%'>" + withBreaks(piece, st) + "</prosody></voice>";
+    }
+
+    private static String signed(int v) {
+        return (v >= 0 ? "+" : "") + v;
+    }
+
+    /** يهرّب الرموز ويضيف وقفات إضافية بعد نهاية الجمل والفواصل (لا داخل الأرقام العشرية). */
+    private static String withBreaks(String s, Style st) {
+        if (st.sentencePauseMs <= 0 && st.commaPauseMs <= 0) return xmlEscape(s);
+        StringBuilder sb = new StringBuilder(s.length() + 32);
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            sb.append(xmlEscape(String.valueOf(c)));
+            boolean boundary = i + 1 >= s.length() || Character.isWhitespace(s.charAt(i + 1));
+            if (!boundary) continue;
+            if (st.sentencePauseMs > 0 && ".!?\u061F\u061B\u2026".indexOf(c) >= 0) {
+                sb.append("<break time='").append(st.sentencePauseMs).append("ms'/>");
+            } else if (st.commaPauseMs > 0 && ",\u060C:".indexOf(c) >= 0) {
+                sb.append("<break time='").append(st.commaPauseMs).append("ms'/>");
+            }
+        }
+        return sb.toString();
     }
 
     /** ar-SA-ZariyahNeural -> Microsoft Server Speech Text to Speech Voice (ar-SA, ZariyahNeural) */

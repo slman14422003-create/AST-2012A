@@ -73,8 +73,11 @@ final class PdfSpeechText {
         final String text;
         final List<Word> words;
         final List<Chunk> chunks;
+        /** لغة الكلمات اللاتينية في الملف (en/fr/tr) - تُستخدم لصوت الكلمات الأجنبية داخل المقاطع العربية. */
+        final String latin;
 
-        PageText(int pageIndex, String text, List<Word> words, List<Chunk> chunks) {
+        PageText(int pageIndex, String text, List<Word> words, List<Chunk> chunks, String latin) {
+            this.latin = latin;
             this.pageIndex = pageIndex;
             this.text = text;
             this.words = words;
@@ -170,7 +173,7 @@ final class PdfSpeechText {
     }
 
     private static PageText emptyPage(int pageIndex) {
-        return new PageText(pageIndex, "", new ArrayList<>(), new ArrayList<>());
+        return new PageText(pageIndex, "", new ArrayList<>(), new ArrayList<>(), "en");
     }
 
     // ------------------------------------------------------------------ الاستخراج
@@ -871,7 +874,7 @@ final class PdfSpeechText {
         }
 
         List<Chunk> chunks = mergeChunks(makeChunks(words, text, paraBefore, latin), text);
-        return new PageText(pageIndex, text, words, chunks);
+        return new PageText(pageIndex, text, words, chunks, latin);
     }
 
     private static boolean[] inferParagraphs(List<Word> words) {

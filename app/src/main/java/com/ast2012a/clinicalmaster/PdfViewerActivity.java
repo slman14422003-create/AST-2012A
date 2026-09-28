@@ -32,6 +32,7 @@ import android.view.ScaleGestureDetector;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
+import android.widget.EditText;
 import android.widget.HorizontalScrollView;
 import android.widget.ImageButton;
 import android.widget.ImageView;
@@ -1388,12 +1389,22 @@ public class PdfViewerActivity extends AppCompatActivity {
     private void showVoiceSettings() {
         if (speaker == null) return;
         final boolean cloud = speaker.isCloudEngine();
-        String[] items = new String[TTS_LANG_LABELS.length + 2];
+        final int nl = TTS_LANG_LABELS.length;
+        // 0 المحرك | 1..nl أصوات اللغات | ثم خيارات المرونة | آخرها إعدادات النظام
+        final int iProfile = nl + 1, iPitch = nl + 2, iAssist = nl + 3, iMixed = nl + 4, iAcro = nl + 5,
+                iLex = nl + 6, iSystem = nl + 7;
+        String[] items = new String[nl + 8];
         items[0] = cloud
                 ? "المحرك: صوت عصبي أونلاين (مجاني) ✓ - اضغط للتحويل لصوت الجهاز"
                 : "المحرك: صوت الجهاز (يعمل بدون إنترنت) - اضغط للتحويل للصوت العصبي";
-        for (int i = 0; i < TTS_LANG_LABELS.length; i++) items[i + 1] = "صوت " + TTS_LANG_LABELS[i];
-        items[TTS_LANG_LABELS.length + 1] = "إعدادات محرك النطق في النظام";
+        for (int i = 0; i < nl; i++) items[i + 1] = "صوت " + TTS_LANG_LABELS[i];
+        items[iProfile] = "أسلوب النطق: " + speaker.getProfileLabel() + " - اضغط للتبديل";
+        items[iPitch] = "طبقة الصوت: " + speaker.getPitchLabel() + " - اضغط للتبديل";
+        items[iAssist] = "تشكيل ذكي للعربي (شدّة/حركات/تنوين/مصطلحات): " + (speaker.isArabicAssist() ? "مفعّل ✓" : "معطّل");
+        items[iMixed] = "تبديل الصوت للكلمات الأجنبية داخل الجملة: " + (speaker.isMixedVoices() ? "مفعّل ✓" : "معطّل");
+        items[iAcro] = "نطق الاختصارات حرفًا حرفًا (EMG, MRI...): " + (speaker.isSpellAcronyms() ? "مفعّل ✓" : "معطّل");
+        items[iLex] = "قاموس النطق الخاص (تصحيح كلمات بعينها)";
+        items[iSystem] = "إعدادات محرك النطق في النظام";
         voiceDialog = new ClaudeDialog(this)
                 .setTitle("إعدادات القراءة الصوتية")
                 .setItems(items, (d, which) -> {
@@ -1401,12 +1412,55 @@ public class PdfViewerActivity extends AppCompatActivity {
                         speaker.setCloudEngine(!cloud);
                         Toast.makeText(this, cloud ? "تم التحويل لصوت الجهاز." : "تم التحويل للصوت العصبي الأونلاين.",
                                 Toast.LENGTH_SHORT).show();
-                    } else if (which == TTS_LANG_CODES.length + 1) {
+                    } else if (which == iSystem) {
                         openSystemTtsSettings();
+                    } else if (which == iProfile) {
+                        speaker.cycleProfile();
+                        showVoiceSettings();
+                    } else if (which == iPitch) {
+                        speaker.cyclePitch();
+                        showVoiceSettings();
+                    } else if (which == iAssist) {
+                        speaker.setArabicAssist(!speaker.isArabicAssist());
+                        showVoiceSettings();
+                    } else if (which == iMixed) {
+                        speaker.setMixedVoices(!speaker.isMixedVoices());
+                        showVoiceSettings();
+                    } else if (which == iAcro) {
+                        speaker.setSpellAcronyms(!speaker.isSpellAcronyms());
+                        showVoiceSettings();
+                    } else if (which == iLex) {
+                        showLexiconEditor();
                     } else {
                         showVoicePicker(which - 1);
                     }
                 })
+                .show();
+    }
+
+    /** قاموس نطق خاص: سطر لكل كلمة بصيغة  كلمة=نطقها  (مثال: Piriformis=بيريفورميس). */
+    private void showLexiconEditor() {
+        final EditText input = new EditText(this);
+        input.setText(speaker.getUserLexicon());
+        input.setHint("Piriformis=بيريفورميس\nمفصل=مَفْصِل");
+        input.setMinLines(5);
+        input.setGravity(Gravity.TOP | Gravity.START);
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        int pad = Ui.dp(this, 8);
+        box.setPadding(pad, pad, pad, 0);
+        box.addView(input, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+        voiceDialog = new ClaudeDialog(this)
+                .setTitle("قاموس النطق الخاص")
+                .setMessage("اكتب كل كلمة في سطر بصيغة: كلمة=نطقها. يمكن كتابة نطق الكلمة الأجنبية بحروف عربية.")
+                .setView(box)
+                .setPositiveButton("حفظ", (d, w) -> {
+                    speaker.setUserLexicon(input.getText().toString());
+                    Toast.makeText(this, "تم حفظ القاموس.", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("إلغاء", null)
                 .show();
     }
 
