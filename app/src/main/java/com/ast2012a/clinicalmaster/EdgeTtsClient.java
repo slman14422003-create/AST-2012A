@@ -5,6 +5,11 @@ import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.net.ConnectException;
+import java.net.SocketException;
+import java.net.SocketTimeoutException;
+import java.net.UnknownHostException;
+import javax.net.ssl.SSLException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.text.SimpleDateFormat;
@@ -84,20 +89,63 @@ final class EdgeTtsClient {
         return new String(a);
     }
 
+    /** آخر سبب فشل (للتشخيص فقط - يظهر في رسالة الخطأ للمستخدم). */
+    static volatile String lastError = "";
+
+    /** فشل من الخادم نفسه (الصوت غير مدعوم/الاتصال أُغلق بعد الاتصال) وليس انقطاع إنترنت. */
+    static final class ServiceException extends IOException {
+        final int httpCode;
+
+        ServiceException(String msg, int httpCode) {
+            super(msg);
+            this.httpCode = httpCode;
+        }
+    }
+
+    /** true لو الفشل سببه الشبكة (لا إنترنت / انتهاء المهلة) - تبديل الصوت لن يفيد وقتها. */
+    static boolean isNetworkFailure(Throwable t) {
+        while (t != null) {
+            if (t instanceof UnknownHostException || t instanceof ConnectException
+                    || t instanceof SocketTimeoutException || t instanceof SSLException
+                    || t instanceof SocketException) {
+                return true;
+            }
+            String m = t.getMessage();
+            if (m != null) {
+                String l = m.toLowerCase(Locale.ROOT);
+                if (l.contains("timeout") || l.contains("unable to resolve") || l.contains("failed to connect")
+                        || l.contains("network is unreachable")) {
+                    return true;
+                }
+            }
+            t = t.getCause();
+        }
+        return false;
+    }
+
     /** ينطق نصًا واحدًا (جملة/مقطع قصير) بالصوت المحدد. يُستدعى من خيط خلفي فقط (يحجب حتى ينتهي). */
     static Result synthesize(String text, String voice) throws IOException {
         long skewMs = 0;
         IOException last = null;
-        for (int attempt = 0; attempt < 2; attempt++) {
+        for (int attempt = 0; attempt < 3; attempt++) {
             Attempt a = new Attempt(text, voice, skewMs);
             try {
-                return a.run();
+                Result r = a.run();
+                lastError = "";
+                return r;
             } catch (IOException e) {
                 last = e;
-                // 403 غالبًا بسبب فرق ساعة الجهاز عن الخادم: نصحّح الفرق ونعيد مرة
+                lastError = (a.httpCode != 0 ? "HTTP " + a.httpCode + " " : "") + e.getMessage();
+                // 403 غالبًا بسبب فرق ساعة الجهاز عن الخادم: نصحّح الفرق ونعيد المحاولة
                 if (a.httpCode == 403 && a.serverDateMs > 0) {
                     skewMs = a.serverDateMs - System.currentTimeMillis();
-                } else {
+                } else if (isNetworkFailure(e) && !(e.getMessage() != null && e.getMessage().contains("timeout"))) {
+                    break; // لا إنترنت أصلًا - لا فائدة من التكرار
+                }
+                try {
+                    Thread.sleep(250L * (attempt + 1));
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
                     break;
                 }
             }
@@ -121,9 +169,9 @@ final class EdgeTtsClient {
         Result run() throws IOException {
             final String url = WSS_BASE
                     + "?TrustedClientToken=" + TRUSTED_CLIENT_TOKEN
+                    + "&ConnectionId=" + randomHex()
                     + "&Sec-MS-GEC=" + secMsGec(skewMs)
-                    + "&Sec-MS-GEC-Version=" + SEC_MS_GEC_VERSION
-                    + "&ConnectionId=" + randomHex();
+                    + "&Sec-MS-GEC-Version=" + SEC_MS_GEC_VERSION;
             Request req = new Request.Builder()
                     .url(url)
                     .header("Pragma", "no-cache")
@@ -140,6 +188,7 @@ final class EdgeTtsClient {
             final CountDownLatch done = new CountDownLatch(1);
             final AtomicBoolean finished = new AtomicBoolean(false);
             final AtomicReference<Throwable> error = new AtomicReference<>();
+            final AtomicReference<String> closeInfo = new AtomicReference<>();
 
             WebSocketListener listener = new WebSocketListener() {
                 @Override
@@ -173,6 +222,7 @@ final class EdgeTtsClient {
 
                 @Override
                 public void onClosing(WebSocket ws, int code, String reason) {
+                    if (!finished.get()) closeInfo.set("close=" + code + (reason != null && !reason.isEmpty() ? " " + reason : ""));
                     ws.close(code, null);
                     done.countDown();
                 }
@@ -204,10 +254,23 @@ final class EdgeTtsClient {
             }
             if (!finished.get()) {
                 Throwable t = error.get();
-                throw new IOException("edge tts closed early" + (httpCode != 0 ? " http=" + httpCode : "")
-                        + (t != null ? ": " + t.getMessage() : ""));
+                String info = "edge tts closed early" + (httpCode != 0 ? " http=" + httpCode : "")
+                        + (closeInfo.get() != null ? " " + closeInfo.get() : "")
+                        + (t != null ? ": " + t.getMessage() : "");
+                if (t != null && httpCode == 0) throw new IOException(info, t); // فشل شبكة (اتصال)
+                throw new ServiceException(info, httpCode); // الخادم ردّ لكنه رفض/أغلق
             }
             byte[] data = audio.toByteArray();
+            if (data.length < 200 && text.trim().length() > 2) {
+                boolean speakable = false;
+                for (int i = 0; i < text.length(); i++) {
+                    if (Character.isLetterOrDigit(text.charAt(i))) {
+                        speakable = true;
+                        break;
+                    }
+                }
+                if (speakable) throw new ServiceException("no audio received for voice " + voice, 0);
+            }
             int n = ms.size();
             int[] wMs = new int[n];
             int[] wChar = new int[n];

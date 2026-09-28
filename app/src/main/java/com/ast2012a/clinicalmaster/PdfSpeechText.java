@@ -202,18 +202,107 @@ final class PdfSpeechText {
             if (parts.length == 1) {
                 addWord(parts[0], minX, minY, maxX, maxY, pw, ph);
             } else {
-                // احتياط: لو رجع PdfBox سطرًا كاملًا بدل كلمة - نوزّع العرض بالتناسب مع عدد الحروف.
-                int total = 0;
-                for (String p : parts) total += p.length();
-                total = Math.max(1, total + parts.length - 1);
-                float cursor = minX;
-                float span = maxX - minX;
-                for (String p : parts) {
-                    float wPart = span * (p.length() / (float) total);
-                    addWord(p, cursor, minY, cursor + wPart, maxY, pw, ph);
-                    cursor += wPart + span * (1f / total);
+                boolean rtl = isRtlText(text);
+                // الأدق: نوزّع أحرف الكلمات على أحرف الصفحة الفعلية بحسب موضعها (يمين->يسار للعربي).
+                if (!assignByGlyphs(parts, tps, rtl, pw, ph)) {
+                    // احتياط: نوزّع العرض بالتناسب مع عدد الحروف - وللعربي نبدأ من اليمين (لا من اليسار).
+                    int total = 0;
+                    for (String p : parts) total += p.length();
+                    total = Math.max(1, total + parts.length - 1);
+                    float span = maxX - minX;
+                    float cursor = rtl ? maxX : minX;
+                    for (String p : parts) {
+                        float wPart = span * (p.length() / (float) total);
+                        if (rtl) {
+                            addWord(p, cursor - wPart, minY, cursor, maxY, pw, ph);
+                            cursor -= wPart + span * (1f / total);
+                        } else {
+                            addWord(p, cursor, minY, cursor + wPart, maxY, pw, ph);
+                            cursor += wPart + span * (1f / total);
+                        }
+                    }
                 }
             }
+        }
+
+        /** true لو حروف السطر العربية أكثر من اللاتينية (اتجاه القراءة من اليمين لليسار). */
+        private static boolean isRtlText(String t) {
+            int ar = 0, lat = 0;
+            for (int i = 0; i < t.length(); i++) {
+                char c = t.charAt(i);
+                if (!Character.isLetter(c)) continue;
+                if (isArabicChar(c) || (c >= 0x0590 && c <= 0x05FF)) ar++;
+                else lat++;
+            }
+            return ar > 0 && ar >= lat;
+        }
+
+        /**
+         * يربط كل كلمة بأحرفها الحقيقية في الصفحة: نرتّب أحرف الصفحة بصريًا (من اليمين لليسار للعربي،
+         * ومن اليسار لليمين لغيره) ثم نستهلك منها بعدد أحرف كل كلمة. لو اختلف عدد الأحرف
+         * (روابط/تطبيع) نرجع false ونستخدم التوزيع التناسبي.
+         */
+        private boolean assignByGlyphs(String[] parts, List<TextPosition> tps, boolean rtl, float pw, float ph) {
+            List<TextPosition> glyphs = new ArrayList<>();
+            int glyphChars = 0;
+            for (TextPosition tp : tps) {
+                String u = tp.getUnicode();
+                if (u == null) continue;
+                int n = 0;
+                for (int i = 0; i < u.length(); i++) {
+                    if (!Character.isWhitespace(u.charAt(i))) n++;
+                }
+                if (n == 0) continue;
+                glyphs.add(tp);
+                glyphChars += n;
+            }
+            int wordChars = 0;
+            for (String p : parts) wordChars += p.length();
+            if (glyphs.isEmpty() || glyphChars != wordChars) return false;
+
+            final boolean r = rtl;
+            java.util.Collections.sort(glyphs, (a, b) -> {
+                int c = Float.compare(a.getXDirAdj(), b.getXDirAdj());
+                return r ? -c : c;
+            });
+
+            int gi = 0;
+            int used = 0; // أحرف مستهلكة من الحرف الحالي (لروابط تحمل أكثر من حرف)
+            List<float[]> boxes = new ArrayList<>();
+            for (String p : parts) {
+                int need = p.length();
+                float x0 = Float.MAX_VALUE, y0 = Float.MAX_VALUE, x1 = -Float.MAX_VALUE, y1 = -Float.MAX_VALUE;
+                while (need > 0 && gi < glyphs.size()) {
+                    TextPosition tp = glyphs.get(gi);
+                    String u = tp.getUnicode();
+                    int len = 0;
+                    for (int i = 0; i < u.length(); i++) {
+                        if (!Character.isWhitespace(u.charAt(i))) len++;
+                    }
+                    float x = tp.getXDirAdj();
+                    float w = tp.getWidthDirAdj() > 0 ? tp.getWidthDirAdj() : tp.getWidth();
+                    float h = tp.getHeightDir() > 0 ? tp.getHeightDir() : tp.getHeight();
+                    float yy = tp.getYDirAdj();
+                    x0 = Math.min(x0, x);
+                    x1 = Math.max(x1, x + w);
+                    y0 = Math.min(y0, yy - h);
+                    y1 = Math.max(y1, yy + h * 0.25f);
+                    int take = Math.min(need, len - used);
+                    need -= take;
+                    used += take;
+                    if (used >= len) {
+                        gi++;
+                        used = 0;
+                    }
+                }
+                if (x0 == Float.MAX_VALUE) return false;
+                boxes.add(new float[]{x0, y0, x1, y1});
+            }
+            for (int i = 0; i < parts.length; i++) {
+                float[] b = boxes.get(i);
+                addWord(parts[i], b[0], b[1], b[2], b[3], pw, ph);
+            }
+            return true;
         }
 
         private void addWord(String t, float x0, float y0, float x1, float y1, float pw, float ph) {
@@ -239,6 +328,23 @@ final class PdfSpeechText {
         }
 
         List<Word> finish() {
+            // سطر عربي كلماته مرتّبة بصريًا من اليسار لليمين (بعض الملفات تخزّنها هكذا) -> نعكس ترتيبها
+            // ليكون ترتيب القراءة من اليمين لليسار. لا نلمس أي سطر ترتيبه سليم أصلًا.
+            int i = 0;
+            while (i < raw.size()) {
+                int j = i;
+                while (j + 1 < raw.size() && raw.get(j + 1).line == raw.get(i).line) j++;
+                if (j > i) {
+                    StringBuilder sb = new StringBuilder();
+                    for (int k = i; k <= j; k++) sb.append(raw.get(k).text).append(' ');
+                    float firstCx = raw.get(i).box.centerX();
+                    float lastCx = raw.get(j).box.centerX();
+                    if (isRtlText(sb.toString()) && firstCx + 0.02f < lastCx) {
+                        java.util.Collections.reverse(raw.subList(i, j + 1));
+                    }
+                }
+                i = j + 1;
+            }
             List<Word> out = new ArrayList<>(raw.size());
             for (RawWord r : raw) out.add(new Word(r.text, r.box, r.line));
             return out;

@@ -173,6 +173,8 @@ final class PdfSpeaker {
     private final Map<String, CloudAudio> cloudReady = new HashMap<>();
     private final Set<String> cloudPending = new HashSet<>();
     private final Set<String> cloudRetried = new HashSet<>();
+    private final Set<String> badCloudVoices = new HashSet<>(); // أصوات فشلت في هذه الجلسة (نتجاوزها لصوت بديل)
+    private int cloudVoiceSwitches = 0;
     private String awaitingKey = null;
     private int awaitingToken = 0;
     private int awaitingChunk = 0;
@@ -370,6 +372,8 @@ final class PdfSpeaker {
             hardStopOutputs();
             resetCloud();
             cloudBroken = false;
+            badCloudVoices.clear();
+            cloudVoiceSwitches = 0;
             deviceErrStreak = 0;
             notifiedMissing.clear();
             emptyStreak = 0;
@@ -553,6 +557,8 @@ final class PdfSpeaker {
     void setCloudEngine(boolean cloud) {
         prefs.edit().putString(KEY_ENGINE, cloud ? "cloud" : "device").apply();
         cloudBroken = false;
+        badCloudVoices.clear();
+        cloudVoiceSwitches = 0;
         resetCloud();
         if (state != State.IDLE) restartFromCurrentPoint();
     }
@@ -575,19 +581,33 @@ final class PdfSpeaker {
         if (name == null) e.remove("cvoice_" + lang);
         else e.putString("cvoice_" + lang, name);
         e.apply();
+        badCloudVoices.clear();
+        cloudVoiceSwitches = 0;
         resetCloud();
         if (state != State.IDLE) restartFromCurrentPoint();
     }
 
-    private String cloudVoiceFor(String lang) {
+    /** الصوت المختار للغة، مع تجاوز الأصوات التي فشلت؛ null لو فشلت كل أصوات اللغة. */
+    private String pickCloudVoice(String lang) {
         String saved = prefs.getString("cvoice_" + lang, null);
-        String def = null;
-        for (String[] v : CLOUD_VOICES) {
-            if (!v[0].equals(lang)) continue;
-            if (def == null) def = v[1];
-            if (saved != null && v[1].equals(saved)) return saved;
+        if (saved != null && !badCloudVoices.contains(saved)) {
+            for (String[] v : CLOUD_VOICES) {
+                if (v[0].equals(lang) && v[1].equals(saved)) return saved;
+            }
         }
-        return def != null ? def : "en-US-EmmaMultilingualNeural";
+        for (String[] v : CLOUD_VOICES) {
+            if (v[0].equals(lang) && !badCloudVoices.contains(v[1])) return v[1];
+        }
+        return null;
+    }
+
+    private String cloudVoiceFor(String lang) {
+        String v = pickCloudVoice(lang);
+        if (v != null) return v;
+        for (String[] cv : CLOUD_VOICES) {
+            if (cv[0].equals(lang)) return cv[1];
+        }
+        return "en-US-EmmaMultilingualNeural";
     }
 
     private boolean useCloud() {
@@ -972,12 +992,15 @@ final class PdfSpeaker {
         try {
             synthPool.execute(() -> {
                 EdgeTtsClient.Result r = null;
+                Throwable err = null;
                 try {
                     r = EdgeTtsClient.synthesize(sent, voice);
-                } catch (Throwable ignored) {
+                } catch (Throwable t) {
+                    err = t;
                 }
                 final EdgeTtsClient.Result rr = r;
-                main.post(() -> onCloudResult(key, rr == null ? null : new CloudAudio(rr), gen));
+                final Throwable ee = err;
+                main.post(() -> onCloudResult(key, rr == null ? null : new CloudAudio(rr), gen, ee));
             });
         } catch (RejectedExecutionException e) {
             cloudPending.remove(key);
@@ -991,17 +1014,37 @@ final class PdfSpeaker {
         for (int k = idx + 1; k <= idx + 2 && k < n; k++) requestCloud(currentText, k);
     }
 
-    private void onCloudResult(String key, CloudAudio a, int gen) {
+    private void onCloudResult(String key, CloudAudio a, int gen, Throwable err) {
         if (gen != cloudGen) return;
         cloudPending.remove(key);
         boolean waiting = key.equals(awaitingKey) && awaitingToken == speakToken;
         if (a == null) {
             if (!waiting) return; // فشل تجهيز مسبق: سنعيد الطلب عند الحاجة
-            if (currentText != null && cloudRetried.add(key)) {
-                requestCloud(currentText, awaitingChunk); // محاولة ثانية
+            if (currentText == null) return;
+            final String why = EdgeTtsClient.lastError == null || EdgeTtsClient.lastError.isEmpty()
+                    ? "" : " (" + EdgeTtsClient.lastError + ")";
+            // مشكلة شبكة أو رفض الاتصال نفسه (403/503...) -> تبديل الصوت لا يفيد: صوت الجهاز فورًا
+            boolean voiceProblem = err instanceof EdgeTtsClient.ServiceException
+                    && ((EdgeTtsClient.ServiceException) err).httpCode == 0;
+            if (!voiceProblem) {
+                awaitingKey = null;
+                fallbackToDevice((EdgeTtsClient.isNetworkFailure(err)
+                        ? "تعذّر الاتصال بالصوت العصبي (تأكد من الإنترنت)، تم التحويل لصوت الجهاز تلقائيًا."
+                        : "الصوت العصبي غير متاح حاليًا من الخادم، تم التحويل لصوت الجهاز تلقائيًا.") + why);
+                return;
+            }
+            // الخادم اتصل لكن هذا الصوت بالذات فشل: نجرّب صوتًا بديلًا بنفس اللغة (حتى مرتين) قبل صوت الجهاز
+            PdfSpeechText.Chunk c = currentText.chunks.get(Math.max(0, Math.min(awaitingChunk, currentText.chunks.size() - 1)));
+            String badVoice = key.substring(0, key.indexOf('#'));
+            badCloudVoices.add(badVoice);
+            String alt = pickCloudVoice(c.lang);
+            if (alt != null && cloudVoiceSwitches < 2) {
+                cloudVoiceSwitches++;
+                awaitingKey = requestCloud(currentText, awaitingChunk);
+                prefetchAhead(awaitingChunk);
             } else {
                 awaitingKey = null;
-                fallbackToDevice("تعذّر الاتصال بالصوت العصبي، تم التحويل لصوت الجهاز تلقائيًا.");
+                fallbackToDevice("تعذّر تشغيل الصوت العصبي، تم التحويل لصوت الجهاز تلقائيًا." + why);
             }
             return;
         }
@@ -1065,6 +1108,7 @@ final class PdfSpeaker {
         if (tok != speakToken || mp != player || currentText == null) return;
         playerPrepared = true;
         cloudPlayErrStreak = 0;
+        cloudVoiceSwitches = 0;
         requestFocus();
         try {
             mp.start();
