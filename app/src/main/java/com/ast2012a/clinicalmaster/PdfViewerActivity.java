@@ -11,6 +11,7 @@ import android.graphics.Color;
 import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Paint;
+import android.graphics.RectF;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.pdf.PdfRenderer;
 import android.net.Uri;
@@ -19,6 +20,8 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.ParcelFileDescriptor;
 import android.provider.OpenableColumns;
+import android.provider.Settings;
+import android.speech.tts.TextToSpeech;
 import android.text.InputType;
 import android.util.LruCache;
 import android.view.Gravity;
@@ -28,6 +31,7 @@ import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.widget.HorizontalScrollView;
 import android.widget.ImageButton;
 import android.widget.ImageView;
@@ -190,6 +194,7 @@ public class PdfViewerActivity extends AppCompatActivity {
         loadingText = findViewById(R.id.pdf_loading_text);
         emptyBox = findViewById(R.id.pdf_empty);
         pageIndicator = findViewById(R.id.pdf_page_indicator);
+        bindTtsBar();
 
         // ذاكرة مؤقتة للصفحات المرسومة: سدس الذاكرة المتاحة للتطبيق (حد أدنى 24 ميجا)
         int maxKb = (int) (Runtime.getRuntime().maxMemory() / 1024);
@@ -293,6 +298,11 @@ public class PdfViewerActivity extends AppCompatActivity {
         loadExecutor.shutdownNow();
         renderExecutor.shutdownNow();
         textExecutor.shutdownNow();
+        if (voiceDialog != null) voiceDialog.dismiss();
+        if (speaker != null) {
+            speaker.shutdown();
+            speaker = null;
+        }
         releaseRenderer();
         cache.evictAll();
     }
@@ -391,6 +401,7 @@ public class PdfViewerActivity extends AppCompatActivity {
         popup.setElevation(Ui.dp(this, 8));
 
         bindMoreMenuRow(content, popup, R.id.row_pdf_ask_ai, this::askAiAboutThisFile);
+        bindMoreMenuRow(content, popup, R.id.row_pdf_read_aloud, this::startReadAloud);
         bindMoreMenuRow(content, popup, R.id.row_pdf_translate_page, this::showTranslateLanguageDialog);
         bindMoreMenuRow(content, popup, R.id.row_pdf_translate_full, this::showFullTranslateLanguageDialog);
         bindMoreMenuRow(content, popup, R.id.row_pdf_save_copy, this::saveCurrentFileCopy);
@@ -547,6 +558,7 @@ public class PdfViewerActivity extends AppCompatActivity {
             closeQuietly(r, pfd);
             return;
         }
+        stopReading();
         releaseRenderer();
         synchronized (renderLock) {
             renderer = r;
@@ -1129,6 +1141,316 @@ public class PdfViewerActivity extends AppCompatActivity {
         });
     }
 
+    // ------------------------------------------------------------------ القراءة الصوتية (TTS مجاني)
+
+    /**
+     * قراءة الملف بصوت عالٍ (مجانًا وبدون إنترنت) عبر محرك النطق المدمج في أندرويد -
+     * التفاصيل في PdfSpeaker / PdfSpeechText. أثناء القراءة تُظلَّل الجملة الحالية والكلمة
+     * المنطوقة فوق الصفحة (PdfHighlightView)، وتنقلب الصفحات تلقائيًا.
+     */
+    private static final float[] TTS_SPEEDS = {0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f};
+    private static final String[] TTS_LANG_LABELS = {"العربية", "English", "Français", "Türkçe"};
+    private static final String[] TTS_LANG_CODES = {"ar", "en", "fr", "tr"};
+
+    private PdfSpeaker speaker;
+    private View ttsBar;
+    private TextView ttsStatus;
+    private TextView ttsSpeed;
+    private ImageButton ttsPlay;
+    private int speakingPage = -1;
+    private List<RectF> speakingSentence = new ArrayList<>();
+    private RectF speakingWord;
+    private Dialog voiceDialog;
+
+    private void bindTtsBar() {
+        ttsBar = findViewById(R.id.tts_bar);
+        ttsStatus = findViewById(R.id.tts_status);
+        ttsSpeed = findViewById(R.id.tts_speed);
+        ttsPlay = findViewById(R.id.tts_play);
+        ttsPlay.setOnClickListener(v -> {
+            if (speaker != null) speaker.togglePlayPause();
+        });
+        findViewById(R.id.tts_prev).setOnClickListener(v -> {
+            if (speaker != null) speaker.previousPage();
+        });
+        findViewById(R.id.tts_next).setOnClickListener(v -> {
+            if (speaker != null) speaker.nextPage();
+        });
+        findViewById(R.id.tts_close).setOnClickListener(v -> stopReading());
+        ttsSpeed.setOnClickListener(v -> cycleSpeed());
+        findViewById(R.id.tts_settings).setOnClickListener(v -> showVoiceSettings());
+    }
+
+    private void startReadAloud() {
+        if (ratios.length == 0 || currentFile == null) {
+            Toast.makeText(this, "افتح ملف PDF أولًا.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (speaker == null) speaker = new PdfSpeaker(this, ttsListener);
+        int pos = layoutManager.findFirstCompletelyVisibleItemPosition();
+        if (pos < 0) pos = layoutManager.findFirstVisibleItemPosition();
+        if (pos < 0) pos = 0;
+        showTtsBar(true);
+        ttsStatus.setText(BidiText.fix("جارٍ تجهيز القراءة..."));
+        updateSpeedLabel();
+        speaker.play(currentFile, pos);
+    }
+
+    private void stopReading() {
+        if (speaker != null) speaker.stop();
+        showTtsBar(false);
+        clearSpeakingHighlight();
+    }
+
+    private void showTtsBar(boolean show) {
+        if (ttsBar == null) return;
+        ttsBar.setVisibility(show ? View.VISIBLE : View.GONE);
+        pages.setPadding(pages.getPaddingLeft(), pages.getPaddingTop(), pages.getPaddingRight(),
+                Ui.dp(this, 28) + (show ? Ui.dp(this, 100) : 0));
+        pageIndicator.setTranslationY(show ? -Ui.dp(this, 104) : 0f);
+        if (show) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    }
+
+    private void cycleSpeed() {
+        if (speaker == null) return;
+        float cur = speaker.getRate();
+        float next = TTS_SPEEDS[0];
+        for (float sp : TTS_SPEEDS) {
+            if (sp > cur + 0.01f) {
+                next = sp;
+                break;
+            }
+        }
+        speaker.setRate(next);
+        updateSpeedLabel();
+    }
+
+    private void updateSpeedLabel() {
+        float r = speaker != null ? speaker.getRate() : 1f;
+        String t = String.format(Locale.US, "%.2f", r).replaceAll("0+$", "").replaceAll("\\.$", "");
+        ttsSpeed.setText(t + "x");
+    }
+
+    private final PdfSpeaker.Listener ttsListener = new PdfSpeaker.Listener() {
+        @Override
+        public void onStateChanged(PdfSpeaker.State state) {
+            if (isFinishing() || isDestroyed()) return;
+            switch (state) {
+                case IDLE:
+                    showTtsBar(false);
+                    clearSpeakingHighlight();
+                    break;
+                case PAUSED:
+                    ttsPlay.setImageResource(R.drawable.ic_tts_play);
+                    getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                    break;
+                default:
+                    ttsPlay.setImageResource(R.drawable.ic_tts_pause);
+                    getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                    break;
+            }
+        }
+
+        @Override
+        public void onPageStarted(int page, PdfSpeechText.PageText text) {
+            if (isFinishing() || isDestroyed()) return;
+            clearSpeakingHighlight();
+            speakingPage = page;
+            layoutManager.scrollToPositionWithOffset(page, 0);
+            updateIndicator();
+            ttsStatus.setText(BidiText.fix("القراءة · الصفحة " + (page + 1) + " / " + ratios.length));
+        }
+
+        @Override
+        public void onSpeaking(int page, PdfSpeechText.PageText text, int chunkIndex, int wordIndex) {
+            if (isFinishing() || isDestroyed()) return;
+            showSpeaking(page, text, chunkIndex, wordIndex);
+        }
+
+        @Override
+        public void onFinished() {
+            if (isFinishing() || isDestroyed()) return;
+            Toast.makeText(PdfViewerActivity.this, "انتهت القراءة.", Toast.LENGTH_SHORT).show();
+        }
+
+        @Override
+        public void onError(String message) {
+            if (isFinishing() || isDestroyed()) return;
+            Toast.makeText(PdfViewerActivity.this, message, Toast.LENGTH_LONG).show();
+        }
+
+        @Override
+        public void onVoiceMissing(String lang) {
+            if (isFinishing() || isDestroyed()) return;
+            offerInstallVoice(lang, true);
+        }
+
+        @Override
+        public void onEngineUnavailable() {
+            if (isFinishing() || isDestroyed()) return;
+            showTtsBar(false);
+            showEngineUnavailableDialog();
+        }
+    };
+
+    /** يبني تظليل الجملة (مستطيل لكل سطر) والكلمة الحالية ويدفعهما لبطاقة الصفحة ثم يتابع بالتمرير. */
+    private void showSpeaking(int page, PdfSpeechText.PageText t, int chunkIdx, int wordIdx) {
+        List<RectF> sentence = new ArrayList<>();
+        if (chunkIdx >= 0 && chunkIdx < t.chunks.size()) {
+            PdfSpeechText.Chunk c = t.chunks.get(chunkIdx);
+            RectF cur = null;
+            int curLine = -1;
+            for (int i = c.firstWord; i <= c.lastWord && i < t.words.size(); i++) {
+                PdfSpeechText.Word w = t.words.get(i);
+                if (cur == null || w.line != curLine) {
+                    if (cur != null) sentence.add(cur);
+                    cur = new RectF(w.box);
+                    curLine = w.line;
+                } else {
+                    cur.union(w.box);
+                }
+            }
+            if (cur != null) sentence.add(cur);
+        }
+        RectF word = (wordIdx >= 0 && wordIdx < t.words.size()) ? new RectF(t.words.get(wordIdx).box) : null;
+        speakingPage = page;
+        speakingSentence = sentence;
+        speakingWord = word;
+
+        RecyclerView.ViewHolder vh = pages.findViewHolderForAdapterPosition(page);
+        if (vh instanceof PageAdapter.PageHolder) {
+            PageAdapter.PageHolder ph = (PageAdapter.PageHolder) vh;
+            ph.highlight.setHighlight(sentence, word);
+            followSpeaker(ph, word);
+        } else {
+            layoutManager.scrollToPositionWithOffset(page, 0);
+        }
+    }
+
+    /** يبقي الكلمة المنطوقة ظاهرة فوق شريط التحكم بدون تدخّل أثناء سحب المستخدم للصفحة. */
+    private void followSpeaker(PageAdapter.PageHolder ph, RectF word) {
+        if (word == null || pages.getScrollState() != RecyclerView.SCROLL_STATE_IDLE) return;
+        int viewH = pages.getHeight();
+        if (viewH <= 0 || ph.image.getHeight() <= 0) return;
+        float y = ph.itemView.getTop() + ph.image.getTop() + word.centerY() * ph.image.getHeight();
+        int barH = ttsBar.getVisibility() == View.VISIBLE ? ttsBar.getHeight() + Ui.dp(this, 14) : 0;
+        float topLimit = viewH * 0.10f;
+        float bottomLimit = viewH - barH - Ui.dp(this, 36);
+        if (y < topLimit || y > bottomLimit) {
+            pages.smoothScrollBy(0, Math.round(y - viewH * 0.28f));
+        }
+    }
+
+    private void clearSpeakingHighlight() {
+        speakingPage = -1;
+        speakingSentence = new ArrayList<>();
+        speakingWord = null;
+        if (pages == null) return;
+        for (int i = 0; i < pages.getChildCount(); i++) {
+            RecyclerView.ViewHolder vh = pages.getChildViewHolder(pages.getChildAt(i));
+            if (vh instanceof PageAdapter.PageHolder) ((PageAdapter.PageHolder) vh).highlight.clearHighlight();
+        }
+    }
+
+    // ---- إعدادات الصوت
+
+    private void showVoiceSettings() {
+        if (speaker == null) return;
+        String[] items = new String[TTS_LANG_LABELS.length + 1];
+        for (int i = 0; i < TTS_LANG_LABELS.length; i++) items[i] = "صوت " + TTS_LANG_LABELS[i];
+        items[TTS_LANG_LABELS.length] = "إعدادات محرك النطق في النظام";
+        voiceDialog = new ClaudeDialog(this)
+                .setTitle("إعدادات القراءة الصوتية")
+                .setItems(items, (d, which) -> {
+                    if (which == TTS_LANG_CODES.length) openSystemTtsSettings();
+                    else showVoicePicker(which);
+                })
+                .show();
+    }
+
+    private void showVoicePicker(int langIdx) {
+        final String lang = TTS_LANG_CODES[langIdx];
+        final List<PdfSpeaker.VoiceOption> opts = speaker.listVoices(lang);
+        if (opts.isEmpty()) {
+            offerInstallVoice(lang, false);
+            return;
+        }
+        String[] labels = new String[opts.size() + 1];
+        labels[0] = "تلقائي (أعلى جودة متاحة)";
+        int checked = 0;
+        String saved = speaker.getPreferredVoice(lang);
+        for (int i = 0; i < opts.size(); i++) {
+            labels[i + 1] = opts.get(i).label;
+            if (opts.get(i).name.equals(saved)) checked = i + 1;
+        }
+        voiceDialog = new ClaudeDialog(this)
+                .setTitle("صوت " + TTS_LANG_LABELS[langIdx])
+                .setSingleChoiceItems(labels, checked, (d, which) ->
+                        speaker.setPreferredVoice(lang, which == 0 ? null : opts.get(which - 1).name))
+                .show();
+    }
+
+    private String langLabel(String lang) {
+        for (int i = 0; i < TTS_LANG_CODES.length; i++) {
+            if (TTS_LANG_CODES[i].equals(lang)) return TTS_LANG_LABELS[i];
+        }
+        return lang;
+    }
+
+    /** لا يوجد صوت مثبّت للغة: نعرض تثبيت بيانات الصوت (مجانًا) من محرك النطق. */
+    private void offerInstallVoice(String lang, boolean skippedSentences) {
+        if (voiceDialog != null && voiceDialog.isShowing()) return;
+        String msg = skippedSentences
+                ? "لا يوجد صوت مثبّت للغة " + langLabel(lang) + " على جهازك، فتم تخطّي الجمل بهذه اللغة. "
+                : "لا توجد أصوات مثبّتة للغة " + langLabel(lang) + ". ";
+        voiceDialog = new ClaudeDialog(this)
+                .setTitle("صوت غير مثبّت")
+                .setMessage(msg + "يمكنك تثبيت بيانات الصوت مجانًا من إعدادات محرك النطق (يُفضَّل \"خدمات Google للكلام\" لأفضل جودة).")
+                .setPositiveButton("تثبيت الصوت", (d, w) -> {
+                    try {
+                        startActivity(new Intent(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA));
+                    } catch (Exception e) {
+                        openSystemTtsSettings();
+                    }
+                })
+                .setNegativeButton("لاحقًا", null)
+                .show();
+    }
+
+    private void showEngineUnavailableDialog() {
+        voiceDialog = new ClaudeDialog(this)
+                .setTitle("محرك النطق غير متاح")
+                .setMessage("لا يوجد محرك نطق يعمل على جهازك. ثبّت \"خدمات Google للكلام\" مجانًا من متجر Play ثم أعد المحاولة.")
+                .setPositiveButton("فتح المتجر", (d, w) -> {
+                    try {
+                        startActivity(new Intent(Intent.ACTION_VIEW,
+                                Uri.parse("market://details?id=com.google.android.tts")));
+                    } catch (Exception e) {
+                        try {
+                            startActivity(new Intent(Intent.ACTION_VIEW,
+                                    Uri.parse("https://play.google.com/store/apps/details?id=com.google.android.tts")));
+                        } catch (Exception ignored) {
+                            openSystemTtsSettings();
+                        }
+                    }
+                })
+                .setNegativeButton("إغلاق", null)
+                .show();
+    }
+
+    private void openSystemTtsSettings() {
+        try {
+            startActivity(new Intent("com.android.settings.TTS_SETTINGS"));
+        } catch (Exception e) {
+            try {
+                startActivity(new Intent(Settings.ACTION_SETTINGS));
+            } catch (Exception ignored) {
+                Toast.makeText(this, "تعذّر فتح إعدادات النظام.", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
     // ------------------------------------------------------------------ الحالات (تحميل/خطأ)
 
     private void showLoading(String text) {
@@ -1219,6 +1541,8 @@ public class PdfViewerActivity extends AppCompatActivity {
                 lp.height = h;
                 holder.image.setLayoutParams(lp);
             }
+            if (position == speakingPage) holder.highlight.setHighlight(speakingSentence, speakingWord);
+            else holder.highlight.clearHighlight();
             Bitmap cached = cache.get(cacheKey(position, zoomBucket()));
             if (cached != null) {
                 holder.image.setImageBitmap(cached);
@@ -1250,11 +1574,13 @@ public class PdfViewerActivity extends AppCompatActivity {
 
         final class PageHolder extends RecyclerView.ViewHolder {
             final ImageView image;
+            final PdfHighlightView highlight;
             volatile int page = -1;
 
             PageHolder(@NonNull View itemView) {
                 super(itemView);
                 image = itemView.findViewById(R.id.pdf_page_image);
+                highlight = itemView.findViewById(R.id.pdf_page_highlight);
             }
         }
     }
