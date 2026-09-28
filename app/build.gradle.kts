@@ -95,4 +95,7 @@ dependencies {
     // وCloudKnowledgeManager عشان Phizyo AI يقدر "يقرأ" محتوى هذه الملفات
     // فعليًا ويستخدمها كمصدر تأريض إضافي، بدل ما تفضل ملفات مغلقة عليه.
     implementation("com.tom-roush:pdfbox-android:2.0.27.0")
+
+    // القراءة الصوتية بالأصوات العصبية المجانية (اتصال WebSocket في EdgeTtsClient)
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 }
