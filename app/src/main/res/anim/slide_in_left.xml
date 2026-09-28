@@ -1,12 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<set xmlns:android="http://schemas.android.com/apk/res/android">
+<!-- رجوع: الشاشة السابقة تعود من الجهة المعاكسة (parallax خفيف) -->
+<set xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shareInterpolator="false">
     <translate
-        android:duration="260"
-        android:fromXDelta="-15%"
-        android:interpolator="@android:interpolator/decelerate_cubic"
+        android:duration="340"
+        android:fromXDelta="-10%"
+        android:interpolator="@android:interpolator/fast_out_slow_in"
         android:toXDelta="0" />
     <alpha
-        android:duration="220"
-        android:fromAlpha="0.5"
+        android:duration="260"
+        android:fromAlpha="0.7"
+        android:interpolator="@android:interpolator/linear_out_slow_in"
         android:toAlpha="1.0" />
 </set>

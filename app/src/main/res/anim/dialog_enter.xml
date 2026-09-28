@@ -1,14 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- فتح شاشة نموذج (إضافة/تعديل): صعود ناعم من الأسفل -->
+<!-- ظهور مربع الحوار: تكبير خفيف من 92% مع تلاشي -->
 <set xmlns:android="http://schemas.android.com/apk/res/android"
     android:shareInterpolator="false">
-    <translate
-        android:duration="360"
-        android:fromYDelta="9%"
-        android:interpolator="@android:interpolator/fast_out_slow_in"
-        android:toYDelta="0" />
-    <alpha
+    <scale
         android:duration="260"
+        android:fromXScale="0.92"
+        android:fromYScale="0.92"
+        android:interpolator="@android:interpolator/fast_out_slow_in"
+        android:pivotX="50%"
+        android:pivotY="50%"
+        android:toXScale="1.0"
+        android:toYScale="1.0" />
+    <alpha
+        android:duration="200"
         android:fromAlpha="0.0"
         android:interpolator="@android:interpolator/linear_out_slow_in"
         android:toAlpha="1.0" />
