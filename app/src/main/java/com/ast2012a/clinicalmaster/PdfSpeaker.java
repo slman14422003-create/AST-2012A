@@ -150,7 +150,7 @@ final class PdfSpeaker {
     private PdfSpeechText.Source source;
     private File sourceFile;
     private volatile int pageCount = 0;
-    private PdfSpeechText.PageText prefetched;
+    private volatile PdfSpeechText.PageText prefetched;
 
     // حالة التشغيل (الخيط الرئيسي فقط)
     private State state = State.IDLE;
@@ -507,7 +507,7 @@ final class PdfSpeaker {
         if (sourceFile == null || state == State.IDLE) return;
         boolean wasPaused = state == State.PAUSED;
         // لو تجاوزنا بداية الصفحة نعيدها من أولها، وإلا الصفحة السابقة
-        int target = (currentChunk > 1 && currentPage >= 0) ? currentPage : Math.max(0, currentPage - 1);
+        int target = ((currentChunk > 0 || currentWord > 15) && currentPage >= 0) ? currentPage : Math.max(0, currentPage - 1);
         jumpToPage(target, wasPaused);
     }
 
@@ -1054,6 +1054,9 @@ final class PdfSpeaker {
         if (currentText == null) return;
         int n = currentText.chunks.size();
         for (int k = idx + 1; k <= idx + 3 && k < n; k++) requestCloud(currentText, k);
+        // المقطع الأخير في الصفحة: نجهّز صوت أول مقطع في الصفحة التالية فورًا حتى لا يحصل انتظار عند الانتقال
+        PdfSpeechText.PageText nx = prefetched;
+        if (idx + 1 >= n && nx != null && nx.pageIndex == currentText.pageIndex + 1 && !nx.isEmpty()) requestCloud(nx, 0);
     }
 
     private void onCloudResult(String key, CloudAudio a, int gen, Throwable err) {

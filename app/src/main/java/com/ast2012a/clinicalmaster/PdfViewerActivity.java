@@ -1326,8 +1326,13 @@ public class PdfViewerActivity extends AppCompatActivity {
             PdfSpeechText.Chunk c = t.chunks.get(chunkIdx);
             RectF cur = null;
             int curLine = -1;
+            // المقطع قد يكون الصفحة كلها: نظلّل الجملة الجارية فقط (بحسب الكلمة المنطوقة)
+            int anchor = (wordIdx >= c.firstWord && wordIdx <= c.lastWord && wordIdx < t.words.size())
+                    ? wordIdx : c.firstWord;
+            int sentNo = anchor < t.words.size() ? t.words.get(anchor).sent : -1;
             for (int i = c.firstWord; i <= c.lastWord && i < t.words.size(); i++) {
                 PdfSpeechText.Word w = t.words.get(i);
+                if (w.sent != sentNo) continue;
                 if (cur == null || w.line != curLine) {
                     if (cur != null) sentence.add(cur);
                     cur = new RectF(w.box);

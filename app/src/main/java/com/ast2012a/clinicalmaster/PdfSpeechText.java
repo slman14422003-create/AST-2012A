@@ -39,6 +39,8 @@ final class PdfSpeechText {
         /** موضع الكلمة كنسبة من عرض/ارتفاع الصفحة (Y من الأعلى). */
         final RectF box;
         final int line;
+        /** رقم الجملة داخل الصفحة (يُستخدم لتظليل الجملة الحالية فقط وليس المقطع كله). */
+        int sent;
         /** بداية/نهاية الكلمة داخل PageText.text (تُملأ عند بناء النص). */
         int start;
         int end;
@@ -826,7 +828,16 @@ final class PdfSpeechText {
                     glue = true;
                 }
             }
-            if (i > 0 && !glue) sb.append(paraBefore[i] ? "\n" : " ");
+            if (i > 0 && !glue) {
+                if (paraBefore[i]) {
+                    // بداية فقرة/عنوان/خلية: لو ما قبلها علامة ترقيم نضيف نقطة كي يقف الصوت وقفة طبيعية
+                    // بدل ما يلصق العنوان بأول جملة (الإزاحات محسوبة للكلمات فلا تتأثر).
+                    if (!endsWithPunct(words.get(i - 1).text)) sb.append('.');
+                    sb.append('\n');
+                } else {
+                    sb.append(' ');
+                }
+            }
             w.start = sb.length();
             if (i + 1 < words.size()) {
                 Word next = words.get(i + 1);
@@ -840,13 +851,26 @@ final class PdfSpeechText {
         }
         String text = sb.toString();
 
+        int sentNo = 0;
+        for (int i = 0; i < words.size(); i++) {
+            if (i > 0) {
+                Word prev = words.get(i - 1);
+                Word cur = words.get(i);
+                if (paraBefore[i]
+                        || (endsSentence(prev.text) && !isAbbreviation(prev.text) && !startsLowerLatin(cur.text))) {
+                    sentNo++;
+                }
+            }
+            words.get(i).sent = sentNo;
+        }
+
         String latin = src.latinHint;
         if (latin == null) {
             latin = detectLatinLang(text);
             if (countLatinLetters(text) > 200) src.latinHint = latin; // نثبّتها بعد عيّنة كافية
         }
 
-        List<Chunk> chunks = makeChunks(words, text, paraBefore, latin);
+        List<Chunk> chunks = mergeChunks(makeChunks(words, text, paraBefore, latin), text);
         return new PageText(pageIndex, text, words, chunks);
     }
 
@@ -924,6 +948,46 @@ final class PdfSpeechText {
             i++;
         }
         return out;
+    }
+
+    /**
+     * يدمج الجمل المتتالية بنفس اللغة في مقطع واحد كبير (الصفحة كلها في الغالب) بدل تجهيز صوت كل جملة
+     * أو فقرة على حدة: صوت واحد متصل بنبرة ثابتة وبلا فجوات انتظار بين الجمل. الحد الأقصى يحفظ الطلب
+     * ضمن سعة الصوت العصبي (SSML ~4KB) ومحرك الجهاز (~4000 حرف). تظليل الجملة الحالية يتم بحسب
+     * Word.sent فلا يتأثر بحجم المقطع. مقطع قصير بلغة مختلفة (عنوان/مصطلح لاتيني) يُدمج بالمجاور.
+     */
+    private static final int MERGE_MAX_CHARS = 1400;
+    private static final int SHORT_LANG_SWITCH_CHARS = 40;
+
+    private static List<Chunk> mergeChunks(List<Chunk> in, String text) {
+        if (in.size() < 2) return in;
+        List<Chunk> out = new ArrayList<>();
+        Chunk cur = in.get(0);
+        for (int i = 1; i < in.size(); i++) {
+            Chunk nx = in.get(i);
+            int curLen = cur.end - cur.start;
+            int nxLen = nx.end - nx.start;
+            boolean sameLang = cur.lang.equals(nx.lang);
+            boolean fits = nx.end - cur.start <= MERGE_MAX_CHARS;
+            boolean shortSwitch = !sameLang && Math.min(curLen, nxLen) < SHORT_LANG_SWITCH_CHARS;
+            if (fits && (sameLang || shortSwitch)) {
+                String lang = sameLang || curLen >= nxLen ? cur.lang : nx.lang;
+                cur = new Chunk(cur.firstWord, nx.lastWord, cur.start, nx.end, lang);
+            } else {
+                out.add(cur);
+                cur = nx;
+            }
+        }
+        out.add(cur);
+        return out;
+    }
+
+    private static boolean endsWithPunct(String w) {
+        if (w == null || w.isEmpty()) return true;
+        char c = w.charAt(w.length() - 1);
+        return c == '.' || c == ',' || c == '!' || c == '?' || c == ':' || c == ';' || c == '\u060C'
+                || c == '\u061B' || c == '\u061F' || c == '\u2026' || c == ')' || c == '"' || c == '\u201D'
+                || c == '\u00BB' || c == ']';
     }
 
     private static void emit(List<Chunk> out, List<Word> words, String text, int first, int last, String latin) {

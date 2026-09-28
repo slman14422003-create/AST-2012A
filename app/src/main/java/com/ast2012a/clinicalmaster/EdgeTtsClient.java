@@ -242,7 +242,7 @@ final class EdgeTtsClient {
             WebSocket ws = HTTP.newWebSocket(req, listener);
             boolean ok;
             try {
-                ok = done.await(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                ok = done.await(Math.max(TIMEOUT_SECONDS, 12 + text.length() / 50), TimeUnit.SECONDS);
             } catch (InterruptedException e) {
                 ws.cancel();
                 Thread.currentThread().interrupt();
