@@ -111,6 +111,18 @@ final class SpeechPrep {
             prevBare = bare;
             if (sp.isEmpty()) continue;
             first = false;
+            // أقواس: نضع وقفة قبل المحتوى وبعده ليُفهم أنه تفسير جانبي (ترقيم فقط - لا كلمات)
+            String ct = clean(tok);
+            if (out.length() > 0 && (ct.startsWith("(") || ct.startsWith("[") || ct.startsWith("\uFF08"))
+                    && PUNCT.indexOf(out.charAt(out.length() - 1)) < 0) {
+                map = ensure(map, mlen + 1);
+                out.append(pause(lang));
+                map[mlen++] = s;
+            }
+            if ((ct.endsWith(")") || ct.endsWith("]") || ct.endsWith("\uFF09"))
+                    && PUNCT.indexOf(sp.charAt(sp.length() - 1)) < 0) {
+                sp = sp + pause(lang);
+            }
             boolean onlyPunct = sp.length() == 1 && PUNCT.indexOf(sp.charAt(0)) >= 0;
             if (onlyPunct && out.length() == 0) continue;
             if (out.length() > 0 && !onlyPunct) {
@@ -124,6 +136,13 @@ final class SpeechPrep {
                 map[mlen++] = s;
             }
         }
+        // نهاية المقطع (عنوان أو بند بلا نقطة): نختمه بنقطة ليهبط الصوت ويقف بدل أن يلتصق بما بعده
+        if (out.length() > 0 && PUNCT.indexOf(out.charAt(out.length() - 1)) < 0) {
+            map = ensure(map, mlen + 1);
+            out.append('.');
+            map[mlen] = map[Math.max(0, mlen - 1)];
+            mlen++;
+        }
         return new Spoken(out.toString(), Arrays.copyOf(map, mlen));
     }
 
@@ -132,7 +151,10 @@ final class SpeechPrep {
         if (a.isEmpty() || b.isEmpty()) return 0;
         if (!isArabicLetter(a.charAt(a.length() - 1)) || !isArabicLetter(b.charAt(0))) return 0;
         // أداة التعريف منفصلة: ال / وال / فال / بال / كال / لل
-        if (AL_ONLY.contains(a) && b.length() >= 2) return 1;
+        if (AL_ONLY.contains(a)) return 1;
+        // "الأ" / "بالإ" منفصلة عن بقية الكلمة
+        if (a.length() >= 3 && "\u0623\u0625\u0622".indexOf(a.charAt(a.length() - 1)) >= 0
+                && AL_ONLY.contains(a.substring(0, a.length() - 1))) return 1;
         // حرف عطف/جر منفرد قبل كلمة: و علي -> وعلي
         if (a.length() == 1 && "\u0648\u0641\u0628\u0644\u0643".indexOf(a.charAt(0)) >= 0 && b.length() >= 2) return 1;
         // حروف متباعدة: ع ض ل ة
@@ -172,7 +194,101 @@ final class SpeechPrep {
             "^(\\d+(?:[.,]\\d+)?)([A-Za-z\u00B5\u03BC][A-Za-z\u00B5\u03BC/\u00B2\u00B3\\d]*)$");
     private static final Pattern UNITPART = Pattern.compile("^([A-Za-z\u00B5]+)([23])?$");
 
+    /**
+     * false (الافتراضي) = القراءة الأمينة: لا نضيف أي كلمة غير موجودة في النص (لا "إلى" ولا "أو" ولا "درجة مئوية"...).
+     * نحذف فقط ما لا يُنطق (شرطات، نقاط تعداد، مراجع، روابط) ونُصلح ما يُخطئ فيه المحرك.
+     * true = يشرح الرموز والوحدات بكلمات (mA -> ملي أمبير، % -> بالمئة، / -> أو ...).
+     */
+    static final boolean EXPAND_SYMBOLS = false;
+
+    /** رموز نتركها كما هي في النص للمحرك (هو يعرف نطقها) ولا نشرحها نحن. */
+    private static final String KEEP_SYM = "+=<>\u00B1\u00D7\u00F7\u2265\u2264%\u00B0";
+    private static final Pattern RANGE_ANY = Pattern.compile(
+            "^(\\d+(?:[.,]\\d+)?)[-\u2212\u2013\u2014](\\d+(?:[.,]\\d+)?)(.*)$");
+    private static final String DASHES = "-\u2010\u2011\u2012\u2013\u2014\u2015\u2212";
+
+    private static String pause(String lang) {
+        return "ar".equals(lang) ? "\u060C" : ",";
+    }
+
+    private static boolean isDashOnly(String t) {
+        for (int i = 0; i < t.length(); i++) {
+            if (DASHES.indexOf(t.charAt(i)) < 0) return false;
+        }
+        return !t.isEmpty();
+    }
+
+    private static String keepSyms(String s) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (KEEP_SYM.indexOf(c) >= 0) sb.append(c);
+        }
+        return sb.toString();
+    }
+
     private static String speakToken(String raw, String lang, boolean first, String prevBare, boolean prevNum) {
+        if (EXPAND_SYMBOLS) return speakTokenExpanded(raw, lang, first, prevBare, prevNum);
+        final boolean ar = "ar".equals(lang);
+        String t = clean(raw);
+        if (t.isEmpty()) return "";
+        String low = t.toLowerCase(Locale.ROOT);
+        if (CITATION.matcher(t).matches()) return lastPunctIn(t);
+        if (low.startsWith("http://") || low.startsWith("https://") || low.startsWith("www.")
+                || EMAIL.matcher(bareOf(t)).matches()) {
+            return lastPunctIn(t); // الروابط والبريد لا تُقرأ حرفًا حرفًا
+        }
+        if (isDashOnly(t)) return first ? "" : pause(lang); // " - " بين جملتين = وقفة فقط
+        if (first) {
+            Matcher m = LIST_MARK.matcher(t);
+            if (m.matches()) return m.group(1) + pause(lang);
+        }
+        int a = 0, b = t.length();
+        while (a < b && !isWordChar(t.charAt(a))) a++;
+        while (b > a && !isWordChar(t.charAt(b - 1))) b--;
+        if (a >= b) {
+            String k = keepSyms(t);
+            return k + lastPunctIn(t);
+        }
+        String pre = keepSyms(t.substring(0, a));
+        String core = t.substring(a, b);
+        String tail = t.substring(b);
+        String body = faithfulCore(core, lang);
+        if (ar) body = arabicWords(body, "");
+        String res = pre + body + keepSyms(tail);
+        return res + lastPunctIn(tail);
+    }
+
+    /** يُبقي حروف الكلمة وأرقامها فقط، والرموز الداخلية (شرطة، شرطة مائلة، أقواس...) تصير فراغًا. */
+    private static String faithfulCore(String core, String lang) {
+        final boolean ar = "ar".equals(lang);
+        Matcher m = RANGE_ANY.matcher(core);
+        if (m.matches()) { // 50-100 -> "50، 100" (وقفة بدل كلمة "إلى")
+            String rest = m.group(3);
+            return m.group(1) + pause(lang) + " " + m.group(2) + (rest.isEmpty() ? "" : faithfulCore(rest, lang));
+        }
+        String c2 = core;
+        if (ar) c2 = c2.replace("\u0648/\u0623\u0648", "\u0648 \u0623\u0648").replace("\u0648/\u0627\u0648", "\u0648 \u0623\u0648");
+        if ("en".equals(lang)) c2 = c2.replace("and/or", "and or");
+        int len = c2.length();
+        StringBuilder sb = new StringBuilder(len + 4);
+        for (int k = 0; k < len; k++) {
+            char c = c2.charAt(k);
+            if (isWordChar(c) || c == '.' || c == ',' || c == '\'' || c == '\u2019' || KEEP_SYM.indexOf(c) >= 0) {
+                sb.append(c);
+            } else if (c == '/' && k > 0 && k + 1 < len && Character.isDigit(c2.charAt(k - 1))
+                    && Character.isDigit(c2.charAt(k + 1))) {
+                sb.append('/'); // 1/2 تبقى كسرًا
+            } else if ("\"\u00AB\u00BB\u201C\u201D\u201E\u2018\u2039\u203A".indexOf(c) >= 0) {
+                // علامات الاقتباس لا تُنطق
+            } else {
+                sb.append(' ');
+            }
+        }
+        return sb.toString().replaceAll("\\s+", " ").trim();
+    }
+
+    private static String speakTokenExpanded(String raw, String lang, boolean first, String prevBare, boolean prevNum) {
         final boolean ar = "ar".equals(lang);
         final boolean en = "en".equals(lang);
         String t = clean(raw);
@@ -676,7 +792,27 @@ final class SpeechPrep {
     }
 
     private static String diacritize(String p) {
-        if (p.length() < 2 || p.length() > 14 || !isPlainArabicWord(p)) return p;
+        if (p.length() < 2 || !isPlainArabicWord(p)) return p;
+        return hamzaAfterAl(p.length() <= 14 ? diacritizeCore(p) : p);
+    }
+
+    /** الأعصاب / الإصابة / بالألم: سكون على لام "ال" ليُنطق الهمز بوضوح (الْأعصاب) لا "ال أ" مفصولة. */
+    private static String hamzaAfterAl(String r) {
+        if (!isPlainArabicWord(r) || r.length() < 4) return r;
+        int i;
+        if (r.startsWith("\u0627\u0644")) i = 0;
+        else if ("\u0648\u0641\u0628\u0643".indexOf(r.charAt(0)) >= 0 && r.startsWith("\u0627\u0644", 1)) i = 1;
+        else return r;
+        int h = i + 2;
+        if (h >= r.length()) return r;
+        char c = r.charAt(h);
+        if (c == '\u0623' || c == '\u0625' || c == '\u0622') {
+            return r.substring(0, h) + "\u0652" + r.substring(h);
+        }
+        return r;
+    }
+
+    private static String diacritizeCore(String p) {
         String direct = D.get(p);
         if (direct != null) return direct;
         String pre = "";
