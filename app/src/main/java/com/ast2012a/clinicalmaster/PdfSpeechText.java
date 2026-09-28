@@ -351,40 +351,58 @@ final class PdfSpeechText {
         }
 
         List<Word> finish() {
-            // PDFBox قد يعيد كلمات السطر العربي بترتيب التخزين داخل ملف الـPDF
-            // بدل ترتيب القراءة البصري. هذا يسبب أن TTS يبدأ من اليسار لليمين
-            // حتى عندما تكون الصفحة عربية. نعتمد هنا على إحداثيات الكلمات نفسها
-            // لتثبيت ترتيب القراءة البصري: العربي من اليمين إلى اليسار.
-            //
-            // مهم: لا نعكس السطر بالكامل بشكل أعمى؛ عند وجود مصطلح لاتيني داخل
-            // السطر العربي نحافظ على ترتيب الكلمات اللاتينية ككتلة LTR.
+            // ترتيب كلمات كل سطر عربي: يجب أن يكون دائمًا من اليمين إلى اليسار (ترتيب القراءة الطبيعي)،
+            // ثم عند نهاية السطر ينتقل التظليل/القراءة إلى أقصى يمين السطر التالي.
+            // سابقًا كنا نعكس السطر كله فقط لو كانت أول كلمة على يسار آخر كلمة، وهذا يفشل مع
+            // الأسطر المخزّنة بترتيب مختلط (أرقام/كلمات لاتينية وسط العربي، أو ملفات Word المحوّلة)،
+            // فيظهر التظليل (وتُنطق الكلمات) بالعكس في بعض الأسطر فقط. الآن نرتّب بحسب الموضع الفعلي
+            // على الصفحة، ونُبقي الجمل اللاتينية المتتالية بترتيبها الطبيعي (يسار -> يمين).
             int i = 0;
             while (i < raw.size()) {
                 int j = i;
                 while (j + 1 < raw.size() && raw.get(j + 1).line == raw.get(i).line) j++;
-                if (j > i) {
-                    StringBuilder sb = new StringBuilder();
-                    int rtlWords = 0;
-                    int wordsCount = j - i + 1;
-                    for (int k = i; k <= j; k++) {
-                        String t = raw.get(k).text;
-                        sb.append(t).append(' ');
-                        if (isRtlText(t)) rtlWords++;
-                    }
-
-                    if (isRtlText(sb.toString()) && rtlWords * 2 >= wordsCount) {
-                        java.util.List<RawWord> line = new java.util.ArrayList<>(raw.subList(i, j + 1));
-                        line.sort((a, b) -> Float.compare(b.box.centerX(), a.box.centerX()));
-                        for (int k = 0; k < line.size(); k++) {
-                            raw.set(i + k, line.get(k));
-                        }
-                    }
-                }
+                if (j > i) orderLineRtl(raw.subList(i, j + 1));
                 i = j + 1;
             }
             List<Word> out = new ArrayList<>(raw.size());
             for (RawWord r : raw) out.add(new Word(r.text, r.box, r.line));
             return out;
+        }
+
+        /** يعيد ترتيب كلمات سطر واحد (في مكانه) إذا كان السطر عربيًا؛ لا يلمس الأسطر اللاتينية. */
+        private static void orderLineRtl(List<RawWord> line) {
+            StringBuilder sb = new StringBuilder();
+            for (RawWord w : line) sb.append(w.text).append(' ');
+            if (!isRtlText(sb.toString())) return;
+
+            // 1) ترتيب بصري من اليمين لليسار (ثابت: الكلمات المتطابقة الموضع تبقى بترتيبها).
+            java.util.Collections.sort(line, (a, b) -> Float.compare(b.box.centerX(), a.box.centerX()));
+
+            // 2) أي مجموعة متتالية من الكلمات اللاتينية (مثل MENTAL STATE EXAMINATION) تُقرأ
+            //    من اليسار لليمين، فنعكس ترتيبها داخل مكانها بعد الفرز.
+            int k = 0;
+            while (k < line.size()) {
+                if (!isLatinWord(line.get(k).text)) {
+                    k++;
+                    continue;
+                }
+                int m = k;
+                while (m + 1 < line.size() && isLatinWord(line.get(m + 1).text)) m++;
+                if (m > k) java.util.Collections.reverse(line.subList(k, m + 1));
+                k = m + 1;
+            }
+        }
+
+        /** كلمة فيها حروف لاتينية ولا فيها أي حرف عربي. */
+        private static boolean isLatinWord(String t) {
+            boolean latin = false;
+            for (int i = 0; i < t.length(); i++) {
+                char c = t.charAt(i);
+                if (!Character.isLetter(c)) continue;
+                if (isArabicChar(c) || (c >= 0x0590 && c <= 0x05FF)) return false;
+                latin = true;
+            }
+            return latin;
         }
     }
 
