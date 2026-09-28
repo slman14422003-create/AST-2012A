@@ -1,889 +1,1032 @@
 package com.ast2012a.clinicalmaster;
 
+import android.content.Context;
+import android.graphics.RectF;
+
+import com.tom_roush.pdfbox.android.PDFBoxResourceLoader;
+import com.tom_roush.pdfbox.pdmodel.PDDocument;
+import com.tom_roush.pdfbox.text.PDFTextStripper;
+import com.tom_roush.pdfbox.text.TextPosition;
+
+import java.io.Closeable;
+import java.io.File;
+import java.io.IOException;
 import java.text.Normalizer;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
- * تجهيز نص المقطع للمحرك الصوتي (العصبي أو صوت الجهاز) قبل النطق.
+ * تجهيز نص صفحة PDF للقراءة الصوتية: استخراج كلمة-كلمة (PdfBox) مع موضع كل كلمة
+ * كنسبة من أبعاد الصفحة (0..1) حتى يقدر PdfHighlightView يظلّل الكلمة المنطوقة
+ * فوق صورة الصفحة بأي تكبير، ثم تقسيم النص إلى مقاطع (جمل) مناسبة للمحرك الصوتي،
+ * وتحديد لغة كل مقطع (عربي / إنجليزي / فرنسي / تركي) لاختيار الصوت الأدق.
  *
- * المشكلة: نص الـ PDF يحتوي رموزًا لا تُنطق (شرطات، نقاط تعداد، أقواس مراجع، روابط)،
- * وترقيمًا قد يُقرأ حرفيًا ("1-" تُنطق "واحد شرطة")، ووحدات لاتينية (mg, Hz) تُنطق حروفًا،
- * وأدوات إشارة وأسماء موصولة وألفاظ عموم (هذا، ذلك، الذي، كل...) يخطئ المحرك في تشكيلها.
- *
- * الحل: نحوّل كل كلمة (Token) إلى صيغتها المنطوقة، ونحتفظ بخريطة (موضع في النص المنطوق -> موضع
- * في النص الأصلي) حتى يبقى تظليل الكلمة الجاري نطقها صحيحًا فوق صفحة الـ PDF.
- * لا يلمس النص المعروض إطلاقًا - التعديل للنطق فقط.
+ * ترتيب القراءة = ترتيب بصري من مواضع الأحرف الفعلية (أسطر كاملة من اليمين لليسار للعربي، ثم السطر
+ * التالي، مع دعم الأعمدة والعناوين العريضة والجداول) - لا يعتمد على ترتيب تخزين النص داخل الملف.
+ * الصفحات الممسوحة ضوئيًا (صور بدون طبقة نص) ما فيها نص لتُقرأ - تُرجَع صفحة فاضية.
  */
-final class SpeechPrep {
+final class PdfSpeechText {
 
-    private SpeechPrep() {
+    private PdfSpeechText() {
     }
 
-    /** النص المنطوق + خريطة كل حرف منه إلى موضع الكلمة الأصلية (نسبةً لبداية النص المُدخل). */
-    static final class Spoken {
+    // ------------------------------------------------------------------ النماذج
+
+    static final class Word {
         final String text;
-        final int[] map;
+        /** موضع الكلمة كنسبة من عرض/ارتفاع الصفحة (Y من الأعلى). */
+        final RectF box;
+        final int line;
+        /** بداية/نهاية الكلمة داخل PageText.text (تُملأ عند بناء النص). */
+        int start;
+        int end;
 
-        Spoken(String text, int[] map) {
+        Word(String text, RectF box, int line) {
             this.text = text;
-            this.map = map;
-        }
-
-        int toOriginal(int spokenOffset) {
-            if (map == null || map.length == 0) return Math.max(0, spokenOffset);
-            return map[Math.max(0, Math.min(map.length - 1, spokenOffset))];
+            this.box = box;
+            this.line = line;
         }
     }
 
-    private static final String PUNCT = ".,;:!?\u060C\u061B\u061F";
+    static final class Chunk {
+        final int firstWord;
+        final int lastWord; // شامل
+        final int start;    // داخل PageText.text
+        final int end;
+        final String lang;  // ar / en / fr / tr
 
-    // ------------------------------------------------------------------ نقطة الدخول
-
-    static Spoken prepare(String src, String lang) {
-        if (src == null || src.isEmpty()) return new Spoken("", new int[0]);
-        final boolean ar = "ar".equals(lang);
-        int n = src.length();
-
-        // 1) تقطيع إلى كلمات مع موضع بداية كل واحدة في النص الأصلي
-        List<Integer> starts = new ArrayList<>();
-        List<String> toks = new ArrayList<>();
-        int i = 0;
-        while (i < n) {
-            while (i < n && isSpace(src.charAt(i))) i++;
-            if (i >= n) break;
-            int s = i;
-            while (i < n && !isSpace(src.charAt(i))) i++;
-            starts.add(s);
-            toks.add(src.substring(s, i));
+        Chunk(int firstWord, int lastWord, int start, int end, String lang) {
+            this.firstWord = firstWord;
+            this.lastWord = lastWord;
+            this.start = start;
+            this.end = end;
+            this.lang = lang;
         }
-
-        // 2) دمج الكلمات العربية المتقطّعة في الـ PDF: "ال" منفصلة عن كلمتها، أو حروف متباعدة
-        //    (كانت تُنطق "ألف لام" أو تُقطَّع الكلمة). التظليل يبقى على أول جزء.
-        if (ar) {
-            List<Integer> ms = new ArrayList<>();
-            List<String> mt = new ArrayList<>();
-            for (int k = 0; k < toks.size(); k++) {
-                String cur = toks.get(k);
-                final int firstIdx = k;
-                boolean run = false;
-                while (k + 1 < toks.size()) {
-                    String nx = toks.get(k + 1);
-                    int mode = glueMode(clean(cur), clean(nx), run);
-                    if (mode == 0) break;
-                    if (mode == 2) run = true;
-                    cur = cur + nx;
-                    k++;
-                }
-                ms.add(starts.get(firstIdx));
-                mt.add(cur);
-            }
-            starts = ms;
-            toks = mt;
-        }
-
-        // 3) تحويل كل كلمة إلى صيغتها المنطوقة مع خريطة المواضع
-        StringBuilder out = new StringBuilder(src.length() + 32);
-        int[] map = new int[src.length() + 64];
-        int mlen = 0;
-        String prevBare = "";
-        boolean prevNum = false;
-        boolean first = true;
-        for (int t = 0; t < toks.size(); t++) {
-            String tok = toks.get(t);
-            int s = starts.get(t);
-            String sp;
-            try {
-                sp = speakToken(tok, lang, first, prevBare, prevNum);
-            } catch (RuntimeException e) {
-                sp = tok; // أي خطأ غير متوقع: ننطق الكلمة كما هي
-            }
-            String bare = bareOf(clean(tok));
-            prevNum = NUMBER.matcher(bare).matches();
-            prevBare = bare;
-            if (sp.isEmpty()) continue;
-            first = false;
-            // أقواس: نضع وقفة قبل المحتوى وبعده ليُفهم أنه تفسير جانبي (ترقيم فقط - لا كلمات)
-            String ct = clean(tok);
-            if (out.length() > 0 && (ct.startsWith("(") || ct.startsWith("[") || ct.startsWith("\uFF08"))
-                    && PUNCT.indexOf(out.charAt(out.length() - 1)) < 0) {
-                map = ensure(map, mlen + 1);
-                out.append(pause(lang));
-                map[mlen++] = s;
-            }
-            if ((ct.endsWith(")") || ct.endsWith("]") || ct.endsWith("\uFF09"))
-                    && PUNCT.indexOf(sp.charAt(sp.length() - 1)) < 0) {
-                sp = sp + pause(lang);
-            }
-            boolean onlyPunct = sp.length() == 1 && PUNCT.indexOf(sp.charAt(0)) >= 0;
-            if (onlyPunct && out.length() == 0) continue;
-            if (out.length() > 0 && !onlyPunct) {
-                map = ensure(map, mlen + 1);
-                out.append(' ');
-                map[mlen++] = s;
-            }
-            map = ensure(map, mlen + sp.length());
-            for (int k = 0; k < sp.length(); k++) {
-                out.append(sp.charAt(k));
-                map[mlen++] = s;
-            }
-        }
-        // نهاية المقطع (عنوان أو بند بلا نقطة): نختمه بنقطة ليهبط الصوت ويقف بدل أن يلتصق بما بعده
-        if (out.length() > 0 && PUNCT.indexOf(out.charAt(out.length() - 1)) < 0) {
-            map = ensure(map, mlen + 1);
-            out.append('.');
-            map[mlen] = map[Math.max(0, mlen - 1)];
-            mlen++;
-        }
-        return new Spoken(out.toString(), Arrays.copyOf(map, mlen));
     }
 
-    /** 0 = لا دمج، 1 = دمج عادي (ال / حرف عطف)، 2 = دمج حروف متباعدة. */
-    private static int glueMode(String a, String b, boolean inRun) {
-        if (a.isEmpty() || b.isEmpty()) return 0;
-        if (!isArabicLetter(a.charAt(a.length() - 1)) || !isArabicLetter(b.charAt(0))) return 0;
-        // أداة التعريف منفصلة: ال / وال / فال / بال / كال / لل
-        if (AL_ONLY.contains(a)) return 1;
-        // "الأ" / "بالإ" منفصلة عن بقية الكلمة
-        if (a.length() >= 3 && "\u0623\u0625\u0622".indexOf(a.charAt(a.length() - 1)) >= 0
-                && AL_ONLY.contains(a.substring(0, a.length() - 1))) return 1;
-        // حرف عطف/جر منفرد قبل كلمة: و علي -> وعلي
-        if (a.length() == 1 && "\u0648\u0641\u0628\u0644\u0643".indexOf(a.charAt(0)) >= 0 && b.length() >= 2) return 1;
-        // حروف متباعدة: ع ض ل ة
-        if (b.length() == 1 && (inRun || (a.length() == 1 && a.charAt(0) != '\u0648'))) return 2;
-        return 0;
-    }
+    static final class PageText {
+        final int pageIndex;
+        final String text;
+        final List<Word> words;
+        final List<Chunk> chunks;
 
-    private static final Set<String> AL_ONLY = new HashSet<>(Arrays.asList(
-            "\u0627\u0644", "\u0648\u0627\u0644", "\u0641\u0627\u0644", "\u0628\u0627\u0644",
-            "\u0643\u0627\u0644", "\u0644\u0644", "\u0648\u0644\u0644", "\u0641\u0644\u0644"));
-
-    private static boolean isArabicLetter(char c) {
-        return (c >= 0x0621 && c <= 0x064A) || (c >= 0x064B && c <= 0x065F) || c == 0x0671;
-    }
-
-    private static int[] ensure(int[] a, int need) {
-        if (need <= a.length) return a;
-        return Arrays.copyOf(a, Math.max(need, a.length * 2));
-    }
-
-    private static boolean isSpace(char c) {
-        return Character.isWhitespace(c) || c == '\u00A0' || c == '\u202F' || c == '\u2007';
-    }
-
-    // ------------------------------------------------------------------ الكلمة الواحدة
-
-    private static final Pattern NUMBER = Pattern.compile("^\\d[\\d.,]*(?:[-\u2212\u2013\u2014]\\d[\\d.,]*)?$");
-    private static final Pattern CITATION = Pattern.compile("^\\[\\d+(?:[,;\\-\u2013]\\s?\\d+)*\\][.,;:!?\u060C\u061B\u061F]*$");
-    private static final Pattern EMAIL = Pattern.compile("^[\\w.+\\-]+@[\\w\\-]+(?:\\.[\\w\\-]+)+$");
-    private static final Pattern LIST_MARK = Pattern.compile("^[(\\[]?(\\d{1,3})[)\\].\\-\u2013\u2014:]$");
-    private static final Pattern SECTION = Pattern.compile("^\\d{1,3}(?:\\.\\d{1,3}){2,4}$");
-    private static final Pattern DEG = Pattern.compile("^(\\d+(?:\\.\\d+)?)\u00B0([CFcf])?$");
-    private static final Pattern RANGE = Pattern.compile("^(\\d+(?:[.,]\\d+)?)[-\u2212\u2013\u2014](\\d+(?:[.,]\\d+)?)$");
-    private static final Pattern RANGE_UNIT = Pattern.compile(
-            "^(\\d+(?:[.,]\\d+)?)[-\u2212\u2013\u2014](\\d+(?:[.,]\\d+)?)([A-Za-z\u00B5\u03BC][A-Za-z\u00B5\u03BC/\u00B2\u00B3\\d]*)$");
-    private static final Pattern NUMUNIT = Pattern.compile(
-            "^(\\d+(?:[.,]\\d+)?)([A-Za-z\u00B5\u03BC][A-Za-z\u00B5\u03BC/\u00B2\u00B3\\d]*)$");
-    private static final Pattern UNITPART = Pattern.compile("^([A-Za-z\u00B5]+)([23])?$");
-
-    /**
-     * false (الافتراضي) = القراءة الأمينة: لا نضيف أي كلمة غير موجودة في النص (لا "إلى" ولا "أو" ولا "درجة مئوية"...).
-     * نحذف فقط ما لا يُنطق (شرطات، نقاط تعداد، مراجع، روابط) ونُصلح ما يُخطئ فيه المحرك.
-     * true = يشرح الرموز والوحدات بكلمات (mA -> ملي أمبير، % -> بالمئة، / -> أو ...).
-     */
-    static final boolean EXPAND_SYMBOLS = false;
-
-    /** رموز نتركها كما هي في النص للمحرك (هو يعرف نطقها) ولا نشرحها نحن. */
-    private static final String KEEP_SYM = "+=<>\u00B1\u00D7\u00F7\u2265\u2264%\u00B0";
-    private static final Pattern RANGE_ANY = Pattern.compile(
-            "^(\\d+(?:[.,]\\d+)?)[-\u2212\u2013\u2014](\\d+(?:[.,]\\d+)?)(.*)$");
-    private static final String DASHES = "-\u2010\u2011\u2012\u2013\u2014\u2015\u2212";
-
-    private static String pause(String lang) {
-        return "ar".equals(lang) ? "\u060C" : ",";
-    }
-
-    private static boolean isDashOnly(String t) {
-        for (int i = 0; i < t.length(); i++) {
-            if (DASHES.indexOf(t.charAt(i)) < 0) return false;
-        }
-        return !t.isEmpty();
-    }
-
-    private static String keepSyms(String s) {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < s.length(); i++) {
-            char c = s.charAt(i);
-            if (KEEP_SYM.indexOf(c) >= 0) sb.append(c);
-        }
-        return sb.toString();
-    }
-
-    private static String speakToken(String raw, String lang, boolean first, String prevBare, boolean prevNum) {
-        if (EXPAND_SYMBOLS) return speakTokenExpanded(raw, lang, first, prevBare, prevNum);
-        final boolean ar = "ar".equals(lang);
-        String t = clean(raw);
-        if (t.isEmpty()) return "";
-        String low = t.toLowerCase(Locale.ROOT);
-        if (CITATION.matcher(t).matches()) return lastPunctIn(t);
-        if (low.startsWith("http://") || low.startsWith("https://") || low.startsWith("www.")
-                || EMAIL.matcher(bareOf(t)).matches()) {
-            return lastPunctIn(t); // الروابط والبريد لا تُقرأ حرفًا حرفًا
-        }
-        if (isDashOnly(t)) return first ? "" : pause(lang); // " - " بين جملتين = وقفة فقط
-        if (first) {
-            Matcher m = LIST_MARK.matcher(t);
-            if (m.matches()) return m.group(1) + pause(lang);
-        }
-        int a = 0, b = t.length();
-        while (a < b && !isWordChar(t.charAt(a))) a++;
-        while (b > a && !isWordChar(t.charAt(b - 1))) b--;
-        if (a >= b) {
-            String k = keepSyms(t);
-            return k + lastPunctIn(t);
-        }
-        String pre = keepSyms(t.substring(0, a));
-        String core = t.substring(a, b);
-        String tail = t.substring(b);
-        String body = faithfulCore(core, lang);
-        if (ar) body = arabicWords(body, "");
-        String res = pre + body + keepSyms(tail);
-        return res + lastPunctIn(tail);
-    }
-
-    /** يُبقي حروف الكلمة وأرقامها فقط، والرموز الداخلية (شرطة، شرطة مائلة، أقواس...) تصير فراغًا. */
-    private static String faithfulCore(String core, String lang) {
-        final boolean ar = "ar".equals(lang);
-        Matcher m = RANGE_ANY.matcher(core);
-        if (m.matches()) { // 50-100 -> "50، 100" (وقفة بدل كلمة "إلى")
-            String rest = m.group(3);
-            return m.group(1) + pause(lang) + " " + m.group(2) + (rest.isEmpty() ? "" : faithfulCore(rest, lang));
-        }
-        String c2 = core;
-        if (ar) c2 = c2.replace("\u0648/\u0623\u0648", "\u0648 \u0623\u0648").replace("\u0648/\u0627\u0648", "\u0648 \u0623\u0648");
-        if ("en".equals(lang)) c2 = c2.replace("and/or", "and or");
-        int len = c2.length();
-        StringBuilder sb = new StringBuilder(len + 4);
-        for (int k = 0; k < len; k++) {
-            char c = c2.charAt(k);
-            if (isWordChar(c) || c == '.' || c == ',' || c == '\'' || c == '\u2019' || KEEP_SYM.indexOf(c) >= 0) {
-                sb.append(c);
-            } else if (c == '/' && k > 0 && k + 1 < len && Character.isDigit(c2.charAt(k - 1))
-                    && Character.isDigit(c2.charAt(k + 1))) {
-                sb.append('/'); // 1/2 تبقى كسرًا
-            } else if ("\"\u00AB\u00BB\u201C\u201D\u201E\u2018\u2039\u203A".indexOf(c) >= 0) {
-                // علامات الاقتباس لا تُنطق
-            } else {
-                sb.append(' ');
-            }
-        }
-        return sb.toString().replaceAll("\\s+", " ").trim();
-    }
-
-    private static String speakTokenExpanded(String raw, String lang, boolean first, String prevBare, boolean prevNum) {
-        final boolean ar = "ar".equals(lang);
-        final boolean en = "en".equals(lang);
-        String t = clean(raw);
-        if (t.isEmpty()) return "";
-        String low = t.toLowerCase(Locale.ROOT);
-
-        // مراجع رقمية [12] [3-5]: لا تُقرأ
-        if (CITATION.matcher(t).matches()) return lastPunctIn(t);
-        // روابط وبريد
-        if (low.startsWith("http://") || low.startsWith("https://") || low.startsWith("www.")) {
-            return linkWord(lang) + lastPunctIn(t);
-        }
-        if (EMAIL.matcher(bareOf(t)).matches()) return emailWord(lang) + lastPunctIn(t);
-        // بداية بند مرقّم: "1-" أو "1." أو "(1)" -> "1،" بدل "واحد شرطة"
-        if (first) {
-            Matcher m = LIST_MARK.matcher(t);
-            if (m.matches()) return m.group(1) + (ar ? "\u060C" : ",");
-        }
-        if (en) {
-            String ab = EN_ABBR.get(low);
-            if (ab != null) return ab;
+        PageText(int pageIndex, String text, List<Word> words, List<Chunk> chunks) {
+            this.pageIndex = pageIndex;
+            this.text = text;
+            this.words = words;
+            this.chunks = chunks;
         }
 
-        int a = 0, b = t.length();
-        while (a < b && !isWordChar(t.charAt(a))) a++;
-        while (b > a && !isWordChar(t.charAt(b - 1))) b--;
-        if (a >= b) return lastPunctIn(t);
-        String lead = t.substring(0, a);
-        String core = t.substring(a, b);
-        String tail = t.substring(b);
-        String punct = lastPunctIn(tail);
-
-        // "37 °C"
-        if (lead.indexOf('\u00B0') >= 0 && prevNum && (core.equals("C") || core.equals("F"))) {
-            return degreeWord(lang, core.charAt(0)) + punct;
-        }
-        // اختصارات عربية
-        if (ar) {
-            if (core.equals("\u062F") && tail.indexOf('.') >= 0) return "\u062F\u0643\u062A\u0648\u0631";
-            if (core.equals("\u0623.\u062F")) return "\u0623\u0633\u062A\u0627\u0630 \u062F\u0643\u062A\u0648\u0631";
-            String ab = AR_ABBR.get(core);
-            if (ab != null) return ab + punct;
+        boolean isEmpty() {
+            return chunks.isEmpty();
         }
 
-        boolean minus = false;
-        if (!lead.isEmpty() && !prevNum && Character.isDigit(core.charAt(0))) {
-            char lc = lead.charAt(lead.length() - 1);
-            minus = lc == '-' || lc == '\u2212' || lc == '\u2013' || lc == '\u2014';
-        }
-        StringBuilder pre = new StringBuilder();
-        for (int k = 0; k < lead.length(); k++) {
-            String w = symWord(lead.charAt(k), ar, en);
-            if (w != null) pre.append(w);
-        }
-
-        String body;
-        if (ar && core.startsWith("\u062F/") && core.length() > 2) {
-            body = "\u062F\u0643\u062A\u0648\u0631 " + coreToSpoken(core.substring(2), lang, false, prevNum);
-        } else {
-            body = coreToSpoken(core, lang, first, prevNum);
-        }
-        if (ar) body = arabicWords(body, prevBare);
-
-        boolean pct = false, deg = false;
-        StringBuilder sym = new StringBuilder();
-        for (int k = 0; k < tail.length(); k++) {
-            char c = tail.charAt(k);
-            if (c == '%' || c == '\u066A') pct = true;
-            else if (c == '\u00B0') deg = true;
-            else if (PUNCT.indexOf(c) < 0 && c != '\u2026') {
-                String w = symWord(c, ar, en);
-                if (w != null) sym.append(w);
-            }
-        }
-
-        StringBuilder r = new StringBuilder();
-        if (minus) r.append(minusWord(lang)).append(' ');
-        if (pct && "tr".equals(lang)) r.append("y\u00FCzde ");
-        r.append(pre).append(' ').append(body);
-        if (pct) r.append(' ').append(percentWord(lang));
-        if (deg) r.append(' ').append(degWord(lang));
-        r.append(' ').append(sym);
-        String res = r.toString().replaceAll("\\s+", " ").trim();
-        return res.isEmpty() ? punct : res + punct;
-    }
-
-    // ------------------------------------------------------------------ جسم الكلمة (أرقام، وحدات، رموز داخلية)
-
-    private static String coreToSpoken(String core, String lang, boolean first, boolean prevNum) {
-        final boolean ar = "ar".equals(lang);
-        final boolean en = "en".equals(lang);
-        Matcher m;
-        if (first && SECTION.matcher(core).matches()) {
-            return core.replace(".", ar ? " \u0646\u0642\u0637\u0629 " : en ? " point " : " ").trim();
-        }
-        if ((m = DEG.matcher(core)).matches()) {
-            String c = m.group(2);
-            return m.group(1) + " " + (c == null ? degWord(lang) : degreeWord(lang, c.charAt(0)));
-        }
-        if ((m = RANGE.matcher(core)).matches()) {
-            return m.group(1) + rangeWord(lang) + m.group(2);
-        }
-        if ((m = RANGE_UNIT.matcher(core)).matches()) {
-            String u = unitSpoken(m.group(3), ar, en, true);
-            if (u != null) return m.group(1) + rangeWord(lang) + m.group(2) + " " + u;
-        }
-        if ((m = NUMUNIT.matcher(core)).matches()) {
-            String u = unitSpoken(m.group(2), ar, en, true);
-            if (u != null) return m.group(1) + " " + u;
-        }
-        if (prevNum && core.length() >= 2) {
-            String u = unitSpoken(core, ar, en, false);
-            if (u != null) return u;
-        }
-
-        String c2 = core;
-        if (ar) c2 = c2.replace("\u0648/\u0623\u0648", "\u0648 \u0623\u0648").replace("\u0648/\u0627\u0648", "\u0648 \u0623\u0648");
-        if (en) c2 = c2.replace("and/or", "and or");
-        int len = c2.length();
-        StringBuilder sb = new StringBuilder(len + 8);
-        for (int k = 0; k < len; k++) {
-            char c = c2.charAt(k);
-            if (isWordChar(c) || c == '.' || c == ',' || c == '\'' || c == '\u2019') {
-                sb.append(c);
-                continue;
-            }
-            if (c == '/') {
-                char p = k > 0 ? c2.charAt(k - 1) : ' ';
-                char q = k + 1 < len ? c2.charAt(k + 1) : ' ';
-                if (Character.isLetter(p) && Character.isLetter(q)) {
-                    sb.append(ar ? " \u0623\u0648 " : en ? " or " : " ");
-                } else if (Character.isDigit(p) && Character.isDigit(q)) {
-                    sb.append(ar ? " \u0639\u0644\u0649 " : en ? " over " : " ");
+        /** فهرس الكلمة التي تحتوي هذا الموضع داخل النص (أو أقرب كلمة سابقة). */
+        int wordAtOffset(int offset) {
+            int lo = 0, hi = words.size() - 1, ans = 0;
+            while (lo <= hi) {
+                int mid = (lo + hi) >>> 1;
+                if (words.get(mid).start <= offset) {
+                    ans = mid;
+                    lo = mid + 1;
                 } else {
-                    sb.append(' ');
+                    hi = mid - 1;
                 }
-                continue;
             }
-            if ("\"\u00AB\u00BB\u201C\u201D\u201E\u2018\u2039\u203A".indexOf(c) >= 0) continue;
-            String w = symWord(c, ar, en);
-            sb.append(w != null ? w : " "); // شرطات، شرطة سفلية، أقواس، نجوم... -> فراغ
-        }
-        return sb.toString().replaceAll("\\s+", " ").trim();
-    }
-
-    // ------------------------------------------------------------------ كلمات الرموز
-
-    private static String symWord(char c, boolean ar, boolean en) {
-        if (!ar && !en) return null;
-        switch (c) {
-            case '+':
-                return ar ? " \u0632\u0627\u0626\u062F " : " plus ";
-            case '=':
-                return ar ? " \u064A\u0633\u0627\u0648\u064A " : " equals ";
-            case '>':
-                return ar ? " \u0623\u0643\u0628\u0631 \u0645\u0646 " : " greater than ";
-            case '<':
-                return ar ? " \u0623\u0635\u063A\u0631 \u0645\u0646 " : " less than ";
-            case '\u2265':
-                return ar ? " \u0623\u0643\u0628\u0631 \u0645\u0646 \u0623\u0648 \u064A\u0633\u0627\u0648\u064A " : " greater than or equal to ";
-            case '\u2264':
-                return ar ? " \u0623\u0635\u063A\u0631 \u0645\u0646 \u0623\u0648 \u064A\u0633\u0627\u0648\u064A " : " less than or equal to ";
-            case '\u00B1':
-                return ar ? " \u0632\u0627\u0626\u062F \u0623\u0648 \u0646\u0627\u0642\u0635 " : " plus or minus ";
-            case '\u00D7':
-                return ar ? " \u0636\u0631\u0628 " : " times ";
-            case '\u00F7':
-                return ar ? " \u0642\u0633\u0645\u0629 " : " divided by ";
-            case '\u2248':
-            case '~':
-                return ar ? " \u062A\u0642\u0631\u064A\u0628\u0627 " : " approximately ";
-            case '\u2192':
-            case '\u21D2':
-            case '\u27F6':
-                return ar ? " \u064A\u0624\u062F\u064A \u0625\u0644\u0649 " : " leads to ";
-            case '\u2191':
-                return ar ? " \u0632\u064A\u0627\u062F\u0629 " : " increase ";
-            case '\u2193':
-                return ar ? " \u0646\u0642\u0635\u0627\u0646 " : " decrease ";
-            case '&':
-                return ar ? " \u0648 " : " and ";
-            case '%':
-            case '\u066A':
-                return ar ? " \u0628\u0627\u0644\u0645\u0626\u0629 " : " percent ";
-            case '\u00B0':
-                return ar ? " \u062F\u0631\u062C\u0629 " : " degrees ";
-            default:
-                return null;
+            return ans;
         }
     }
 
-    private static String minusWord(String l) {
-        switch (l) {
-            case "ar":
-                return "\u0633\u0627\u0644\u0628";
-            case "fr":
-                return "moins";
-            case "tr":
-                return "eksi";
-            default:
-                return "minus";
+    // ------------------------------------------------------------------ المصدر (ملف مفتوح)
+
+    /** يفتح المستند مرة واحدة ويستخرج صفحاته عند الطلب. غير آمن للاستخدام من أكثر من خيط. */
+    static final class Source implements Closeable {
+        private final PDDocument doc;
+        private String latinHint = null;
+
+        private Source(PDDocument doc) {
+            this.doc = doc;
+        }
+
+        static Source open(Context ctx, File file) throws IOException {
+            PDFBoxResourceLoader.init(ctx.getApplicationContext());
+            return new Source(PDDocument.load(file));
+        }
+
+        int pageCount() {
+            return doc.getNumberOfPages();
+        }
+
+        PageText page(int pageIndex) {
+            try {
+                if (pageIndex < 0 || pageIndex >= doc.getNumberOfPages()) return emptyPage(pageIndex);
+                GlyphCollector stripper = new GlyphCollector();
+                stripper.setStartPage(pageIndex + 1);
+                stripper.setEndPage(pageIndex + 1);
+                stripper.setSortByPosition(false);
+                stripper.getText(doc);
+                List<Word> words = dropRunningHeadersFooters(assemble(stripper.glyphs, stripper.pw, stripper.ph));
+                if (words.isEmpty()) return emptyPage(pageIndex);
+                return build(pageIndex, words, this);
+            } catch (Throwable t) {
+                return emptyPage(pageIndex);
+            }
+        }
+
+        @Override
+        public void close() {
+            try {
+                doc.close();
+            } catch (Throwable ignored) {
+            }
         }
     }
 
-    private static String percentWord(String l) {
-        switch (l) {
-            case "ar":
-                return "\u0628\u0627\u0644\u0645\u0626\u0629";
-            case "fr":
-                return "pour cent";
-            case "tr":
-                return "";
-            default:
-                return "percent";
-        }
-    }
-
-    private static String degWord(String l) {
-        switch (l) {
-            case "ar":
-                return "\u062F\u0631\u062C\u0629";
-            case "fr":
-                return "degr\u00E9s";
-            case "tr":
-                return "derece";
-            default:
-                return "degrees";
-        }
-    }
-
-    private static String degreeWord(String l, char scale) {
-        boolean f = scale == 'F' || scale == 'f';
-        switch (l) {
-            case "ar":
-                return f ? "\u062F\u0631\u062C\u0629 \u0641\u0647\u0631\u0646\u0647\u0627\u064A\u062A" : "\u062F\u0631\u062C\u0629 \u0645\u0626\u0648\u064A\u0629";
-            case "fr":
-                return f ? "degr\u00E9s Fahrenheit" : "degr\u00E9s Celsius";
-            case "tr":
-                return f ? "derece Fahrenheit" : "derece Celsius";
-            default:
-                return f ? "degrees Fahrenheit" : "degrees Celsius";
-        }
-    }
-
-    private static String rangeWord(String l) {
-        switch (l) {
-            case "ar":
-                return " \u0625\u0644\u0649 ";
-            case "fr":
-                return " \u00E0 ";
-            case "tr":
-                return " ile ";
-            default:
-                return " to ";
-        }
-    }
-
-    private static String linkWord(String l) {
-        switch (l) {
-            case "ar":
-                return "\u0631\u0627\u0628\u0637 \u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A";
-            case "fr":
-                return "lien";
-            case "tr":
-                return "ba\u011Flant\u0131";
-            default:
-                return "web link";
-        }
-    }
-
-    private static String emailWord(String l) {
-        switch (l) {
-            case "ar":
-                return "\u0628\u0631\u064A\u062F \u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A";
-            case "fr":
-                return "adresse e-mail";
-            case "tr":
-                return "e-posta adresi";
-            default:
-                return "email address";
-        }
-    }
-
-    // ------------------------------------------------------------------ الوحدات
-
-    private static final Map<String, String> U_AR = new HashMap<>();
-    private static final Map<String, String> U_EN = new HashMap<>();
-
-    private static void unit(String key, String ar, String en) {
-        U_AR.put(key, ar);
-        U_EN.put(key, en);
-    }
-
-    static {
-        unit("mg", "\u0645\u0644\u064A\u063A\u0631\u0627\u0645", "milligrams");
-        unit("g", "\u063A\u0631\u0627\u0645", "grams");
-        unit("kg", "\u0643\u064A\u0644\u0648\u063A\u0631\u0627\u0645", "kilograms");
-        unit("mcg", "\u0645\u064A\u0643\u0631\u0648\u063A\u0631\u0627\u0645", "micrograms");
-        unit("\u00B5g", "\u0645\u064A\u0643\u0631\u0648\u063A\u0631\u0627\u0645", "micrograms");
-        unit("ml", "\u0645\u0644\u064A\u0644\u062A\u0631", "milliliters");
-        unit("l", "\u0644\u062A\u0631", "liters");
-        unit("dl", "\u062F\u064A\u0633\u064A\u0644\u062A\u0631", "deciliters");
-        unit("cm", "\u0633\u0646\u062A\u064A\u0645\u062A\u0631", "centimeters");
-        unit("mm", "\u0645\u0644\u064A\u0645\u062A\u0631", "millimeters");
-        unit("m", "\u0645\u062A\u0631", "meters");
-        unit("km", "\u0643\u064A\u0644\u0648\u0645\u062A\u0631", "kilometers");
-        unit("hz", "\u0647\u0631\u062A\u0632", "hertz");
-        unit("khz", "\u0643\u064A\u0644\u0648 \u0647\u0631\u062A\u0632", "kilohertz");
-        unit("mhz", "\u0645\u064A\u063A\u0627 \u0647\u0631\u062A\u0632", "megahertz");
-        unit("ma", "\u0645\u0644\u064A \u0623\u0645\u0628\u064A\u0631", "milliamps");
-        unit("a", "\u0623\u0645\u0628\u064A\u0631", "amps");
-        unit("v", "\u0641\u0648\u0644\u062A", "volts");
-        unit("mv", "\u0645\u0644\u064A \u0641\u0648\u0644\u062A", "millivolts");
-        unit("w", "\u0648\u0627\u0637", "watts");
-        unit("mw", "\u0645\u0644\u064A \u0648\u0627\u0637", "milliwatts");
-        unit("j", "\u062C\u0648\u0644", "joules");
-        unit("kj", "\u0643\u064A\u0644\u0648 \u062C\u0648\u0644", "kilojoules");
-        unit("min", "\u062F\u0642\u064A\u0642\u0629", "minutes");
-        unit("mins", "\u062F\u0642\u064A\u0642\u0629", "minutes");
-        unit("sec", "\u062B\u0627\u0646\u064A\u0629", "seconds");
-        unit("secs", "\u062B\u0627\u0646\u064A\u0629", "seconds");
-        unit("s", "\u062B\u0627\u0646\u064A\u0629", "seconds");
-        unit("h", "\u0633\u0627\u0639\u0629", "hours");
-        unit("hr", "\u0633\u0627\u0639\u0629", "hours");
-        unit("hrs", "\u0633\u0627\u0639\u0629", "hours");
-        unit("bpm", "\u0646\u0628\u0636\u0629 \u0641\u064A \u0627\u0644\u062F\u0642\u064A\u0642\u0629", "beats per minute");
-        unit("mmhg", "\u0645\u0644\u064A\u0645\u062A\u0631 \u0632\u0626\u0628\u0642\u064A", "millimeters of mercury");
-        unit("kcal", "\u0633\u0639\u0631\u0629 \u062D\u0631\u0627\u0631\u064A\u0629", "kilocalories");
-        unit("iu", "\u0648\u062D\u062F\u0629 \u062F\u0648\u0644\u064A\u0629", "international units");
-        unit("rpm", "\u062F\u0648\u0631\u0629 \u0641\u064A \u0627\u0644\u062F\u0642\u064A\u0642\u0629", "revolutions per minute");
-    }
+    /** حدود هامش رأس/تذييل الصفحة (نسبة من ارتفاع الصفحة). */
+    private static final float HEADER_BOTTOM = 0.078f;
+    private static final float FOOTER_TOP = 0.91f;
+    private static final int MIN_BODY_WORDS = 25;
 
     /**
-     * attached = الوحدة ملتصقة برقم (10mg) فنقبل حرفًا واحدًا (s, m, A)؛ وإلا (10 mg) نشترط حرفين فأكثر
-     * حتى لا تتحول "Figure 5 A" إلى "5 أمبير".
+     * يحذف رأس الصفحة المتكرر ("الفصل الأول"، عنوان الملف) وتذييلها (رقم الصفحة) من القراءة.
+     * يُطبَّق فقط لو في الصفحة نص أساسي كافٍ، حتى لا تضيع صفحات الغلاف/العناوين القليلة النص.
      */
-    private static String unitSpoken(String u, boolean ar, boolean en, boolean attached) {
-        if (!ar && !en) return null;
-        String x = u.replace('\u00B2', '2').replace('\u00B3', '3').replace('\u03BC', '\u00B5');
-        String[] parts = x.split("/", -1);
-        if (parts.length > 2) return null;
-        Map<String, String> map = ar ? U_AR : U_EN;
-        StringBuilder sb = new StringBuilder();
-        for (int idx = 0; idx < parts.length; idx++) {
-            Matcher m = UNITPART.matcher(parts[idx]);
-            if (!m.matches()) return null;
-            String base = m.group(1);
-            if (!attached && base.length() < 2 && !(parts.length == 2 && parts[1 - idx].length() >= 2)) return null;
-            String v = map.get(base);
-            if (v == null) v = map.get(base.toLowerCase(Locale.ROOT));
-            if (v == null) return null;
-            String pw = m.group(2);
-            if (pw != null) v += pw.equals("2") ? (ar ? " \u0645\u0631\u0628\u0639" : " squared") : (ar ? " \u0645\u0643\u0639\u0628" : " cubed");
-            if (idx > 0) sb.append(ar ? " \u0644\u0643\u0644 " : " per ");
-            sb.append(v);
+    private static List<Word> dropRunningHeadersFooters(List<Word> words) {
+        int body = 0;
+        for (Word w : words) {
+            if (!(w.box.bottom < HEADER_BOTTOM || w.box.top > FOOTER_TOP)) body++;
         }
-        return sb.toString();
-    }
-
-    // ------------------------------------------------------------------ اختصارات
-
-    private static final Map<String, String> EN_ABBR = new HashMap<>();
-    private static final Map<String, String> AR_ABBR = new HashMap<>();
-
-    static {
-        EN_ABBR.put("e.g.", "for example,");
-        EN_ABBR.put("i.e.", "that is,");
-        EN_ABBR.put("vs.", "versus");
-        EN_ABBR.put("vs", "versus");
-        EN_ABBR.put("etc.", "et cetera");
-        EN_ABBR.put("fig.", "figure");
-        EN_ABBR.put("figs.", "figures");
-        EN_ABBR.put("dr.", "doctor");
-        EN_ABBR.put("mr.", "mister");
-        EN_ABBR.put("mrs.", "missus");
-        EN_ABBR.put("prof.", "professor");
-        EN_ABBR.put("approx.", "approximately");
-        AR_ABBR.put("\u0625\u0644\u062E", "\u0625\u0644\u0649 \u0622\u062E\u0631\u0647");
-        AR_ABBR.put("\u0627\u0644\u062E", "\u0625\u0644\u0649 \u0622\u062E\u0631\u0647");
-        AR_ABBR.put("\u0642.\u0645", "\u0642\u0628\u0644 \u0627\u0644\u0645\u064A\u0644\u0627\u062F");
-    }
-
-    // ------------------------------------------------------------------ العربية: تشكيل أدوات الإشارة والموصولات وألفاظ العموم
-
-    private static final Map<String, String> D = new HashMap<>();
-    private static final Set<String> P = new HashSet<>(); // كلمات تقبل سوابق ب/ل/ك (بهذا، لذلك، بكل)
-    private static final Map<Character, String> PREFIX_V = new HashMap<>();
-
-    private static void d(String plain, String shaped, boolean prefixable) {
-        D.put(plain, shaped);
-        if (prefixable) P.add(plain);
-    }
-
-    static {
-        PREFIX_V.put('\u0648', "\u0648\u064E");
-        PREFIX_V.put('\u0641', "\u0641\u064E");
-        PREFIX_V.put('\u0628', "\u0628\u0650");
-        PREFIX_V.put('\u0644', "\u0644\u0650");
-        PREFIX_V.put('\u0643', "\u0643\u064E");
-
-        // أدوات الإشارة
-        d("هذا", "هَذَا", true);
-        d("هذه", "هَذِه", true);
-        d("ذلك", "ذَلِك", true);
-        d("تلك", "تِلْك", true);
-        d("ذاك", "ذَاك", true);
-        d("هؤلاء", "هَؤُلَاء", true);
-        d("أولئك", "أُولَئِك", true);
-        d("اولئك", "أُولَئِك", true);
-        d("هذان", "هَذَان", true);
-        d("هذين", "هَذَيْن", true);
-        d("هاتان", "هَاتَان", true);
-        d("هاتين", "هَاتَيْن", true);
-        d("هنا", "هُنَا", true);
-        d("هناك", "هُنَاك", true);
-        d("هنالك", "هُنَالِك", true);
-        d("هكذا", "هَكَذَا", true);
-        d("كذا", "كَذَا", true);
-        // الأسماء الموصولة
-        d("الذي", "الَّذِي", false);
-        d("التي", "الَّتِي", false);
-        d("الذين", "الَّذِين", false);
-        d("اللذان", "اللَّذَان", false);
-        d("اللتان", "اللَّتَان", false);
-        d("اللاتي", "اللَّاتِي", false);
-        d("اللواتي", "اللَّوَاتِي", false);
-        // أدوات الاستفهام
-        d("ماذا", "مَاذَا", false);
-        d("لماذا", "لِمَاذَا", false);
-        d("كيف", "كَيْف", false);
-        d("متى", "مَتَى", false);
-        d("أين", "أَيْن", false);
-        // ألفاظ العموم والكمّ
-        d("كل", "كُلّ", true);
-        d("بعض", "بَعْض", true);
-        d("جميع", "جَمِيع", true);
-        d("كافة", "كَافَّة", true);
-        d("معظم", "مُعْظَم", true);
-        d("أغلب", "أَغْلَب", true);
-        d("أكثر", "أَكْثَر", true);
-        d("أقل", "أَقَلّ", true);
-        // حروف وظروف يكثر الخطأ في ضبطها (لا نضع حركة إعراب على الآخر حتى لا نفرضها خطأً)
-        d("إذا", "إِذَا", false);
-        d("اذا", "إِذَا", false);
-        d("حيث", "حَيْث", false);
-        d("حين", "حِين", false);
-        d("بينما", "بَيْنَمَا", false);
-        d("لكن", "لَكِنْ", false);
-        d("لذا", "لِذَا", false);
-        d("إلى", "إِلَى", false);
-        d("الى", "إِلَى", false);
-        d("على", "عَلَى", false);
-        d("عن", "عَنْ", false);
-        d("حتى", "حَتَّى", false);
-        d("بعد", "بَعْد", false);
-        d("قبل", "قَبْل", false);
-        d("بين", "بَيْن", false);
-        d("خلال", "خِلَال", false);
-        d("أثناء", "أَثْنَاء", false);
-        d("عند", "عِنْد", false);
-        d("لدى", "لَدَى", false);
-        d("منذ", "مُنْذ", false);
-        d("دون", "دُون", false);
-        d("ثم", "ثُمَّ", false);
-        d("قد", "قَدْ", false);
-        d("لقد", "لَقَدْ", false);
-        d("سوف", "سَوْف", false);
-        d("لم", "لَمْ", false);
-        d("لن", "لَنْ", false);
-        d("ليس", "لَيْس", false);
-        d("ليست", "لَيْسَتْ", false);
-        d("إنما", "إِنَّمَا", false);
-        d("أيضا", "أَيْضًا", false);
-    }
-
-    private static String arabicWords(String body, String prevBare) {
-        if (body.isEmpty() || !hasArabic(body)) return body;
-        String[] parts = body.split(" ");
-        StringBuilder sb = new StringBuilder(body.length() + 16);
-        for (int k = 0; k < parts.length; k++) {
-            if (k > 0) sb.append(' ');
-            sb.append(diacritize(parts[k]));
+        if (body < MIN_BODY_WORDS) return words;
+        List<Word> out = new ArrayList<>(words.size());
+        for (Word w : words) {
+            if (w.box.bottom < HEADER_BOTTOM || w.box.top > FOOTER_TOP) continue;
+            out.add(w);
         }
-        return sb.toString();
+        return out;
     }
 
-    private static boolean hasArabic(String s) {
+    private static PageText emptyPage(int pageIndex) {
+        return new PageText(pageIndex, "", new ArrayList<>(), new ArrayList<>());
+    }
+
+    // ------------------------------------------------------------------ الاستخراج
+    //
+    // الاستخراج هنا يعتمد على *مواضع الأحرف الفعلية* في الصفحة فقط، لا على ترتيب ورود النص في
+    // الملف ولا على تجميع PdfBox للأسطر (الذي يعيد ترتيب/عكس الحروف العربية أحيانًا ويجعل القراءة
+    // تقفز بين طرفي السطر). الخطوات:
+    //   1) نجمع كل حرف بموضعه (Glyph) ونطبّع أشكال العرض العربية (ﻻ / ﻣ ...) إلى حروفها الأصلية.
+    //   2) نجمع الأحرف في "أسطر" بحسب خط الأساس، ثم نقطّع السطر إلى مقاطع (Seg) عند الفجوات الكبيرة
+    //      (عمود آخر / خلية جدول).
+    //   3) داخل كل مقطع نبني الكلمات من الفجوات الأفقية، ونحدد ترتيب القراءة (يمين->يسار للعربي
+    //      مع إبقاء الكلمات اللاتينية/الأرقام المتتالية بترتيبها الطبيعي).
+    //   4) نرتّب المقاطع على مستوى الصفحة بخوارزمية XY-cut: أعمدة (العربي من اليمين) ثم أسطر من الأعلى،
+    //      وبدون تحويل الجداول إلى أعمدة (الجدول يُقرأ صفًا صفًا).
+
+    /** حرف واحد من الصفحة بموضعه الفعلي (بالنقطة، Y من الأعلى). */
+    private static final class Glyph {
+        String u;
+        float x0, x1, base, top, bottom, font;
+        boolean mark;
+        boolean space;
+
+        float cx() {
+            return (x0 + x1) / 2f;
+        }
+    }
+
+    private static final class RawWord {
+        String text;
+        RectF box;
+        int line;
+        /** L = لاتيني، R = عربي/عبري، N = أرقام/رموز فقط. */
+        char cls;
+    }
+
+    /** مقطع سطر متصل (سطر كامل، أو جزء منه إذا كان في الصفحة أعمدة/خلايا). */
+    private static final class Seg {
+        final List<RawWord> words = new ArrayList<>();
+        float x0 = Float.MAX_VALUE, y0 = Float.MAX_VALUE, x1 = -Float.MAX_VALUE, y1 = -Float.MAX_VALUE;
+        float base;
+        float font = 10f;
+        boolean rtl;
+
+        float cx() {
+            return (x0 + x1) / 2f;
+        }
+
+        float width() {
+            return x1 - x0;
+        }
+    }
+
+    /** فجوة (كمضاعف لحجم الخط) أكبر منها = نهاية كلمة. */
+    private static final float WORD_GAP_EM = 0.20f;
+    /** فجوة (كمضاعف لحجم الخط) أكبر منها = عمود/خلية أخرى. */
+    private static final float SEG_GAP_EM = 2.5f;
+
+    private static final class GlyphCollector extends PDFTextStripper {
+        final List<Glyph> glyphs = new ArrayList<>();
+        float pw = 0f;
+        float ph = 0f;
+
+        GlyphCollector() throws IOException {
+            super();
+        }
+
+        @Override
+        protected void writeString(String text, List<TextPosition> tps) {
+            if (tps == null) return;
+            for (TextPosition tp : tps) {
+                if (tp == null) continue;
+                if (pw <= 0f || ph <= 0f) {
+                    pw = tp.getPageWidth();
+                    ph = tp.getPageHeight();
+                }
+                String u = cleanGlyph(tp.getUnicode());
+                if (u == null) continue;
+                Glyph g = new Glyph();
+                g.u = u;
+                g.space = isBlank(u);
+                float w = tp.getWidthDirAdj();
+                if (w <= 0f) w = tp.getWidth();
+                if (w < 0f) w = 0f;
+                float h = tp.getHeightDir();
+                if (h <= 0f) h = tp.getHeight();
+                g.font = Math.max(1f, tp.getFontSizeInPt());
+                if (h <= 0f) h = g.font;
+                g.x0 = tp.getXDirAdj();
+                g.x1 = g.x0 + w;
+                g.base = tp.getYDirAdj();
+                g.top = g.base - h;
+                g.bottom = g.base + h * 0.25f;
+                if (!g.space) {
+                    int t = Character.getType(g.u.codePointAt(0));
+                    g.mark = t == Character.NON_SPACING_MARK || t == Character.ENCLOSING_MARK
+                            || t == Character.COMBINING_SPACING_MARK;
+                }
+                // نص خارج حدود الصفحة (مخفي) لا يُقرأ
+                if (pw > 0f && (g.x1 < -2f || g.x0 > pw + 2f)) continue;
+                if (ph > 0f && (g.base < -2f || g.base > ph + 2f)) continue;
+                glyphs.add(g);
+            }
+        }
+    }
+
+    private static boolean isBlank(String s) {
         for (int i = 0; i < s.length(); i++) {
             char c = s.charAt(i);
-            if (c >= 0x0621 && c <= 0x064A) return true;
-        }
-        return false;
-    }
-
-    private static boolean isPlainArabicWord(String p) {
-        for (int i = 0; i < p.length(); i++) {
-            char c = p.charAt(i);
-            if (c < 0x0621 || c > 0x064A) return false;
+            if (!Character.isWhitespace(c) && !Character.isSpaceChar(c)) return false;
         }
         return true;
     }
 
-    private static String diacritize(String p) {
-        if (p.length() < 2 || !isPlainArabicWord(p)) return p;
-        return hamzaAfterAl(p.length() <= 14 ? diacritizeCore(p) : p);
-    }
-
-    /** الأعصاب / الإصابة / بالألم: سكون على لام "ال" ليُنطق الهمز بوضوح (الْأعصاب) لا "ال أ" مفصولة. */
-    private static String hamzaAfterAl(String r) {
-        if (!isPlainArabicWord(r) || r.length() < 4) return r;
-        int i;
-        if (r.startsWith("\u0627\u0644")) i = 0;
-        else if ("\u0648\u0641\u0628\u0643".indexOf(r.charAt(0)) >= 0 && r.startsWith("\u0627\u0644", 1)) i = 1;
-        else return r;
-        int h = i + 2;
-        if (h >= r.length()) return r;
-        char c = r.charAt(h);
-        if (c == '\u0623' || c == '\u0625' || c == '\u0622') {
-            return r.substring(0, h) + "\u0652" + r.substring(h);
+    /** ينظّف نص حرف واحد: يحذف محارف التحكم/التطويل ويفكّ أشكال العرض العربية واللاتينية المركّبة. */
+    private static String cleanGlyph(String u) {
+        if (u == null || u.isEmpty()) return null;
+        StringBuilder sb = null;
+        boolean needNorm = false;
+        for (int i = 0; i < u.length(); i++) {
+            char c = u.charAt(i);
+            boolean drop = (c >= 0x200B && c <= 0x200F) || (c >= 0x202A && c <= 0x202E)
+                    || (c >= 0x2066 && c <= 0x2069) || c == 0xFEFF || c == 0x00AD || c == 0x0640
+                    || c == 0x0000 || c == 0xFFFD || (c < 0x20 && c != '\t');
+            if ((c >= 0xFB00 && c <= 0xFB06) || (c >= 0xFB50 && c <= 0xFDFF) || (c >= 0xFE70 && c <= 0xFEFF)) {
+                needNorm = true;
+            }
+            if (drop) {
+                if (sb == null) {
+                    sb = new StringBuilder(u.length());
+                    sb.append(u, 0, i);
+                }
+            } else if (sb != null) {
+                sb.append(c);
+            }
         }
-        return r;
+        String r = sb != null ? sb.toString() : u;
+        if (needNorm) {
+            try {
+                r = Normalizer.normalize(r, Normalizer.Form.NFKC);
+            } catch (Throwable ignored) {
+            }
+        }
+        return r.isEmpty() ? null : r;
     }
 
-    private static String diacritizeCore(String p) {
-        String direct = D.get(p);
-        if (direct != null) return direct;
-        String pre = "";
-        String rest = p;
-        for (int k = 0; k < 2 && rest.length() > 2; k++) {
-            char c = rest.charAt(0);
-            String v = PREFIX_V.get(c);
-            if (v == null) break;
-            String base = rest.substring(1);
-            String d2 = D.get(base);
-            boolean prefixOk = c == '\u0648' || c == '\u0641' || P.contains(base);
-            if (d2 != null && prefixOk) return pre + v + d2;
-            if (c == '\u0648' || c == '\u0641') { // و / ف قد تسبق سابقة أخرى: ولذلك، فبهذا
-                pre = pre + v;
-                rest = base;
+    private static float clamp01(float v) {
+        return Math.max(0f, Math.min(1f, v));
+    }
+
+    // ---- 1) من الأحرف إلى مقاطع
+
+    /** يدمج علامات التشكيل/الحركات مع حرفها الأساسي (لا تدخل في ترتيب الكلمات). */
+    private static List<Glyph> attachMarks(List<Glyph> all) {
+        List<Glyph> bases = new ArrayList<>(all.size());
+        List<Glyph> marks = new ArrayList<>();
+        for (Glyph g : all) {
+            if (g.mark) marks.add(g);
+            else bases.add(g);
+        }
+        for (Glyph m : marks) {
+            Glyph best = null;
+            float bestD = Float.MAX_VALUE;
+            float mc = m.cx();
+            for (Glyph b : bases) {
+                if (b.space) continue;
+                if (Math.abs(b.base - m.base) > b.font * 1.2f) continue;
+                float d;
+                if (mc >= b.x0 && mc <= b.x1) d = 0f;
+                else d = Math.min(Math.abs(mc - b.x0), Math.abs(mc - b.x1));
+                if (d < bestD) {
+                    bestD = d;
+                    best = b;
+                }
+            }
+            if (best != null && bestD <= best.font * 0.6f) best.u = best.u + m.u;
+        }
+        return bases;
+    }
+
+    private static List<Seg> buildSegments(List<Glyph> bases, float pw, float ph) {
+        List<Seg> segs = new ArrayList<>();
+        Collections.sort(bases, (a, b) -> Float.compare(a.base, b.base));
+        List<List<Glyph>> bands = new ArrayList<>();
+        List<Glyph> cur = null;
+        float mean = 0f;
+        float bandFont = 0f;
+        for (Glyph g : bases) {
+            if (cur != null && Math.abs(g.base - mean) <= 0.5f * Math.max(bandFont, g.font)) {
+                cur.add(g);
+                mean += (g.base - mean) / cur.size();
+                bandFont = Math.max(bandFont, g.font);
+            } else {
+                cur = new ArrayList<>();
+                cur.add(g);
+                mean = g.base;
+                bandFont = g.font;
+                bands.add(cur);
+            }
+        }
+        for (List<Glyph> band : bands) {
+            Collections.sort(band, (a, b) -> Float.compare(a.cx(), b.cx()));
+            List<Glyph> part = new ArrayList<>();
+            float maxR = -Float.MAX_VALUE;
+            float prevFont = 0f;
+            for (Glyph g : band) {
+                if (g.space) {
+                    if (!part.isEmpty()) part.add(g);
+                    continue;
+                }
+                if (!part.isEmpty()) {
+                    float gap = g.x0 - maxR;
+                    if (gap > Math.max(g.font, prevFont) * SEG_GAP_EM) {
+                        addSegment(segs, part, pw, ph);
+                        part = new ArrayList<>();
+                    }
+                }
+                maxR = part.isEmpty() ? g.x1 : Math.max(maxR, g.x1);
+                part.add(g);
+                prevFont = g.font;
+            }
+            addSegment(segs, part, pw, ph);
+        }
+        return segs;
+    }
+
+    private static void addSegment(List<Seg> segs, List<Glyph> glyphs, float pw, float ph) {
+        if (glyphs.isEmpty()) return;
+        List<List<Glyph>> ws = splitWords(glyphs);
+        Seg seg = new Seg();
+        List<RawWord> words = new ArrayList<>();
+        float fontSum = 0f;
+        float baseSum = 0f;
+        int gc = 0;
+        for (List<Glyph> wg : ws) {
+            String text = logicalWord(wg).trim();
+            if (text.isEmpty()) continue;
+            boolean has = false;
+            for (int i = 0; i < text.length(); i++) {
+                if (Character.isLetterOrDigit(text.charAt(i))) {
+                    has = true;
+                    break;
+                }
+            }
+            if (!has) continue; // رموز/نقاط تعداد/خطوط نقطية/أيقونات
+            float x0 = Float.MAX_VALUE, y0 = Float.MAX_VALUE, x1 = -Float.MAX_VALUE, y1 = -Float.MAX_VALUE;
+            for (Glyph g : wg) {
+                x0 = Math.min(x0, g.x0);
+                x1 = Math.max(x1, g.x1);
+                y0 = Math.min(y0, g.top);
+                y1 = Math.max(y1, g.bottom);
+                fontSum += g.font;
+                baseSum += g.base;
+                gc++;
+            }
+            RawWord rw = new RawWord();
+            rw.text = text;
+            rw.box = new RectF(clamp01(x0 / pw), clamp01(y0 / ph), clamp01(x1 / pw), clamp01(y1 / ph));
+            rw.cls = wordClass(text);
+            words.add(rw);
+            seg.x0 = Math.min(seg.x0, x0);
+            seg.x1 = Math.max(seg.x1, x1);
+            seg.y0 = Math.min(seg.y0, y0);
+            seg.y1 = Math.max(seg.y1, y1);
+        }
+        if (words.isEmpty() || gc == 0) return;
+        seg.font = fontSum / gc;
+        seg.base = baseSum / gc;
+        int ar = 0, lat = 0;
+        for (RawWord w : words) {
+            for (int i = 0; i < w.text.length(); i++) {
+                char c = w.text.charAt(i);
+                if (!Character.isLetter(c)) continue;
+                if (isRtlLetterChar(c)) ar++;
+                else lat++;
+            }
+        }
+        seg.rtl = ar > 0 && ar >= lat;
+        seg.words.addAll(orderWords(words, seg.rtl));
+        segs.add(seg);
+    }
+
+    /** يقسّم أحرف المقطع (مرتبة بصريًا) إلى كلمات: عند الفراغ الفعلي أو عند فجوة أفقية بعرض مسافة. */
+    private static List<List<Glyph>> splitWords(List<Glyph> glyphs) {
+        List<List<Glyph>> out = new ArrayList<>();
+        List<Glyph> w = new ArrayList<>();
+        float maxR = -Float.MAX_VALUE;
+        float prevFont = 0f;
+        for (Glyph g : glyphs) {
+            if (g.space) {
+                if (!w.isEmpty()) {
+                    out.add(w);
+                    w = new ArrayList<>();
+                }
                 continue;
             }
-            break;
+            if (!w.isEmpty()) {
+                float gap = g.x0 - maxR;
+                if (gap > Math.max(g.font, prevFont) * WORD_GAP_EM) {
+                    out.add(w);
+                    w = new ArrayList<>();
+                }
+            }
+            maxR = w.isEmpty() ? g.x1 : Math.max(maxR, g.x1);
+            w.add(g);
+            prevFont = g.font;
         }
-        return p;
+        if (!w.isEmpty()) out.add(w);
+        return out;
     }
 
-    // ------------------------------------------------------------------ أدوات
-
-    private static boolean isWordChar(char c) {
-        return Character.isLetterOrDigit(c) || Character.getType(c) == Character.NON_SPACING_MARK;
-    }
-
-    private static String bareOf(String s) {
-        int a = 0, b = s.length();
-        while (a < b && !isWordChar(s.charAt(a))) a++;
-        while (b > a && !isWordChar(s.charAt(b - 1))) b--;
-        return s.substring(a, b);
-    }
-
-    /** آخر علامة ترقيم في ذيل الكلمة (تُحفظ لتبقى وقفة الجملة). */
-    private static String lastPunctIn(String s) {
-        for (int i = s.length() - 1; i >= 0; i--) {
-            char c = s.charAt(i);
-            if (isWordChar(c)) break;
-            if (c == '\u2026') return ".";
-            if (PUNCT.indexOf(c) >= 0) return String.valueOf(c);
-        }
-        return "";
-    }
-
-    /** يحذف الرموز غير المنطوقة والأحرف الخفية، ويوحّد الأرقام (هندية/فارسية -> لاتينية) وأشكال الحروف. */
-    private static String clean(String s) {
-        boolean presentation = false;
-        for (int i = 0; i < s.length(); i++) {
-            char c = s.charAt(i);
-            if ((c >= 0xFB50 && c <= 0xFDFF) || (c >= 0xFE70 && c <= 0xFEFF)) {
-                presentation = true;
+    /**
+     * يحوّل أحرف كلمة مرتّبة بصريًا (يسار->يمين) إلى نصها المنطقي. الكلمة العربية تُقرأ من اليمين،
+     * لكن مقاطع الأرقام/الحروف اللاتينية داخلها تبقى بترتيبها الطبيعي (مثل "ج2" أو "mA").
+     */
+    private static String logicalWord(List<Glyph> gs) {
+        boolean anyRtl = false;
+        for (Glyph g : gs) {
+            if (hasRtlLetter(g.u)) {
+                anyRtl = true;
                 break;
             }
         }
-        String x = presentation ? Normalizer.normalize(s, Normalizer.Form.NFKC) : s;
-        StringBuilder sb = new StringBuilder(x.length());
-        for (int i = 0; i < x.length(); i++) {
-            char c = x.charAt(i);
-            if ((c >= 0x200B && c <= 0x200F) || (c >= 0x202A && c <= 0x202E) || (c >= 0x2066 && c <= 0x2069)
-                    || c == 0xFEFF || c == 0x00AD || c == 0x0640 || c == 0x061C) continue;
-            if (Character.isSurrogate(c)) continue; // إيموجي
-            if (c >= 0xE000 && c <= 0xF8FF) continue; // أيقونات الخطوط
-            if ("\u2022\u25CF\u25AA\u25E6\u25A0\u25A1\u25C6\u25C7\u2605\u2606\u2713\u2714\u2717\u2718\u27A2\u27A4\u25BA\u25B6\u00B7\u2023\u2043".indexOf(c) >= 0) continue;
-            if (c >= 0x0660 && c <= 0x0669) c = (char) ('0' + (c - 0x0660));
-            else if (c >= 0x06F0 && c <= 0x06F9) c = (char) ('0' + (c - 0x06F0));
-            else if (c == 0x066B) c = '.';
-            else if (c == 0x066C) c = ',';
-            sb.append(c);
+        StringBuilder sb = new StringBuilder();
+        if (!anyRtl) {
+            for (Glyph g : gs) sb.append(g.u);
+            return sb.toString();
         }
+        List<String> units = new ArrayList<>();
+        int i = 0;
+        while (i < gs.size()) {
+            if (isLtrCell(gs.get(i).u)) {
+                StringBuilder run = new StringBuilder();
+                while (i < gs.size() && isLtrCell(gs.get(i).u)) {
+                    run.append(gs.get(i).u);
+                    i++;
+                }
+                units.add(run.toString());
+            } else {
+                units.add(gs.get(i).u);
+                i++;
+            }
+        }
+        for (int k = units.size() - 1; k >= 0; k--) sb.append(units.get(k));
         return sb.toString();
+    }
+
+    private static boolean isRtlLetterChar(char c) {
+        return Character.isLetter(c) && (isArabicChar(c) || (c >= 0x0590 && c <= 0x05FF));
+    }
+
+    private static boolean hasRtlLetter(String s) {
+        for (int i = 0; i < s.length(); i++) {
+            if (isRtlLetterChar(s.charAt(i))) return true;
+        }
+        return false;
+    }
+
+    /** خلية (حرف) لاتينية/رقمية: تُقرأ من اليسار لليمين حتى داخل الكلمة العربية. */
+    private static boolean isLtrCell(String u) {
+        boolean ltr = false;
+        for (int i = 0; i < u.length(); i++) {
+            char c = u.charAt(i);
+            if (isRtlLetterChar(c)) return false;
+            if (Character.isLetterOrDigit(c)) ltr = true;
+        }
+        return ltr;
+    }
+
+    private static char wordClass(String t) {
+        boolean lat = false;
+        for (int i = 0; i < t.length(); i++) {
+            char c = t.charAt(i);
+            if (!Character.isLetter(c)) continue;
+            if (isRtlLetterChar(c)) return 'R';
+            lat = true;
+        }
+        return lat ? 'L' : 'N';
+    }
+
+    private static final String[] UNIT_TOKENS = {
+            "hz", "khz", "mhz", "ma", "a", "v", "mv", "ms", "us", "\u00B5s", "\u03BCs", "s", "sec", "min",
+            "mm", "cm", "m", "kg", "g", "ohm", "\u03A9", "\u00B0c", "c"
+    };
+
+    private static boolean isUnitToken(String t) {
+        String l = t.toLowerCase(Locale.ROOT);
+        for (String u : UNIT_TOKENS) {
+            if (l.equals(u)) return true;
+        }
+        return false;
+    }
+
+    /**
+     * يرتّب كلمات مقطع واحد (تصل بترتيبها البصري يسار->يمين) إلى ترتيب القراءة.
+     * سطر عربي: من اليمين لليسار، ومجموعات الكلمات اللاتينية المتتالية تبقى بترتيبها الطبيعي.
+     * سطر لاتيني: من اليسار لليمين، ومجموعات الكلمات العربية المتتالية تُقرأ من اليمين.
+     */
+    private static List<RawWord> orderWords(List<RawWord> v, boolean rtl) {
+        int n = v.size();
+        if (n < 2) return v;
+        final char runCls = rtl ? 'L' : 'R';
+        List<List<RawWord>> units = new ArrayList<>();
+        int i = 0;
+        while (i < n) {
+            RawWord w = v.get(i);
+            List<RawWord> u = new ArrayList<>(2);
+            u.add(w);
+            int j = i + 1;
+            if (w.cls == runCls) {
+                while (j < n) {
+                    RawWord x = v.get(j);
+                    if (x.cls == runCls) {
+                        u.add(x);
+                        j++;
+                        continue;
+                    }
+                    if (x.cls == 'N') {
+                        boolean between = j + 1 < n && v.get(j + 1).cls == runCls;
+                        // رقم يلي كلمة لاتينية في سطر عربي (TENS 2) يتبعها، إلا لو كانت وحدة قياس (20 Hz)
+                        boolean trailing = rtl && v.get(j - 1).cls == 'L' && !isUnitToken(v.get(j - 1).text);
+                        if (between || trailing) {
+                            u.add(x);
+                            j++;
+                            continue;
+                        }
+                    }
+                    break;
+                }
+            }
+            units.add(u);
+            i = j;
+        }
+        List<RawWord> out = new ArrayList<>(n);
+        if (rtl) {
+            for (int k = units.size() - 1; k >= 0; k--) out.addAll(units.get(k));
+        } else {
+            for (List<RawWord> u : units) {
+                if (u.size() > 1 && u.get(0).cls == 'R') Collections.reverse(u);
+                out.addAll(u);
+            }
+        }
+        return out;
+    }
+
+    // ---- 2) ترتيب المقاطع على مستوى الصفحة (XY-cut)
+
+    private static boolean blockRtl(List<Seg> segs) {
+        int r = 0, l = 0;
+        for (Seg s : segs) {
+            if (s.rtl) r += s.words.size();
+            else l += s.words.size();
+        }
+        return r > 0 && r >= l;
+    }
+
+    private static void xyCut(List<Seg> segs, float pw, List<Seg> out, int depth) {
+        if (segs.size() <= 1) {
+            out.addAll(segs);
+            return;
+        }
+        if (depth < 8) {
+            List<List<Seg>> parts = splitColumns(segs, pw);
+            if (parts != null) {
+                for (List<Seg> p : parts) xyCut(p, pw, out, depth + 1);
+                return;
+            }
+        }
+        sortRows(segs, out);
+    }
+
+    /** أسطر بترتيب من الأعلى للأسفل، وداخل كل سطر مقاطعه بحسب اتجاه السطر. */
+    private static void sortRows(List<Seg> segs, List<Seg> out) {
+        List<Seg> s = new ArrayList<>(segs);
+        Collections.sort(s, (a, b) -> Float.compare(a.base, b.base));
+        List<List<Seg>> rows = new ArrayList<>();
+        List<Seg> row = null;
+        float mean = 0f;
+        float rowFont = 0f;
+        for (Seg g : s) {
+            if (row != null && Math.abs(g.base - mean) <= 0.5f * Math.max(rowFont, g.font)) {
+                row.add(g);
+                mean += (g.base - mean) / row.size();
+                rowFont = Math.max(rowFont, g.font);
+            } else {
+                row = new ArrayList<>();
+                row.add(g);
+                mean = g.base;
+                rowFont = g.font;
+                rows.add(row);
+            }
+        }
+        for (List<Seg> r : rows) {
+            final boolean rtl = blockRtl(r);
+            Collections.sort(r, (a, b) -> rtl ? Float.compare(b.cx(), a.cx()) : Float.compare(a.cx(), b.cx()));
+            out.addAll(r);
+        }
+    }
+
+    /**
+     * يكتشف أعمدة نص حقيقية: ممر عمودي فارغ (تقريبًا) بين مقاطع الصفحة. المقاطع التي تعبر الممر
+     * (عناوين/تذييلات بعرض الصفحة) تبقى كتلًا مستقلة بترتيبها الرأسي؛ وبين الكتل تُقرأ الأعمدة عمودًا
+     * عمودًا (العربي من اليمين). لو بدا التخطيط جدولًا (خلايا قصيرة متحاذية) لا نقطّعه لأعمدة، فيُقرأ صفًا صفًا.
+     * يرجع null لو لا توجد أعمدة.
+     */
+    private static List<List<Seg>> splitColumns(List<Seg> segs, float pw) {
+        int n = segs.size();
+        if (n < 6) return null;
+        float minX = Float.MAX_VALUE, maxX = -Float.MAX_VALUE, fontSum = 0f;
+        for (Seg s : segs) {
+            minX = Math.min(minX, s.x0);
+            maxX = Math.max(maxX, s.x1);
+            fontSum += s.font;
+        }
+        float avgFont = fontSum / n;
+        float minGutter = Math.max(1.2f * avgFont, 8f);
+        int bins = (int) Math.ceil(maxX - minX) + 1;
+        if (bins < 20 || bins > 5000) return null;
+        int[] cover = new int[bins];
+        for (Seg s : segs) {
+            int a = Math.max(0, Math.min(bins - 1, (int) Math.floor(s.x0 - minX)));
+            int b = Math.max(0, Math.min(bins - 1, (int) Math.ceil(s.x1 - minX)));
+            for (int k = a; k <= b; k++) cover[k]++;
+        }
+        int maxSpan = (int) Math.floor(n * 0.12f);
+        int bestStart = -1, bestLen = 0;
+        int k = 0;
+        while (k < bins) {
+            if (cover[k] <= maxSpan) {
+                int st = k;
+                while (k < bins && cover[k] <= maxSpan) k++;
+                int len = k - st;
+                if (st > 0 && k < bins && len >= minGutter && len > bestLen) {
+                    bestStart = st;
+                    bestLen = len;
+                }
+            } else {
+                k++;
+            }
+        }
+        if (bestStart < 0) return null;
+        float gs = minX + bestStart;
+        float ge = minX + bestStart + bestLen;
+        float mid = (gs + ge) / 2f;
+
+        List<Seg> left = new ArrayList<>();
+        List<Seg> right = new ArrayList<>();
+        for (Seg s : segs) {
+            if (s.x0 < gs && s.x1 > ge) continue; // يعبر الممر
+            if (s.cx() < mid) left.add(s);
+            else right.add(s);
+        }
+        if (left.size() < 3 || right.size() < 3) return null;
+        if (looksLikeTable(left, right, pw)) return null;
+
+        final boolean rtl = blockRtl(segs);
+        List<Seg> sorted = new ArrayList<>(segs);
+        Collections.sort(sorted, (a, b) -> Float.compare(a.y0, b.y0));
+        List<List<Seg>> parts = new ArrayList<>();
+        List<Seg> full = new ArrayList<>();
+        List<Seg> colL = new ArrayList<>();
+        List<Seg> colR = new ArrayList<>();
+        boolean inCols = false;
+        for (Seg s : sorted) {
+            boolean span = s.x0 < gs && s.x1 > ge;
+            if (span) {
+                if (inCols) {
+                    flushColumns(parts, colL, colR, rtl);
+                    colL = new ArrayList<>();
+                    colR = new ArrayList<>();
+                    inCols = false;
+                }
+                full.add(s);
+            } else {
+                if (!inCols) {
+                    if (!full.isEmpty()) {
+                        parts.add(full);
+                        full = new ArrayList<>();
+                    }
+                    inCols = true;
+                }
+                if (s.cx() < mid) colL.add(s);
+                else colR.add(s);
+            }
+        }
+        if (inCols) flushColumns(parts, colL, colR, rtl);
+        if (!full.isEmpty()) parts.add(full);
+        return parts.size() >= 2 ? parts : null;
+    }
+
+    private static void flushColumns(List<List<Seg>> parts, List<Seg> colL, List<Seg> colR, boolean rtl) {
+        if (rtl) {
+            if (!colR.isEmpty()) parts.add(colR);
+            if (!colL.isEmpty()) parts.add(colL);
+        } else {
+            if (!colL.isEmpty()) parts.add(colL);
+            if (!colR.isEmpty()) parts.add(colR);
+        }
+    }
+
+    /** جدول: خلايا قصيرة تتحاذى أفقيًا مع خلايا العمود الآخر (صفوف). النص المتعدد الأعمدة أسطره طويلة. */
+    private static boolean looksLikeTable(List<Seg> left, List<Seg> right, float pw) {
+        List<Seg> small = left.size() <= right.size() ? left : right;
+        List<Seg> other = small == left ? right : left;
+        int aligned = 0;
+        for (Seg s : small) {
+            for (Seg o : other) {
+                if (Math.abs(s.base - o.base) <= 0.6f * Math.max(s.font, o.font)) {
+                    aligned++;
+                    break;
+                }
+            }
+        }
+        float frac = aligned / (float) small.size();
+        List<Float> widths = new ArrayList<>(left.size() + right.size());
+        for (Seg s : left) widths.add(s.width());
+        for (Seg s : right) widths.add(s.width());
+        Collections.sort(widths);
+        float medianW = widths.get(widths.size() / 2);
+        return frac >= 0.7f && medianW < 0.25f * pw;
+    }
+
+    /** يجمع كل شيء: أحرف الصفحة -> كلمات مرتبة بترتيب القراءة (line = رقم المقطع). */
+    private static List<Word> assemble(List<Glyph> all, float pw, float ph) {
+        List<Word> out = new ArrayList<>();
+        if (all == null || all.isEmpty() || pw <= 0f || ph <= 0f) return out;
+        List<Glyph> bases = attachMarks(all);
+        List<Seg> segs = buildSegments(bases, pw, ph);
+        if (segs.isEmpty()) return out;
+        List<Seg> ordered = new ArrayList<>(segs.size());
+        xyCut(segs, pw, ordered, 0);
+        int line = 0;
+        for (Seg s : ordered) {
+            for (RawWord w : s.words) out.add(new Word(w.text, w.box, line));
+            line++;
+        }
+        return out;
+    }
+
+    // ------------------------------------------------------------------ بناء النص والمقاطع
+
+    private static PageText build(int pageIndex, List<Word> words, Source src) {
+        // بداية الفقرات: تُستنتج من الفجوات الرأسية بين الأسطر (وقفزة الأعمدة للأعلى).
+        boolean[] paraBefore = inferParagraphs(words);
+
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < words.size(); i++) {
+            Word w = words.get(i);
+            String t = w.text;
+            boolean glue = false;
+            if (i > 0) {
+                Word prev = words.get(i - 1);
+                // كلمة مقسومة بشرطة في آخر السطر (لاتيني فقط): ندمجها مع تاليتها
+                if (!paraBefore[i] && prev.line != w.line && prev.text.endsWith("-") && prev.text.length() > 2
+                        && Character.isLowerCase(t.charAt(0)) && isLatin(prev.text)) {
+                    glue = true;
+                }
+            }
+            if (i > 0 && !glue) sb.append(paraBefore[i] ? "\n" : " ");
+            w.start = sb.length();
+            if (i + 1 < words.size()) {
+                Word next = words.get(i + 1);
+                if (!paraBefore[i + 1] && next.line != w.line && t.endsWith("-") && t.length() > 2 && isLatin(t)
+                        && Character.isLowerCase(next.text.charAt(0))) {
+                    t = t.substring(0, t.length() - 1); // نحذف الشرطة، والكلمة التالية تلتصق بها
+                }
+            }
+            sb.append(t);
+            w.end = sb.length();
+        }
+        String text = sb.toString();
+
+        String latin = src.latinHint;
+        if (latin == null) {
+            latin = detectLatinLang(text);
+            if (countLatinLetters(text) > 200) src.latinHint = latin; // نثبّتها بعد عيّنة كافية
+        }
+
+        List<Chunk> chunks = makeChunks(words, text, paraBefore, latin);
+        return new PageText(pageIndex, text, words, chunks);
+    }
+
+    private static boolean[] inferParagraphs(List<Word> words) {
+        boolean[] flags = new boolean[words.size()];
+        // المسافة المعتادة بين سطرين في هذه الصفحة (الوسيط). الاعتماد على ارتفاع الحرف كان يعتبر
+        // كل سطر فقرة مستقلة في الملفات ذات التباعد المزدوج (وهذا كان يقطع الجملة عند نهاية كل سطر).
+        List<Float> pitches = new ArrayList<>();
+        for (int i = 1; i < words.size(); i++) {
+            Word prev = words.get(i - 1);
+            Word cur = words.get(i);
+            if (cur.line == prev.line) continue;
+            float dy = cur.box.top - prev.box.top;
+            if (dy > 0.002f) pitches.add(dy);
+        }
+        float median = -1f;
+        if (pitches.size() >= 3) {
+            java.util.Collections.sort(pitches);
+            median = pitches.get(pitches.size() / 2);
+        }
+        for (int i = 1; i < words.size(); i++) {
+            Word prev = words.get(i - 1);
+            Word cur = words.get(i);
+            if (cur.line == prev.line) continue;
+            float lineH = Math.max(0.004f, prev.box.height());
+            float dy = cur.box.top - prev.box.top;
+            // مقطع آخر على نفس الارتفاع (خلية جدول/عمود مجاور): وقفة بدل وصل الجملتين ببعض
+            if (Math.abs(dy) < lineH * 0.35f) {
+                flags[i] = true;
+                continue;
+            }
+            float gap = median > 0 ? Math.max(median * 1.7f, lineH * 1.6f) : lineH * 2.1f;
+            if (dy > gap || dy < -lineH * 2.4f) flags[i] = true;
+        }
+        return flags;
+    }
+
+    // مقاطع أطول = فجوات أقل بين الجمل ونبرة أكثر سلاسة (الجمل القصيرة تُدمج مع التي تليها)
+    private static final int MAX_CHUNK_CHARS = 420;
+    private static final int MIN_SENTENCE_CHARS = 90;
+
+    private static List<Chunk> makeChunks(List<Word> words, String text, boolean[] para, String latin) {
+        List<Chunk> out = new ArrayList<>();
+        int n = words.size();
+        int first = 0;
+        int i = 0;
+        while (i < n) {
+            Word w = words.get(i);
+            int len = w.end - words.get(first).start;
+            boolean last = i == n - 1;
+            boolean nextPara = !last && para[i + 1];
+            boolean sentenceEnd = endsSentence(w.text) && len >= MIN_SENTENCE_CHARS
+                    && (last || !startsLowerLatin(words.get(i + 1).text) || nextPara)
+                    && !isAbbreviation(w.text);
+            boolean tooLong = len >= MAX_CHUNK_CHARS;
+            // عند تجاوز الحد نفضّل الكسر بعد فاصلة قريبة
+            if (tooLong && !sentenceEnd) {
+                int cut = i;
+                for (int k = i; k > first && words.get(i).end - words.get(k).start < 140; k--) {
+                    String t = words.get(k).text;
+                    if (t.endsWith(",") || t.endsWith("،") || t.endsWith(";") || t.endsWith("؛") || t.endsWith(":")) {
+                        cut = k;
+                        break;
+                    }
+                }
+                emit(out, words, text, first, cut, latin);
+                first = cut + 1;
+                i = cut + 1;
+                continue;
+            }
+            if (last || nextPara || sentenceEnd) {
+                emit(out, words, text, first, i, latin);
+                first = i + 1;
+            }
+            i++;
+        }
+        return out;
+    }
+
+    private static void emit(List<Chunk> out, List<Word> words, String text, int first, int last, String latin) {
+        if (first > last || first >= words.size()) return;
+        int s = words.get(first).start;
+        int e = words.get(last).end;
+        String piece = text.substring(s, e);
+        out.add(new Chunk(first, last, s, e, detectLang(piece, latin)));
+    }
+
+    private static boolean endsSentence(String w) {
+        if (w.isEmpty()) return false;
+        char c = w.charAt(w.length() - 1);
+        if (c == ')' || c == '"' || c == '\u201D' || c == '\u00BB' || c == ']') {
+            if (w.length() < 2) return false;
+            c = w.charAt(w.length() - 2);
+        }
+        return c == '.' || c == '!' || c == '?' || c == '\u061F' || c == '\u061B' || c == '\u2026' || c == '\u3002';
+    }
+
+    private static final String[] ABBREVIATIONS = {
+            "dr.", "mr.", "mrs.", "ms.", "prof.", "fig.", "figs.", "vs.", "et", "al.", "e.g.", "i.e.",
+            "no.", "eq.", "ref.", "approx.", "etc.", "cf.", "vol.", "pp.", "p.", "st.", "min.", "sec.",
+            "د.", "أ.", "م."
+    };
+
+    private static boolean isAbbreviation(String w) {
+        String l = w.toLowerCase(Locale.ROOT);
+        for (String a : ABBREVIATIONS) {
+            if (l.equals(a)) return true;
+        }
+        // حرف واحد + نقطة (اختصار اسم)
+        return l.length() == 2 && l.charAt(1) == '.' && Character.isLetter(l.charAt(0));
+    }
+
+    private static boolean startsLowerLatin(String w) {
+        return !w.isEmpty() && Character.isLowerCase(w.charAt(0)) && isLatin(w);
+    }
+
+    // ------------------------------------------------------------------ اكتشاف اللغة
+
+    private static boolean isArabicChar(char c) {
+        return (c >= 0x0600 && c <= 0x06FF) || (c >= 0x0750 && c <= 0x077F)
+                || (c >= 0xFB50 && c <= 0xFDFF) || (c >= 0xFE70 && c <= 0xFEFF);
+    }
+
+    private static boolean isLatin(String s) {
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (Character.isLetter(c) && isArabicChar(c)) return false;
+        }
+        return true;
+    }
+
+    private static int countLatinLetters(String s) {
+        int n = 0;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (Character.isLetter(c) && !isArabicChar(c)) n++;
+        }
+        return n;
+    }
+
+    /** لغة مقطع واحد: عربي لو حروفه العربية أكثر من اللاتينية، وإلا اللغة اللاتينية السائدة بالملف. */
+    static String detectLang(String s, String latinDefault) {
+        int ar = 0, lat = 0;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (!Character.isLetter(c)) continue;
+            if (isArabicChar(c)) ar++;
+            else lat++;
+        }
+        if (ar == 0 && lat == 0) return latinDefault != null ? latinDefault : "en";
+        return ar > lat ? "ar" : (latinDefault != null ? latinDefault : "en");
+    }
+
+    /** إنجليزي / فرنسي / تركي بناءً على علامات مميّزة وكلمات شائعة. */
+    static String detectLatinLang(String s) {
+        String l = " " + s.toLowerCase(Locale.ROOT).replaceAll("[\\p{Punct}\\n]", " ") + " ";
+        int letters = Math.max(1, countLatinLetters(s));
+        int tr = 0, fr = 0, en = 0;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if ("ğĞşŞıİ".indexOf(c) >= 0) tr += 3;
+            if ("éèêàçùûôîëïœÉÈÊÀÇ".indexOf(c) >= 0) fr++;
+        }
+        String[] enWords = {" the ", " and ", " of ", " to ", " is ", " in ", " that ", " with ", " for ", " are "};
+        String[] frWords = {" le ", " la ", " les ", " des ", " est ", " une ", " et ", " du ", " pour ", " dans ", " que "};
+        String[] trWords = {" ve ", " bir ", " bu ", " için ", " ile ", " olan ", " da ", " de "};
+        for (String w : enWords) en += count(l, w);
+        for (String w : frWords) fr += count(l, w) * 2;
+        for (String w : trWords) tr += count(l, w) * 2;
+        if (tr > en && tr > fr && tr * 400 > letters) return "tr";
+        if (fr > en && fr * 400 > letters) return "fr";
+        return "en";
+    }
+
+    private static int count(String hay, String needle) {
+        int c = 0, idx = 0;
+        while ((idx = hay.indexOf(needle, idx)) >= 0) {
+            c++;
+            idx += needle.length() - 1;
+        }
+        return c;
     }
 }
