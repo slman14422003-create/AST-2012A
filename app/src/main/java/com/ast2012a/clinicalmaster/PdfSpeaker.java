@@ -187,7 +187,11 @@ final class PdfSpeaker {
     private final Map<String, Voice> usedVoice = new HashMap<>();
 
     // الصوت الأونلاين
-    private boolean cloudBroken = false;   // فشل خلال هذه الجلسة -> نستخدم صوت الجهاز
+    private boolean cloudBroken = false;   // فشل مؤخرًا -> نستخدم صوت الجهاز مؤقتًا ثم نعيد تجربة العصبي
+    private long cloudBrokenAt = 0L;
+    private boolean cloudErrorShown = false; // نافذة الخطأ الكاملة تظهر مرة واحدة لكل جلسة قراءة
+    /** بعد فشل الصوت العصبي نعود لتجربته بعد هذه المدة بدل الاستسلام لبقية الملف (أعطال الخادم عابرة عادةً). */
+    private static final long CLOUD_RETRY_MS = 60_000L;
     private boolean cloudActive = false;   // المقطع الحالي يُنطق عبر الأونلاين
     private int cloudGen = 0;
     private int cloudPlayErrStreak = 0;
@@ -410,6 +414,7 @@ final class PdfSpeaker {
             hardStopOutputs();
             resetCloud();
             cloudBroken = false;
+            cloudErrorShown = false;
             badCloudVoices.clear();
             cloudVoiceSwitches = 0;
             deviceErrStreak = 0;
@@ -779,6 +784,11 @@ final class PdfSpeaker {
     }
 
     private boolean useCloud() {
+        if (cloudBroken && System.currentTimeMillis() - cloudBrokenAt > CLOUD_RETRY_MS) {
+            cloudBroken = false;
+            badCloudVoices.clear();
+            cloudVoiceSwitches = 0;
+        }
         return isCloudEngine() && !cloudBroken;
     }
 
@@ -1257,8 +1267,14 @@ final class PdfSpeaker {
 
     private void fallbackToDevice(String message) {
         cloudBroken = true;
+        cloudBrokenAt = System.currentTimeMillis();
         cloudActive = false;
-        listener.onError(message);
+        if (!cloudErrorShown) {
+            cloudErrorShown = true;
+            listener.onError(message); // أول مرة: الرسالة الكاملة مع التشخيص
+        } else {
+            listener.onError("تعذّر الصوت العصبي لهذا المقطع، نستخدم صوت الجهاز مؤقتًا ثم نعيد المحاولة تلقائيًا.");
+        }
         if (currentText == null) return;
         lastAppliedLang = null;
         speakChunk(currentChunk, 0);

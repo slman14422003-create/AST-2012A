@@ -1303,7 +1303,11 @@ public class PdfViewerActivity extends AppCompatActivity {
         @Override
         public void onError(String message) {
             if (isFinishing() || isDestroyed()) return;
-            Toast.makeText(PdfViewerActivity.this, message, Toast.LENGTH_LONG).show();
+            if (message != null && message.length() > 110) {
+                showFullError(message); // الرسالة الطويلة (تشخيص الصوت العصبي) لا تتسع في Toast: نافذة كاملة قابلة للنسخ
+            } else {
+                Toast.makeText(PdfViewerActivity.this, message, Toast.LENGTH_LONG).show();
+            }
         }
 
         @Override
@@ -1319,6 +1323,29 @@ public class PdfViewerActivity extends AppCompatActivity {
             showEngineUnavailableDialog();
         }
     };
+
+    private void showFullError(final String message) {
+        try {
+            if (voiceDialog != null && voiceDialog.isShowing()) voiceDialog.dismiss();
+        } catch (Throwable ignored) {
+        }
+        voiceDialog = new ClaudeDialog(this)
+                .setTitle("تفاصيل خطأ الصوت العصبي")
+                .setMessage(message)
+                .setPositiveButton("نسخ الخطأ", (d, w) -> {
+                    try {
+                        android.content.ClipboardManager cm =
+                                (android.content.ClipboardManager) getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+                        if (cm != null) {
+                            cm.setPrimaryClip(android.content.ClipData.newPlainText("tts_error", message));
+                            Toast.makeText(this, "تم نسخ الخطأ.", Toast.LENGTH_SHORT).show();
+                        }
+                    } catch (Throwable ignored) {
+                    }
+                })
+                .setNegativeButton("إغلاق", null)
+                .show();
+    }
 
     /** يبني تظليل الجملة (مستطيل لكل سطر) والكلمة الحالية ويدفعهما لبطاقة الصفحة ثم يتابع بالتمرير. */
     private void showSpeaking(int page, PdfSpeechText.PageText t, int chunkIdx, int wordIdx) {

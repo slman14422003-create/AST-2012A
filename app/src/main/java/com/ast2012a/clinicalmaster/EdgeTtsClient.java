@@ -148,8 +148,14 @@ final class EdgeTtsClient {
             try {
                 return doSynth(text, ssml, voice, runs != null && runs.size() >= 2);
             } catch (ServiceException e) {
-                // الخادم أغلق الاتصال بلا سبب واضح (غالبًا طول الطلب): نجرّب نصفين قبل الاستسلام
-                if (e.httpCode != 0 || !canSplit || text.length() < 240) throw e;
+                if (e.httpCode != 0) throw e;
+                // الخادم أغلق الاتصال بلا سبب واضح: نبسّط الطلب تدريجيًا لنعرف السبب ونتجاوزه
+                if (runs == null || runs.size() < 2) {
+                    Result rr = rescue(text, voice);
+                    if (rr != null) return rr;
+                }
+                // ثم نجرّب نصفين قبل الاستسلام
+                if (!canSplit || text.length() < 240) throw e;
             }
         }
         int sp = splitPoint(text);
@@ -158,6 +164,47 @@ final class EdgeTtsClient {
         Result r1 = synthPart(p1, runs, 0, sp, voice, style, depth + 1);
         Result r2 = synthPart(p2, runs, sp, text.length(), voice, style, depth + 1);
         return concat(r1, r2, sp);
+    }
+
+    /** يزيل كل ما قد يُغضب الخادم تدريجيًا: (1) SSML بسيط بلا وقفات/أسلوب، (2) بلا توقيت كلمات، (3) بلا تشكيل. */
+    private static Result rescue(String text, String voice) {
+        String plain = minimalSsml(text, voice);
+        try {
+            Result r = doSynth(text, plain, voice, false, 2, true);
+            lastRescue = "minimal-ssml";
+            return r;
+        } catch (IOException ignored) {
+        }
+        try {
+            Result r = doSynth(text, plain, voice, false, 2, false);
+            lastRescue = "sentence-boundary";
+            return new Result(r.audio, new int[0], new int[0], r.durationMs);
+        } catch (IOException ignored) {
+        }
+        String bare = stripArabicMarks(text);
+        if (!bare.equals(text)) {
+            try {
+                Result r = doSynth(bare, minimalSsml(bare, voice), voice, false, 2, false);
+                lastRescue = "no-diacritics";
+                return new Result(r.audio, new int[0], new int[0], r.durationMs);
+            } catch (IOException ignored) {
+            }
+        }
+        return null;
+    }
+
+    private static String minimalSsml(String text, String voice) {
+        return "<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='" + localeOf(voice) + "'>"
+                + "<voice name='" + longVoiceName(voice) + "'>" + xmlEscape(text) + "</voice></speak>";
+    }
+
+    private static String stripArabicMarks(String s) {
+        StringBuilder sb = new StringBuilder(s.length());
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (!ArabicPhonetics.isMark(c)) sb.append(c);
+        }
+        return sb.toString();
     }
 
     private static Result synthPart(String piece, List<Run> runs, int a, int b, String voice, Style style, int depth)
@@ -201,13 +248,20 @@ final class EdgeTtsClient {
     /** جودة 96kbps أولًا؛ لو رفضها الخادم نثبّت 48kbps لبقية الجلسة. */
     private static volatile boolean hqBroken = false;
     private static volatile int mixedFails = 0;
+    private static volatile long mixedFailAt = 0L;
 
     /** يستبدل أي محرف تحكّم بمسافة (بنفس الطول تمامًا حتى تبقى مواضع الكلمات صحيحة). */
     static String sanitize(String s) {
         char[] a = s.toCharArray();
         for (int i = 0; i < a.length; i++) {
             char c = a[i];
-            if (c < 0x20 || c == 0x7F || c == 0xFFFE || c == 0xFFFF || c == '\u2028' || c == '\u2029') {
+            if (Character.isHighSurrogate(c) && i + 1 < a.length && Character.isLowSurrogate(a[i + 1])) {
+                i++; // زوج صحيح (إيموجي...) نتركه
+                continue;
+            }
+            // محارف تحكّم، surrogate يتيم، non-characters، منطقة الاستخدام الخاص، رموز FFF0-FFFF: الخادم يغلق الاتصال عليها
+            if (c < 0x20 || (c >= 0x7F && c <= 0x9F) || Character.isSurrogate(c) || (c >= 0xE000 && c <= 0xF8FF)
+                    || (c >= 0xFDD0 && c <= 0xFDEF) || c >= 0xFFF0 || c == '\u2028' || c == '\u2029') {
                 a[i] = ' ';
             }
         }
@@ -262,6 +316,7 @@ final class EdgeTtsClient {
      * وبتوقيت كلمات متصل. لو الخادم رفض تعدد الأصوات نرجع تلقائيًا لصوت واحد للنص كله.
      */
     static Result synthesizeRuns(String text, List<Run> runs, String baseVoice, Style style) throws IOException {
+        if (mixedFails >= 2 && System.currentTimeMillis() - mixedFailAt > 120_000L) mixedFails = 0; // نعيد المحاولة لاحقًا
         if (runs == null || runs.size() < 2 || mixedFails >= 2) return synthesize(text, baseVoice, style);
         try {
             Result r = synthesizeSplit(text, runs, baseVoice, style, 0);
@@ -270,17 +325,42 @@ final class EdgeTtsClient {
         } catch (ServiceException e) {
             if (e.httpCode != 0) throw e;
             mixedFails++;
+            mixedFailAt = System.currentTimeMillis();
             return synthesize(text, baseVoice, style);
         }
     }
 
     private static Result doSynth(String text, String ssml, String voice, boolean mixed) throws IOException {
+        return doSynth(text, ssml, voice, mixed, 3, true);
+    }
+
+    /** آخر تشخيص كامل لفشل الطلب: الصوت، حجم SSML، الأحرف الشاذة، ومقدمة النص - يظهر للمستخدم في نافذة الخطأ. */
+    static volatile String lastDiag = "";
+    /** أي مستوى تبسيط نجح آخر مرة بعد فشل الطلب الكامل (للتشخيص). */
+    static volatile String lastRescue = "";
+
+    private static String describeRequest(String text, String ssml, String voice, boolean mixed, boolean hq) {
+        StringBuilder odd = new StringBuilder();
+        java.util.LinkedHashSet<Character> seen = new java.util.LinkedHashSet<>();
+        for (int i = 0; i < text.length() && seen.size() < 8; i++) {
+            char c = text.charAt(i);
+            boolean ok = c == ' ' || (c >= 0x20 && c < 0x7F) || (c >= 0x0600 && c <= 0x06FF) || (c >= 0x00A0 && c <= 0x024F)
+                    || (c >= 0x2010 && c <= 0x2026);
+            if (!ok && seen.add(c)) odd.append(String.format(Locale.ROOT, " U+%04X", (int) c));
+        }
+        String prev = text.length() > 70 ? text.substring(0, 70) + "..." : text;
+        return "voice=" + voice + " | ssml=" + utf8Len(ssml) + "B | chars=" + text.length() + " | mixed=" + mixed
+                + " | hq=" + hq + (odd.length() > 0 ? " | odd:" + odd : "") + " | text=\"" + prev.replace('\n', ' ') + "\"";
+    }
+
+    private static Result doSynth(String text, String ssml, String voice, boolean mixed, int maxAttempts, boolean wordB)
+            throws IOException {
         long skewMs = 0;
         IOException last = null;
         boolean hq = !hqBroken;
         boolean hqFellBack = false;
-        for (int attempt = 0; attempt < 3; attempt++) {
-            Attempt a = new Attempt(text, ssml, voice, skewMs, hq);
+        for (int attempt = 0; attempt < maxAttempts; attempt++) {
+            Attempt a = new Attempt(text, ssml, voice, skewMs, hq, wordB);
             try {
                 Result r = a.run();
                 lastError = "";
@@ -288,7 +368,9 @@ final class EdgeTtsClient {
                 return r;
             } catch (IOException e) {
                 last = e;
-                lastError = (a.httpCode != 0 ? "HTTP " + a.httpCode + " " : "") + e.getMessage();
+                lastDiag = describeRequest(text, ssml, voice, mixed, hq);
+                lastError = (a.httpCode != 0 ? "HTTP " + a.httpCode + " " : "") + e.getMessage() + " | " + lastDiag
+                        + (lastRescue.isEmpty() ? "" : " | last-rescue=" + lastRescue);
                 // 403 غالبًا بسبب فرق ساعة الجهاز عن الخادم: نصحّح الفرق ونعيد المحاولة
                 if (a.httpCode == 403 && a.serverDateMs > 0) {
                     skewMs = a.serverDateMs - System.currentTimeMillis();
@@ -319,15 +401,17 @@ final class EdgeTtsClient {
         final String voice;
         final long skewMs;
         final boolean hq;
+        final boolean wordB;
         volatile int httpCode = 0;
         volatile long serverDateMs = 0;
 
-        Attempt(String text, String ssml, String voice, long skewMs, boolean hq) {
+        Attempt(String text, String ssml, String voice, long skewMs, boolean hq, boolean wordB) {
             this.text = text;
             this.ssml = ssml;
             this.voice = voice;
             this.skewMs = skewMs;
             this.hq = hq;
+            this.wordB = wordB;
         }
 
         Result run() throws IOException {
@@ -357,7 +441,7 @@ final class EdgeTtsClient {
             WebSocketListener listener = new WebSocketListener() {
                 @Override
                 public void onOpen(WebSocket ws, Response response) {
-                    ws.send(configMessage(hq));
+                    ws.send(configMessage(hq, wordB));
                     ws.send(ssmlMessage(ssml));
                 }
 
@@ -470,12 +554,13 @@ final class EdgeTtsClient {
         return f.format(new Date()) + " GMT+0000 (Coordinated Universal Time)";
     }
 
-    private static String configMessage(boolean hq) {
+    private static String configMessage(boolean hq, boolean wordB) {
         return "X-Timestamp:" + timestamp() + "\r\n"
                 + "Content-Type:application/json; charset=utf-8\r\n"
                 + "Path:speech.config\r\n\r\n"
                 + "{\"context\":{\"synthesis\":{\"audio\":{\"metadataoptions\":{"
-                + "\"sentenceBoundaryEnabled\":\"false\",\"wordBoundaryEnabled\":\"true\"},"
+                + "\"sentenceBoundaryEnabled\":\"" + (wordB ? "false" : "true") + "\",\"wordBoundaryEnabled\":\""
+                + (wordB ? "true" : "false") + "\"},"
                 + "\"outputFormat\":\"" + (hq ? "audio-24khz-96kbitrate-mono-mp3" : "audio-24khz-48kbitrate-mono-mp3")
                 + "\"}}}}\r\n";
     }
