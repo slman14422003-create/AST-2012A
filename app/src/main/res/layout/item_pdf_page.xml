@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- بطاقة صفحة واحدة داخل قارئ PDF: إطار زجاجي بحواف مستديرة وظل خفيف (نفس أسلوب
-     بطاقات التطبيق bg_card)، وصورة الصفحة المرسومة بداخله كأنها ورقة داخل برواز. -->
+     بطاقات التطبيق bg_card)، وصورة الصفحة المرسومة بداخله كأنها ورقة داخل برواز.
+     فوق الصورة طبقة شفافة (pdf_page_highlight) لتظليل الكلمة/الجملة أثناء القراءة الصوتية. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -19,4 +20,9 @@
         android:background="@color/white"
         android:importantForAccessibility="no"
         android:scaleType="fitXY" />
+
+    <com.ast2012a.clinicalmaster.PdfHighlightView
+        android:id="@+id/pdf_page_highlight"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
 </FrameLayout>
