@@ -11,7 +11,9 @@ import com.tom_roush.pdfbox.text.TextPosition;
 import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
+import java.text.Normalizer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
@@ -21,8 +23,8 @@ import java.util.Locale;
  * فوق صورة الصفحة بأي تكبير، ثم تقسيم النص إلى مقاطع (جمل) مناسبة للمحرك الصوتي،
  * وتحديد لغة كل مقطع (عربي / إنجليزي / فرنسي / تركي) لاختيار الصوت الأدق.
  *
- * ترتيب القراءة = ترتيب المحتوى داخل الملف (وليس الترتيب حسب الموضع)، لأنه يحافظ
- * على تسلسل الأعمدة والجداول في أغلب الملفات، وهو نفس ما تعتمده قارئات الشاشة.
+ * ترتيب القراءة = ترتيب بصري من مواضع الأحرف الفعلية (أسطر كاملة من اليمين لليسار للعربي، ثم السطر
+ * التالي، مع دعم الأعمدة والعناوين العريضة والجداول) - لا يعتمد على ترتيب تخزين النص داخل الملف.
  * الصفحات الممسوحة ضوئيًا (صور بدون طبقة نص) ما فيها نص لتُقرأ - تُرجَع صفحة فاضية.
  */
 final class PdfSpeechText {
@@ -120,12 +122,12 @@ final class PdfSpeechText {
         PageText page(int pageIndex) {
             try {
                 if (pageIndex < 0 || pageIndex >= doc.getNumberOfPages()) return emptyPage(pageIndex);
-                WordStripper stripper = new WordStripper();
+                GlyphCollector stripper = new GlyphCollector();
                 stripper.setStartPage(pageIndex + 1);
                 stripper.setEndPage(pageIndex + 1);
                 stripper.setSortByPosition(false);
                 stripper.getText(doc);
-                List<Word> words = dropRunningHeadersFooters(stripper.finish());
+                List<Word> words = dropRunningHeadersFooters(assemble(stripper.glyphs, stripper.pw, stripper.ph));
                 if (words.isEmpty()) return emptyPage(pageIndex);
                 return build(pageIndex, words, this);
             } catch (Throwable t) {
@@ -170,305 +172,639 @@ final class PdfSpeechText {
     }
 
     // ------------------------------------------------------------------ الاستخراج
+    //
+    // الاستخراج هنا يعتمد على *مواضع الأحرف الفعلية* في الصفحة فقط، لا على ترتيب ورود النص في
+    // الملف ولا على تجميع PdfBox للأسطر (الذي يعيد ترتيب/عكس الحروف العربية أحيانًا ويجعل القراءة
+    // تقفز بين طرفي السطر). الخطوات:
+    //   1) نجمع كل حرف بموضعه (Glyph) ونطبّع أشكال العرض العربية (ﻻ / ﻣ ...) إلى حروفها الأصلية.
+    //   2) نجمع الأحرف في "أسطر" بحسب خط الأساس، ثم نقطّع السطر إلى مقاطع (Seg) عند الفجوات الكبيرة
+    //      (عمود آخر / خلية جدول).
+    //   3) داخل كل مقطع نبني الكلمات من الفجوات الأفقية، ونحدد ترتيب القراءة (يمين->يسار للعربي
+    //      مع إبقاء الكلمات اللاتينية/الأرقام المتتالية بترتيبها الطبيعي).
+    //   4) نرتّب المقاطع على مستوى الصفحة بخوارزمية XY-cut: أعمدة (العربي من اليمين) ثم أسطر من الأعلى،
+    //      وبدون تحويل الجداول إلى أعمدة (الجدول يُقرأ صفًا صفًا).
+
+    /** حرف واحد من الصفحة بموضعه الفعلي (بالنقطة، Y من الأعلى). */
+    private static final class Glyph {
+        String u;
+        float x0, x1, base, top, bottom, font;
+        boolean mark;
+        boolean space;
+
+        float cx() {
+            return (x0 + x1) / 2f;
+        }
+    }
 
     private static final class RawWord {
         String text;
         RectF box;
         int line;
+        /** L = لاتيني، R = عربي/عبري، N = أرقام/رموز فقط. */
+        char cls;
     }
 
-    private static final class WordStripper extends PDFTextStripper {
-        private final List<RawWord> raw = new ArrayList<>();
-        private int lineNo = 0;
-        private float lastY = Float.NaN;
-        private float lastFont = 10f;
+    /** مقطع سطر متصل (سطر كامل، أو جزء منه إذا كان في الصفحة أعمدة/خلايا). */
+    private static final class Seg {
+        final List<RawWord> words = new ArrayList<>();
+        float x0 = Float.MAX_VALUE, y0 = Float.MAX_VALUE, x1 = -Float.MAX_VALUE, y1 = -Float.MAX_VALUE;
+        float base;
+        float font = 10f;
+        boolean rtl;
 
-        WordStripper() throws IOException {
+        float cx() {
+            return (x0 + x1) / 2f;
+        }
+
+        float width() {
+            return x1 - x0;
+        }
+    }
+
+    /** فجوة (كمضاعف لحجم الخط) أكبر منها = نهاية كلمة. */
+    private static final float WORD_GAP_EM = 0.20f;
+    /** فجوة (كمضاعف لحجم الخط) أكبر منها = عمود/خلية أخرى. */
+    private static final float SEG_GAP_EM = 2.5f;
+
+    private static final class GlyphCollector extends PDFTextStripper {
+        final List<Glyph> glyphs = new ArrayList<>();
+        float pw = 0f;
+        float ph = 0f;
+
+        GlyphCollector() throws IOException {
             super();
         }
 
         @Override
         protected void writeString(String text, List<TextPosition> tps) {
-            if (tps == null || tps.isEmpty() || text == null) return;
-            TextPosition first = tps.get(0);
-            float pw = first.getPageWidth();
-            float ph = first.getPageHeight();
-            if (pw <= 0 || ph <= 0) return;
-
-            float y = first.getYDirAdj();
-            float font = Math.max(1f, first.getFontSizeInPt());
-            if (!Float.isNaN(lastY)) {
-                float dy = y - lastY;
-                if (Math.abs(dy) > lastFont * 0.55f) {
-                    lineNo++;
-                }
-            }
-            lastY = y;
-            lastFont = font;
-
-            // حدود كل الأحرف (لصندوق الكلمة أو السطر كله)
-            float minX = Float.MAX_VALUE, minY = Float.MAX_VALUE;
-            float maxX = -Float.MAX_VALUE, maxY = -Float.MAX_VALUE;
+            if (tps == null) return;
             for (TextPosition tp : tps) {
-                float x = tp.getXDirAdj();
-                float w = tp.getWidthDirAdj() > 0 ? tp.getWidthDirAdj() : tp.getWidth();
-                float h = tp.getHeightDir() > 0 ? tp.getHeightDir() : tp.getHeight();
-                float yy = tp.getYDirAdj();
-                minX = Math.min(minX, x);
-                maxX = Math.max(maxX, x + w);
-                minY = Math.min(minY, yy - h);
-                maxY = Math.max(maxY, yy + h * 0.25f);
-            }
-            if (minX == Float.MAX_VALUE) return;
-
-            String[] parts = text.trim().split("\\s+");
-            if (parts.length == 1) {
-                addWord(parts[0], minX, minY, maxX, maxY, pw, ph);
-            } else {
-                boolean rtl = isRtlText(text);
-                // الأدق: نوزّع أحرف الكلمات على أحرف الصفحة الفعلية بحسب موضعها (يمين->يسار للعربي).
-                if (!assignByGlyphs(parts, tps, rtl, pw, ph)) {
-                    // احتياط: نوزّع العرض بالتناسب مع عدد الحروف - وللعربي نبدأ من اليمين (لا من اليسار).
-                    int total = 0;
-                    for (String p : parts) total += p.length();
-                    total = Math.max(1, total + parts.length - 1);
-                    float span = maxX - minX;
-                    float cursor = rtl ? maxX : minX;
-                    for (String p : parts) {
-                        float wPart = span * (p.length() / (float) total);
-                        if (rtl) {
-                            addWord(p, cursor - wPart, minY, cursor, maxY, pw, ph);
-                            cursor -= wPart + span * (1f / total);
-                        } else {
-                            addWord(p, cursor, minY, cursor + wPart, maxY, pw, ph);
-                            cursor += wPart + span * (1f / total);
-                        }
-                    }
+                if (tp == null) continue;
+                if (pw <= 0f || ph <= 0f) {
+                    pw = tp.getPageWidth();
+                    ph = tp.getPageHeight();
                 }
-            }
-        }
-
-        /** true لو حروف السطر العربية أكثر من اللاتينية (اتجاه القراءة من اليمين لليسار). */
-        private static boolean isRtlText(String t) {
-            int ar = 0, lat = 0;
-            for (int i = 0; i < t.length(); i++) {
-                char c = t.charAt(i);
-                if (!Character.isLetter(c)) continue;
-                if (isArabicChar(c) || (c >= 0x0590 && c <= 0x05FF)) ar++;
-                else lat++;
-            }
-            return ar > 0 && ar >= lat;
-        }
-
-        /**
-         * يربط كل كلمة بأحرفها الحقيقية في الصفحة: نرتّب أحرف الصفحة بصريًا (من اليمين لليسار للعربي،
-         * ومن اليسار لليمين لغيره) ثم نستهلك منها بعدد أحرف كل كلمة. لو اختلف عدد الأحرف
-         * (روابط/تطبيع) نرجع false ونستخدم التوزيع التناسبي.
-         */
-        private boolean assignByGlyphs(String[] parts, List<TextPosition> tps, boolean rtl, float pw, float ph) {
-            List<TextPosition> glyphs = new ArrayList<>();
-            int glyphChars = 0;
-            for (TextPosition tp : tps) {
-                String u = tp.getUnicode();
+                String u = cleanGlyph(tp.getUnicode());
                 if (u == null) continue;
-                int n = 0;
-                for (int i = 0; i < u.length(); i++) {
-                    if (!Character.isWhitespace(u.charAt(i))) n++;
+                Glyph g = new Glyph();
+                g.u = u;
+                g.space = isBlank(u);
+                float w = tp.getWidthDirAdj();
+                if (w <= 0f) w = tp.getWidth();
+                if (w < 0f) w = 0f;
+                float h = tp.getHeightDir();
+                if (h <= 0f) h = tp.getHeight();
+                g.font = Math.max(1f, tp.getFontSizeInPt());
+                if (h <= 0f) h = g.font;
+                g.x0 = tp.getXDirAdj();
+                g.x1 = g.x0 + w;
+                g.base = tp.getYDirAdj();
+                g.top = g.base - h;
+                g.bottom = g.base + h * 0.25f;
+                if (!g.space) {
+                    int t = Character.getType(g.u.codePointAt(0));
+                    g.mark = t == Character.NON_SPACING_MARK || t == Character.ENCLOSING_MARK
+                            || t == Character.COMBINING_SPACING_MARK;
                 }
-                if (n == 0) continue;
-                glyphs.add(tp);
-                glyphChars += n;
-            }
-            int wordChars = 0;
-            for (String p : parts) wordChars += p.length();
-            if (glyphs.isEmpty() || glyphChars != wordChars) return false;
-
-            final boolean r = rtl;
-            java.util.Collections.sort(glyphs, (a, b) -> {
-                int c = Float.compare(a.getXDirAdj(), b.getXDirAdj());
-                return r ? -c : c;
-            });
-
-            int gi = 0;
-            int used = 0; // أحرف مستهلكة من الحرف الحالي (لروابط تحمل أكثر من حرف)
-            List<float[]> boxes = new ArrayList<>();
-            for (String p : parts) {
-                int need = p.length();
-                float x0 = Float.MAX_VALUE, y0 = Float.MAX_VALUE, x1 = -Float.MAX_VALUE, y1 = -Float.MAX_VALUE;
-                while (need > 0 && gi < glyphs.size()) {
-                    TextPosition tp = glyphs.get(gi);
-                    String u = tp.getUnicode();
-                    int len = 0;
-                    for (int i = 0; i < u.length(); i++) {
-                        if (!Character.isWhitespace(u.charAt(i))) len++;
-                    }
-                    float x = tp.getXDirAdj();
-                    float w = tp.getWidthDirAdj() > 0 ? tp.getWidthDirAdj() : tp.getWidth();
-                    float h = tp.getHeightDir() > 0 ? tp.getHeightDir() : tp.getHeight();
-                    float yy = tp.getYDirAdj();
-                    x0 = Math.min(x0, x);
-                    x1 = Math.max(x1, x + w);
-                    y0 = Math.min(y0, yy - h);
-                    y1 = Math.max(y1, yy + h * 0.25f);
-                    int take = Math.min(need, len - used);
-                    need -= take;
-                    used += take;
-                    if (used >= len) {
-                        gi++;
-                        used = 0;
-                    }
-                }
-                if (x0 == Float.MAX_VALUE) return false;
-                boxes.add(new float[]{x0, y0, x1, y1});
-            }
-            for (int i = 0; i < parts.length; i++) {
-                float[] b = boxes.get(i);
-                addWord(parts[i], b[0], b[1], b[2], b[3], pw, ph);
-            }
-            return true;
-        }
-
-        private void addWord(String t, float x0, float y0, float x1, float y1, float pw, float ph) {
-            String clean = t.replace("\u00AD", "").replace("\u200B", "").trim();
-            if (clean.isEmpty()) return;
-            boolean hasContent = false;
-            for (int i = 0; i < clean.length(); i++) {
-                if (Character.isLetterOrDigit(clean.charAt(i))) {
-                    hasContent = true;
-                    break;
-                }
-            }
-            if (!hasContent) return; // رموز/نقاط تعداد/أيقونات
-            RawWord w = new RawWord();
-            w.text = clean;
-            w.box = new RectF(clamp(x0 / pw), clamp(y0 / ph), clamp(x1 / pw), clamp(y1 / ph));
-            w.line = lineNo;
-            raw.add(w);
-        }
-
-        private static float clamp(float v) {
-            return Math.max(0f, Math.min(1f, v));
-        }
-
-        List<Word> finish() {
-            // ترتيب كلمات كل سطر عربي: يجب أن يكون دائمًا من اليمين إلى اليسار (ترتيب القراءة الطبيعي)،
-            // ثم عند نهاية السطر ينتقل التظليل/القراءة إلى أقصى يمين السطر التالي.
-            // سابقًا كنا نعكس السطر كله فقط لو كانت أول كلمة على يسار آخر كلمة، وهذا يفشل مع
-            // الأسطر المخزّنة بترتيب مختلط (أرقام/كلمات لاتينية وسط العربي، أو ملفات Word المحوّلة)،
-            // فيظهر التظليل (وتُنطق الكلمات) بالعكس في بعض الأسطر فقط. الآن نرتّب بحسب الموضع الفعلي
-            // على الصفحة، ونُبقي الجمل اللاتينية المتتالية بترتيبها الطبيعي (يسار -> يمين).
-            regroupLines();
-            int i = 0;
-            while (i < raw.size()) {
-                int j = i;
-                while (j + 1 < raw.size() && raw.get(j + 1).line == raw.get(i).line) j++;
-                if (j > i) orderLineRtl(raw.subList(i, j + 1));
-                i = j + 1;
-            }
-            List<Word> out = new ArrayList<>(raw.size());
-            for (RawWord r : raw) out.add(new Word(r.text, r.box, r.line));
-            return out;
-        }
-
-        /** أقصى فجوة أفقية (نسبة من عرض الصفحة) بين كلمة ومجموعة سطر لتُضمّ إليها؛ أكبر من ذلك = عمود آخر. */
-        private static final float MAX_SAME_LINE_GAP = 0.05f;
-        /** كم مجموعة سطر سابقة نبحث فيها عن سطر تنتمي إليه الكلمة (لمعالجة التداخل في ترتيب الملف). */
-        private static final int LINE_LOOKBACK = 8;
-
-        private static final class LineGroup {
-            float cy;
-            float h;
-            float minX;
-            float maxX;
-            final List<RawWord> words = new ArrayList<>();
-        }
-
-        /**
-         * يعيد تجميع الكلمات في أسطر بحسب موضعها الفعلي على الصفحة لا بحسب ترتيب ورودها في الملف.
-         * بعض الملفات (خصوصًا العربية المحوّلة من Word) تخزّن أجزاء السطر الواحد متقطّعة ومتداخلة مع
-         * سطر آخر (جزء من السطر 4 ثم جزء من السطر 5 ثم بقية السطر 4)، فكان الرقم التسلسلي للسطر يقفز
-         * ذهابًا وإيابًا فتُقرأ الكلمات مختلطة بين السطرين (مثل: "يعانون من مواكبة الأفكار في مجرى
-         * الأحداث" بدل قراءة السطر كاملًا ثم الذي بعده). الآن كل كلمة تنضم لسطرها الحقيقي (نفس
-         * الارتفاع + قريبة أفقيًا)، فيُقرأ السطر كاملًا من اليمين لليسار ثم ننتقل للسطر التالي.
-         * الكلمات البعيدة أفقيًا (عمود مختلف) تبقى في مجموعة منفصلة فلا تختلط الأعمدة.
-         */
-        private void regroupLines() {
-            if (raw.size() < 2) return;
-            List<LineGroup> groups = new ArrayList<>();
-            for (RawWord w : raw) {
-                float cy = (w.box.top + w.box.bottom) / 2f;
-                float h = Math.max(0.004f, w.box.height());
-                LineGroup target = null;
-                int stop = Math.max(0, groups.size() - LINE_LOOKBACK);
-                for (int gi = groups.size() - 1; gi >= stop; gi--) {
-                    LineGroup g = groups.get(gi);
-                    float tol = 0.45f * Math.max(h, g.h);
-                    if (Math.abs(cy - g.cy) > tol) continue;
-                    float gap = Math.max(0f, Math.max(w.box.left - g.maxX, g.minX - w.box.right));
-                    if (gap > MAX_SAME_LINE_GAP) continue;
-                    target = g;
-                    break;
-                }
-                if (target == null) {
-                    target = new LineGroup();
-                    target.cy = cy;
-                    target.h = h;
-                    target.minX = w.box.left;
-                    target.maxX = w.box.right;
-                    groups.add(target);
-                } else {
-                    int n = target.words.size();
-                    target.cy = (target.cy * n + cy) / (n + 1);
-                    target.h = Math.max(target.h, h);
-                    target.minX = Math.min(target.minX, w.box.left);
-                    target.maxX = Math.max(target.maxX, w.box.right);
-                }
-                target.words.add(w);
-            }
-            raw.clear();
-            for (int gi = 0; gi < groups.size(); gi++) {
-                for (RawWord w : groups.get(gi).words) {
-                    w.line = gi;
-                    raw.add(w);
-                }
+                // نص خارج حدود الصفحة (مخفي) لا يُقرأ
+                if (pw > 0f && (g.x1 < -2f || g.x0 > pw + 2f)) continue;
+                if (ph > 0f && (g.base < -2f || g.base > ph + 2f)) continue;
+                glyphs.add(g);
             }
         }
+    }
 
-        /** يعيد ترتيب كلمات سطر واحد (في مكانه) إذا كان السطر عربيًا؛ لا يلمس الأسطر اللاتينية. */
-        private static void orderLineRtl(List<RawWord> line) {
-            StringBuilder sb = new StringBuilder();
-            for (RawWord w : line) sb.append(w.text).append(' ');
-            if (!isRtlText(sb.toString())) return;
+    private static boolean isBlank(String s) {
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (!Character.isWhitespace(c) && !Character.isSpaceChar(c)) return false;
+        }
+        return true;
+    }
 
-            // 1) ترتيب بصري من اليمين لليسار (ثابت: الكلمات المتطابقة الموضع تبقى بترتيبها).
-            java.util.Collections.sort(line, (a, b) -> Float.compare(b.box.centerX(), a.box.centerX()));
+    /** ينظّف نص حرف واحد: يحذف محارف التحكم/التطويل ويفكّ أشكال العرض العربية واللاتينية المركّبة. */
+    private static String cleanGlyph(String u) {
+        if (u == null || u.isEmpty()) return null;
+        StringBuilder sb = null;
+        boolean needNorm = false;
+        for (int i = 0; i < u.length(); i++) {
+            char c = u.charAt(i);
+            boolean drop = (c >= 0x200B && c <= 0x200F) || (c >= 0x202A && c <= 0x202E)
+                    || (c >= 0x2066 && c <= 0x2069) || c == 0xFEFF || c == 0x00AD || c == 0x0640
+                    || c == 0x0000 || c == 0xFFFD || (c < 0x20 && c != '\t');
+            if ((c >= 0xFB00 && c <= 0xFB06) || (c >= 0xFB50 && c <= 0xFDFF) || (c >= 0xFE70 && c <= 0xFEFF)) {
+                needNorm = true;
+            }
+            if (drop) {
+                if (sb == null) {
+                    sb = new StringBuilder(u.length());
+                    sb.append(u, 0, i);
+                }
+            } else if (sb != null) {
+                sb.append(c);
+            }
+        }
+        String r = sb != null ? sb.toString() : u;
+        if (needNorm) {
+            try {
+                r = Normalizer.normalize(r, Normalizer.Form.NFKC);
+            } catch (Throwable ignored) {
+            }
+        }
+        return r.isEmpty() ? null : r;
+    }
 
-            // 2) أي مجموعة متتالية من الكلمات اللاتينية (مثل MENTAL STATE EXAMINATION) تُقرأ
-            //    من اليسار لليمين، فنعكس ترتيبها داخل مكانها بعد الفرز.
-            int k = 0;
-            while (k < line.size()) {
-                if (!isLatinWord(line.get(k).text)) {
-                    k++;
+    private static float clamp01(float v) {
+        return Math.max(0f, Math.min(1f, v));
+    }
+
+    // ---- 1) من الأحرف إلى مقاطع
+
+    /** يدمج علامات التشكيل/الحركات مع حرفها الأساسي (لا تدخل في ترتيب الكلمات). */
+    private static List<Glyph> attachMarks(List<Glyph> all) {
+        List<Glyph> bases = new ArrayList<>(all.size());
+        List<Glyph> marks = new ArrayList<>();
+        for (Glyph g : all) {
+            if (g.mark) marks.add(g);
+            else bases.add(g);
+        }
+        for (Glyph m : marks) {
+            Glyph best = null;
+            float bestD = Float.MAX_VALUE;
+            float mc = m.cx();
+            for (Glyph b : bases) {
+                if (b.space) continue;
+                if (Math.abs(b.base - m.base) > b.font * 1.2f) continue;
+                float d;
+                if (mc >= b.x0 && mc <= b.x1) d = 0f;
+                else d = Math.min(Math.abs(mc - b.x0), Math.abs(mc - b.x1));
+                if (d < bestD) {
+                    bestD = d;
+                    best = b;
+                }
+            }
+            if (best != null && bestD <= best.font * 0.6f) best.u = best.u + m.u;
+        }
+        return bases;
+    }
+
+    private static List<Seg> buildSegments(List<Glyph> bases, float pw, float ph) {
+        List<Seg> segs = new ArrayList<>();
+        Collections.sort(bases, (a, b) -> Float.compare(a.base, b.base));
+        List<List<Glyph>> bands = new ArrayList<>();
+        List<Glyph> cur = null;
+        float mean = 0f;
+        float bandFont = 0f;
+        for (Glyph g : bases) {
+            if (cur != null && Math.abs(g.base - mean) <= 0.5f * Math.max(bandFont, g.font)) {
+                cur.add(g);
+                mean += (g.base - mean) / cur.size();
+                bandFont = Math.max(bandFont, g.font);
+            } else {
+                cur = new ArrayList<>();
+                cur.add(g);
+                mean = g.base;
+                bandFont = g.font;
+                bands.add(cur);
+            }
+        }
+        for (List<Glyph> band : bands) {
+            Collections.sort(band, (a, b) -> Float.compare(a.cx(), b.cx()));
+            List<Glyph> part = new ArrayList<>();
+            float maxR = -Float.MAX_VALUE;
+            float prevFont = 0f;
+            for (Glyph g : band) {
+                if (g.space) {
+                    if (!part.isEmpty()) part.add(g);
                     continue;
                 }
-                int m = k;
-                while (m + 1 < line.size() && isLatinWord(line.get(m + 1).text)) m++;
-                if (m > k) java.util.Collections.reverse(line.subList(k, m + 1));
-                k = m + 1;
+                if (!part.isEmpty()) {
+                    float gap = g.x0 - maxR;
+                    if (gap > Math.max(g.font, prevFont) * SEG_GAP_EM) {
+                        addSegment(segs, part, pw, ph);
+                        part = new ArrayList<>();
+                    }
+                }
+                maxR = part.isEmpty() ? g.x1 : Math.max(maxR, g.x1);
+                part.add(g);
+                prevFont = g.font;
             }
+            addSegment(segs, part, pw, ph);
         }
+        return segs;
+    }
 
-        /** كلمة فيها حروف لاتينية ولا فيها أي حرف عربي. */
-        private static boolean isLatinWord(String t) {
-            boolean latin = false;
-            for (int i = 0; i < t.length(); i++) {
-                char c = t.charAt(i);
-                if (!Character.isLetter(c)) continue;
-                if (isArabicChar(c) || (c >= 0x0590 && c <= 0x05FF)) return false;
-                latin = true;
+    private static void addSegment(List<Seg> segs, List<Glyph> glyphs, float pw, float ph) {
+        if (glyphs.isEmpty()) return;
+        List<List<Glyph>> ws = splitWords(glyphs);
+        Seg seg = new Seg();
+        List<RawWord> words = new ArrayList<>();
+        float fontSum = 0f;
+        float baseSum = 0f;
+        int gc = 0;
+        for (List<Glyph> wg : ws) {
+            String text = logicalWord(wg).trim();
+            if (text.isEmpty()) continue;
+            boolean has = false;
+            for (int i = 0; i < text.length(); i++) {
+                if (Character.isLetterOrDigit(text.charAt(i))) {
+                    has = true;
+                    break;
+                }
             }
-            return latin;
+            if (!has) continue; // رموز/نقاط تعداد/خطوط نقطية/أيقونات
+            float x0 = Float.MAX_VALUE, y0 = Float.MAX_VALUE, x1 = -Float.MAX_VALUE, y1 = -Float.MAX_VALUE;
+            for (Glyph g : wg) {
+                x0 = Math.min(x0, g.x0);
+                x1 = Math.max(x1, g.x1);
+                y0 = Math.min(y0, g.top);
+                y1 = Math.max(y1, g.bottom);
+                fontSum += g.font;
+                baseSum += g.base;
+                gc++;
+            }
+            RawWord rw = new RawWord();
+            rw.text = text;
+            rw.box = new RectF(clamp01(x0 / pw), clamp01(y0 / ph), clamp01(x1 / pw), clamp01(y1 / ph));
+            rw.cls = wordClass(text);
+            words.add(rw);
+            seg.x0 = Math.min(seg.x0, x0);
+            seg.x1 = Math.max(seg.x1, x1);
+            seg.y0 = Math.min(seg.y0, y0);
+            seg.y1 = Math.max(seg.y1, y1);
         }
+        if (words.isEmpty() || gc == 0) return;
+        seg.font = fontSum / gc;
+        seg.base = baseSum / gc;
+        int ar = 0, lat = 0;
+        for (RawWord w : words) {
+            for (int i = 0; i < w.text.length(); i++) {
+                char c = w.text.charAt(i);
+                if (!Character.isLetter(c)) continue;
+                if (isRtlLetterChar(c)) ar++;
+                else lat++;
+            }
+        }
+        seg.rtl = ar > 0 && ar >= lat;
+        seg.words.addAll(orderWords(words, seg.rtl));
+        segs.add(seg);
+    }
+
+    /** يقسّم أحرف المقطع (مرتبة بصريًا) إلى كلمات: عند الفراغ الفعلي أو عند فجوة أفقية بعرض مسافة. */
+    private static List<List<Glyph>> splitWords(List<Glyph> glyphs) {
+        List<List<Glyph>> out = new ArrayList<>();
+        List<Glyph> w = new ArrayList<>();
+        float maxR = -Float.MAX_VALUE;
+        float prevFont = 0f;
+        for (Glyph g : glyphs) {
+            if (g.space) {
+                if (!w.isEmpty()) {
+                    out.add(w);
+                    w = new ArrayList<>();
+                }
+                continue;
+            }
+            if (!w.isEmpty()) {
+                float gap = g.x0 - maxR;
+                if (gap > Math.max(g.font, prevFont) * WORD_GAP_EM) {
+                    out.add(w);
+                    w = new ArrayList<>();
+                }
+            }
+            maxR = w.isEmpty() ? g.x1 : Math.max(maxR, g.x1);
+            w.add(g);
+            prevFont = g.font;
+        }
+        if (!w.isEmpty()) out.add(w);
+        return out;
+    }
+
+    /**
+     * يحوّل أحرف كلمة مرتّبة بصريًا (يسار->يمين) إلى نصها المنطقي. الكلمة العربية تُقرأ من اليمين،
+     * لكن مقاطع الأرقام/الحروف اللاتينية داخلها تبقى بترتيبها الطبيعي (مثل "ج2" أو "mA").
+     */
+    private static String logicalWord(List<Glyph> gs) {
+        boolean anyRtl = false;
+        for (Glyph g : gs) {
+            if (hasRtlLetter(g.u)) {
+                anyRtl = true;
+                break;
+            }
+        }
+        StringBuilder sb = new StringBuilder();
+        if (!anyRtl) {
+            for (Glyph g : gs) sb.append(g.u);
+            return sb.toString();
+        }
+        List<String> units = new ArrayList<>();
+        int i = 0;
+        while (i < gs.size()) {
+            if (isLtrCell(gs.get(i).u)) {
+                StringBuilder run = new StringBuilder();
+                while (i < gs.size() && isLtrCell(gs.get(i).u)) {
+                    run.append(gs.get(i).u);
+                    i++;
+                }
+                units.add(run.toString());
+            } else {
+                units.add(gs.get(i).u);
+                i++;
+            }
+        }
+        for (int k = units.size() - 1; k >= 0; k--) sb.append(units.get(k));
+        return sb.toString();
+    }
+
+    private static boolean isRtlLetterChar(char c) {
+        return Character.isLetter(c) && (isArabicChar(c) || (c >= 0x0590 && c <= 0x05FF));
+    }
+
+    private static boolean hasRtlLetter(String s) {
+        for (int i = 0; i < s.length(); i++) {
+            if (isRtlLetterChar(s.charAt(i))) return true;
+        }
+        return false;
+    }
+
+    /** خلية (حرف) لاتينية/رقمية: تُقرأ من اليسار لليمين حتى داخل الكلمة العربية. */
+    private static boolean isLtrCell(String u) {
+        boolean ltr = false;
+        for (int i = 0; i < u.length(); i++) {
+            char c = u.charAt(i);
+            if (isRtlLetterChar(c)) return false;
+            if (Character.isLetterOrDigit(c)) ltr = true;
+        }
+        return ltr;
+    }
+
+    private static char wordClass(String t) {
+        boolean lat = false;
+        for (int i = 0; i < t.length(); i++) {
+            char c = t.charAt(i);
+            if (!Character.isLetter(c)) continue;
+            if (isRtlLetterChar(c)) return 'R';
+            lat = true;
+        }
+        return lat ? 'L' : 'N';
+    }
+
+    private static final String[] UNIT_TOKENS = {
+            "hz", "khz", "mhz", "ma", "a", "v", "mv", "ms", "us", "\u00B5s", "\u03BCs", "s", "sec", "min",
+            "mm", "cm", "m", "kg", "g", "ohm", "\u03A9", "\u00B0c", "c"
+    };
+
+    private static boolean isUnitToken(String t) {
+        String l = t.toLowerCase(Locale.ROOT);
+        for (String u : UNIT_TOKENS) {
+            if (l.equals(u)) return true;
+        }
+        return false;
+    }
+
+    /**
+     * يرتّب كلمات مقطع واحد (تصل بترتيبها البصري يسار->يمين) إلى ترتيب القراءة.
+     * سطر عربي: من اليمين لليسار، ومجموعات الكلمات اللاتينية المتتالية تبقى بترتيبها الطبيعي.
+     * سطر لاتيني: من اليسار لليمين، ومجموعات الكلمات العربية المتتالية تُقرأ من اليمين.
+     */
+    private static List<RawWord> orderWords(List<RawWord> v, boolean rtl) {
+        int n = v.size();
+        if (n < 2) return v;
+        final char runCls = rtl ? 'L' : 'R';
+        List<List<RawWord>> units = new ArrayList<>();
+        int i = 0;
+        while (i < n) {
+            RawWord w = v.get(i);
+            List<RawWord> u = new ArrayList<>(2);
+            u.add(w);
+            int j = i + 1;
+            if (w.cls == runCls) {
+                while (j < n) {
+                    RawWord x = v.get(j);
+                    if (x.cls == runCls) {
+                        u.add(x);
+                        j++;
+                        continue;
+                    }
+                    if (x.cls == 'N') {
+                        boolean between = j + 1 < n && v.get(j + 1).cls == runCls;
+                        // رقم يلي كلمة لاتينية في سطر عربي (TENS 2) يتبعها، إلا لو كانت وحدة قياس (20 Hz)
+                        boolean trailing = rtl && v.get(j - 1).cls == 'L' && !isUnitToken(v.get(j - 1).text);
+                        if (between || trailing) {
+                            u.add(x);
+                            j++;
+                            continue;
+                        }
+                    }
+                    break;
+                }
+            }
+            units.add(u);
+            i = j;
+        }
+        List<RawWord> out = new ArrayList<>(n);
+        if (rtl) {
+            for (int k = units.size() - 1; k >= 0; k--) out.addAll(units.get(k));
+        } else {
+            for (List<RawWord> u : units) {
+                if (u.size() > 1 && u.get(0).cls == 'R') Collections.reverse(u);
+                out.addAll(u);
+            }
+        }
+        return out;
+    }
+
+    // ---- 2) ترتيب المقاطع على مستوى الصفحة (XY-cut)
+
+    private static boolean blockRtl(List<Seg> segs) {
+        int r = 0, l = 0;
+        for (Seg s : segs) {
+            if (s.rtl) r += s.words.size();
+            else l += s.words.size();
+        }
+        return r > 0 && r >= l;
+    }
+
+    private static void xyCut(List<Seg> segs, float pw, List<Seg> out, int depth) {
+        if (segs.size() <= 1) {
+            out.addAll(segs);
+            return;
+        }
+        if (depth < 8) {
+            List<List<Seg>> parts = splitColumns(segs, pw);
+            if (parts != null) {
+                for (List<Seg> p : parts) xyCut(p, pw, out, depth + 1);
+                return;
+            }
+        }
+        sortRows(segs, out);
+    }
+
+    /** أسطر بترتيب من الأعلى للأسفل، وداخل كل سطر مقاطعه بحسب اتجاه السطر. */
+    private static void sortRows(List<Seg> segs, List<Seg> out) {
+        List<Seg> s = new ArrayList<>(segs);
+        Collections.sort(s, (a, b) -> Float.compare(a.base, b.base));
+        List<List<Seg>> rows = new ArrayList<>();
+        List<Seg> row = null;
+        float mean = 0f;
+        float rowFont = 0f;
+        for (Seg g : s) {
+            if (row != null && Math.abs(g.base - mean) <= 0.5f * Math.max(rowFont, g.font)) {
+                row.add(g);
+                mean += (g.base - mean) / row.size();
+                rowFont = Math.max(rowFont, g.font);
+            } else {
+                row = new ArrayList<>();
+                row.add(g);
+                mean = g.base;
+                rowFont = g.font;
+                rows.add(row);
+            }
+        }
+        for (List<Seg> r : rows) {
+            final boolean rtl = blockRtl(r);
+            Collections.sort(r, (a, b) -> rtl ? Float.compare(b.cx(), a.cx()) : Float.compare(a.cx(), b.cx()));
+            out.addAll(r);
+        }
+    }
+
+    /**
+     * يكتشف أعمدة نص حقيقية: ممر عمودي فارغ (تقريبًا) بين مقاطع الصفحة. المقاطع التي تعبر الممر
+     * (عناوين/تذييلات بعرض الصفحة) تبقى كتلًا مستقلة بترتيبها الرأسي؛ وبين الكتل تُقرأ الأعمدة عمودًا
+     * عمودًا (العربي من اليمين). لو بدا التخطيط جدولًا (خلايا قصيرة متحاذية) لا نقطّعه لأعمدة، فيُقرأ صفًا صفًا.
+     * يرجع null لو لا توجد أعمدة.
+     */
+    private static List<List<Seg>> splitColumns(List<Seg> segs, float pw) {
+        int n = segs.size();
+        if (n < 6) return null;
+        float minX = Float.MAX_VALUE, maxX = -Float.MAX_VALUE, fontSum = 0f;
+        for (Seg s : segs) {
+            minX = Math.min(minX, s.x0);
+            maxX = Math.max(maxX, s.x1);
+            fontSum += s.font;
+        }
+        float avgFont = fontSum / n;
+        float minGutter = Math.max(1.2f * avgFont, 8f);
+        int bins = (int) Math.ceil(maxX - minX) + 1;
+        if (bins < 20 || bins > 5000) return null;
+        int[] cover = new int[bins];
+        for (Seg s : segs) {
+            int a = Math.max(0, Math.min(bins - 1, (int) Math.floor(s.x0 - minX)));
+            int b = Math.max(0, Math.min(bins - 1, (int) Math.ceil(s.x1 - minX)));
+            for (int k = a; k <= b; k++) cover[k]++;
+        }
+        int maxSpan = (int) Math.floor(n * 0.12f);
+        int bestStart = -1, bestLen = 0;
+        int k = 0;
+        while (k < bins) {
+            if (cover[k] <= maxSpan) {
+                int st = k;
+                while (k < bins && cover[k] <= maxSpan) k++;
+                int len = k - st;
+                if (st > 0 && k < bins && len >= minGutter && len > bestLen) {
+                    bestStart = st;
+                    bestLen = len;
+                }
+            } else {
+                k++;
+            }
+        }
+        if (bestStart < 0) return null;
+        float gs = minX + bestStart;
+        float ge = minX + bestStart + bestLen;
+        float mid = (gs + ge) / 2f;
+
+        List<Seg> left = new ArrayList<>();
+        List<Seg> right = new ArrayList<>();
+        for (Seg s : segs) {
+            if (s.x0 < gs && s.x1 > ge) continue; // يعبر الممر
+            if (s.cx() < mid) left.add(s);
+            else right.add(s);
+        }
+        if (left.size() < 3 || right.size() < 3) return null;
+        if (looksLikeTable(left, right, pw)) return null;
+
+        final boolean rtl = blockRtl(segs);
+        List<Seg> sorted = new ArrayList<>(segs);
+        Collections.sort(sorted, (a, b) -> Float.compare(a.y0, b.y0));
+        List<List<Seg>> parts = new ArrayList<>();
+        List<Seg> full = new ArrayList<>();
+        List<Seg> colL = new ArrayList<>();
+        List<Seg> colR = new ArrayList<>();
+        boolean inCols = false;
+        for (Seg s : sorted) {
+            boolean span = s.x0 < gs && s.x1 > ge;
+            if (span) {
+                if (inCols) {
+                    flushColumns(parts, colL, colR, rtl);
+                    colL = new ArrayList<>();
+                    colR = new ArrayList<>();
+                    inCols = false;
+                }
+                full.add(s);
+            } else {
+                if (!inCols) {
+                    if (!full.isEmpty()) {
+                        parts.add(full);
+                        full = new ArrayList<>();
+                    }
+                    inCols = true;
+                }
+                if (s.cx() < mid) colL.add(s);
+                else colR.add(s);
+            }
+        }
+        if (inCols) flushColumns(parts, colL, colR, rtl);
+        if (!full.isEmpty()) parts.add(full);
+        return parts.size() >= 2 ? parts : null;
+    }
+
+    private static void flushColumns(List<List<Seg>> parts, List<Seg> colL, List<Seg> colR, boolean rtl) {
+        if (rtl) {
+            if (!colR.isEmpty()) parts.add(colR);
+            if (!colL.isEmpty()) parts.add(colL);
+        } else {
+            if (!colL.isEmpty()) parts.add(colL);
+            if (!colR.isEmpty()) parts.add(colR);
+        }
+    }
+
+    /** جدول: خلايا قصيرة تتحاذى أفقيًا مع خلايا العمود الآخر (صفوف). النص المتعدد الأعمدة أسطره طويلة. */
+    private static boolean looksLikeTable(List<Seg> left, List<Seg> right, float pw) {
+        List<Seg> small = left.size() <= right.size() ? left : right;
+        List<Seg> other = small == left ? right : left;
+        int aligned = 0;
+        for (Seg s : small) {
+            for (Seg o : other) {
+                if (Math.abs(s.base - o.base) <= 0.6f * Math.max(s.font, o.font)) {
+                    aligned++;
+                    break;
+                }
+            }
+        }
+        float frac = aligned / (float) small.size();
+        List<Float> widths = new ArrayList<>(left.size() + right.size());
+        for (Seg s : left) widths.add(s.width());
+        for (Seg s : right) widths.add(s.width());
+        Collections.sort(widths);
+        float medianW = widths.get(widths.size() / 2);
+        return frac >= 0.7f && medianW < 0.25f * pw;
+    }
+
+    /** يجمع كل شيء: أحرف الصفحة -> كلمات مرتبة بترتيب القراءة (line = رقم المقطع). */
+    private static List<Word> assemble(List<Glyph> all, float pw, float ph) {
+        List<Word> out = new ArrayList<>();
+        if (all == null || all.isEmpty() || pw <= 0f || ph <= 0f) return out;
+        List<Glyph> bases = attachMarks(all);
+        List<Seg> segs = buildSegments(bases, pw, ph);
+        if (segs.isEmpty()) return out;
+        List<Seg> ordered = new ArrayList<>(segs.size());
+        xyCut(segs, pw, ordered, 0);
+        int line = 0;
+        for (Seg s : ordered) {
+            for (RawWord w : s.words) out.add(new Word(w.text, w.box, line));
+            line++;
+        }
+        return out;
     }
 
     // ------------------------------------------------------------------ بناء النص والمقاطع
@@ -485,7 +821,7 @@ final class PdfSpeechText {
             if (i > 0) {
                 Word prev = words.get(i - 1);
                 // كلمة مقسومة بشرطة في آخر السطر (لاتيني فقط): ندمجها مع تاليتها
-                if (prev.line != w.line && prev.text.endsWith("-") && prev.text.length() > 2
+                if (!paraBefore[i] && prev.line != w.line && prev.text.endsWith("-") && prev.text.length() > 2
                         && Character.isLowerCase(t.charAt(0)) && isLatin(prev.text)) {
                     glue = true;
                 }
@@ -494,7 +830,7 @@ final class PdfSpeechText {
             w.start = sb.length();
             if (i + 1 < words.size()) {
                 Word next = words.get(i + 1);
-                if (next.line != w.line && t.endsWith("-") && t.length() > 2 && isLatin(t)
+                if (!paraBefore[i + 1] && next.line != w.line && t.endsWith("-") && t.length() > 2 && isLatin(t)
                         && Character.isLowerCase(next.text.charAt(0))) {
                     t = t.substring(0, t.length() - 1); // نحذف الشرطة، والكلمة التالية تلتصق بها
                 }
@@ -537,6 +873,11 @@ final class PdfSpeechText {
             if (cur.line == prev.line) continue;
             float lineH = Math.max(0.004f, prev.box.height());
             float dy = cur.box.top - prev.box.top;
+            // مقطع آخر على نفس الارتفاع (خلية جدول/عمود مجاور): وقفة بدل وصل الجملتين ببعض
+            if (Math.abs(dy) < lineH * 0.35f) {
+                flags[i] = true;
+                continue;
+            }
             float gap = median > 0 ? Math.max(median * 1.7f, lineH * 1.6f) : lineH * 2.1f;
             if (dy > gap || dy < -lineH * 2.4f) flags[i] = true;
         }
