@@ -351,19 +351,33 @@ final class PdfSpeechText {
         }
 
         List<Word> finish() {
-            // سطر عربي كلماته مرتّبة بصريًا من اليسار لليمين (بعض الملفات تخزّنها هكذا) -> نعكس ترتيبها
-            // ليكون ترتيب القراءة من اليمين لليسار. لا نلمس أي سطر ترتيبه سليم أصلًا.
+            // PDFBox قد يعيد كلمات السطر العربي بترتيب التخزين داخل ملف الـPDF
+            // بدل ترتيب القراءة البصري. هذا يسبب أن TTS يبدأ من اليسار لليمين
+            // حتى عندما تكون الصفحة عربية. نعتمد هنا على إحداثيات الكلمات نفسها
+            // لتثبيت ترتيب القراءة البصري: العربي من اليمين إلى اليسار.
+            //
+            // مهم: لا نعكس السطر بالكامل بشكل أعمى؛ عند وجود مصطلح لاتيني داخل
+            // السطر العربي نحافظ على ترتيب الكلمات اللاتينية ككتلة LTR.
             int i = 0;
             while (i < raw.size()) {
                 int j = i;
                 while (j + 1 < raw.size() && raw.get(j + 1).line == raw.get(i).line) j++;
                 if (j > i) {
                     StringBuilder sb = new StringBuilder();
-                    for (int k = i; k <= j; k++) sb.append(raw.get(k).text).append(' ');
-                    float firstCx = raw.get(i).box.centerX();
-                    float lastCx = raw.get(j).box.centerX();
-                    if (isRtlText(sb.toString()) && firstCx + 0.02f < lastCx) {
-                        java.util.Collections.reverse(raw.subList(i, j + 1));
+                    int rtlWords = 0;
+                    int wordsCount = j - i + 1;
+                    for (int k = i; k <= j; k++) {
+                        String t = raw.get(k).text;
+                        sb.append(t).append(' ');
+                        if (isRtlText(t)) rtlWords++;
+                    }
+
+                    if (isRtlText(sb.toString()) && rtlWords * 2 >= wordsCount) {
+                        java.util.List<RawWord> line = new java.util.ArrayList<>(raw.subList(i, j + 1));
+                        line.sort((a, b) -> Float.compare(b.box.centerX(), a.box.centerX()));
+                        for (int k = 0; k < line.size(); k++) {
+                            raw.set(i + k, line.get(k));
+                        }
                     }
                 }
                 i = j + 1;
