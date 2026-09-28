@@ -215,6 +215,15 @@ public class PdfViewerActivity extends AppCompatActivity {
             public void onScrolled(@NonNull RecyclerView rv, int dx, int dy) {
                 if (dy != 0) updateIndicator();
             }
+
+            @Override
+            public void onScrollStateChanged(@NonNull RecyclerView rv, int newState) {
+                if (newState == RecyclerView.SCROLL_STATE_DRAGGING) userScrolled = true;
+                else if (newState == RecyclerView.SCROLL_STATE_IDLE && userScrolled) {
+                    userScrolled = false;
+                    reseekReadingToVisiblePage();
+                }
+            }
         });
         pageIndicator.setOnClickListener(v -> showGoToPageDialog());
         Ui.applyPressFeedback(pageIndicator);
@@ -748,6 +757,21 @@ public class PdfViewerActivity extends AppCompatActivity {
 
     // ------------------------------------------------------------------ مؤشر الصفحة والانتقال
 
+    private boolean userScrolled = false;
+
+    /** لو المستخدم سحب الملف لصفحات بعيدة عن الصفحة المقروءة، نبدأ القراءة من الصفحة الظاهرة. */
+    private void reseekReadingToVisiblePage() {
+        if (speaker == null || !speaker.isActive() || layoutManager == null) return;
+        int first = layoutManager.findFirstVisibleItemPosition();
+        int last = layoutManager.findLastVisibleItemPosition();
+        int reading = speaker.getCurrentPage();
+        if (first < 0 || last < 0 || reading < 0) return;
+        if (reading >= first && reading <= last) return; // ما زالت الصفحة المقروءة على الشاشة
+        int target = layoutManager.findFirstCompletelyVisibleItemPosition();
+        if (target < 0) target = first;
+        speaker.seekToPage(target);
+    }
+
     private void updateIndicator() {
         if (ratios.length == 0) return;
         int pos = layoutManager.findFirstCompletelyVisibleItemPosition();
@@ -789,6 +813,7 @@ public class PdfViewerActivity extends AppCompatActivity {
                         int p = Math.max(1, Math.min(total, Integer.parseInt(s)));
                         layoutManager.scrollToPositionWithOffset(p - 1, 0);
                         updateIndicator();
+                        if (speaker != null && speaker.isActive()) speaker.seekToPage(p - 1);
                     } catch (NumberFormatException ignored) {
                     }
                 })

@@ -493,6 +493,14 @@ final class PdfSpeaker {
         jumpToPage(target, wasPaused);
     }
 
+    /** انتقال المستخدم لصفحة أخرى أثناء القراءة: نعيد تجهيز القراءة من تلك الصفحة. */
+    void seekToPage(int page) {
+        if (sourceFile == null || state == State.IDLE || pageCount <= 0) return;
+        int target = Math.max(0, Math.min(pageCount - 1, page));
+        if (target == currentPage && currentText != null) return;
+        jumpToPage(target, state == State.PAUSED);
+    }
+
     private void jumpToPage(int page, boolean stayPaused) {
         session++;
         hardStopOutputs();

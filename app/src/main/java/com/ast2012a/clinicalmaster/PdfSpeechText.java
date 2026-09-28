@@ -125,7 +125,7 @@ final class PdfSpeechText {
                 stripper.setEndPage(pageIndex + 1);
                 stripper.setSortByPosition(false);
                 stripper.getText(doc);
-                List<Word> words = stripper.finish();
+                List<Word> words = dropRunningHeadersFooters(stripper.finish());
                 if (words.isEmpty()) return emptyPage(pageIndex);
                 return build(pageIndex, words, this);
             } catch (Throwable t) {
@@ -140,6 +140,29 @@ final class PdfSpeechText {
             } catch (Throwable ignored) {
             }
         }
+    }
+
+    /** حدود هامش رأس/تذييل الصفحة (نسبة من ارتفاع الصفحة). */
+    private static final float HEADER_BOTTOM = 0.078f;
+    private static final float FOOTER_TOP = 0.91f;
+    private static final int MIN_BODY_WORDS = 25;
+
+    /**
+     * يحذف رأس الصفحة المتكرر ("الفصل الأول"، عنوان الملف) وتذييلها (رقم الصفحة) من القراءة.
+     * يُطبَّق فقط لو في الصفحة نص أساسي كافٍ، حتى لا تضيع صفحات الغلاف/العناوين القليلة النص.
+     */
+    private static List<Word> dropRunningHeadersFooters(List<Word> words) {
+        int body = 0;
+        for (Word w : words) {
+            if (!(w.box.bottom < HEADER_BOTTOM || w.box.top > FOOTER_TOP)) body++;
+        }
+        if (body < MIN_BODY_WORDS) return words;
+        List<Word> out = new ArrayList<>(words.size());
+        for (Word w : words) {
+            if (w.box.bottom < HEADER_BOTTOM || w.box.top > FOOTER_TOP) continue;
+            out.add(w);
+        }
+        return out;
     }
 
     private static PageText emptyPage(int pageIndex) {
@@ -396,13 +419,29 @@ final class PdfSpeechText {
 
     private static boolean[] inferParagraphs(List<Word> words) {
         boolean[] flags = new boolean[words.size()];
+        // المسافة المعتادة بين سطرين في هذه الصفحة (الوسيط). الاعتماد على ارتفاع الحرف كان يعتبر
+        // كل سطر فقرة مستقلة في الملفات ذات التباعد المزدوج (وهذا كان يقطع الجملة عند نهاية كل سطر).
+        List<Float> pitches = new ArrayList<>();
+        for (int i = 1; i < words.size(); i++) {
+            Word prev = words.get(i - 1);
+            Word cur = words.get(i);
+            if (cur.line == prev.line) continue;
+            float dy = cur.box.top - prev.box.top;
+            if (dy > 0.002f) pitches.add(dy);
+        }
+        float median = -1f;
+        if (pitches.size() >= 3) {
+            java.util.Collections.sort(pitches);
+            median = pitches.get(pitches.size() / 2);
+        }
         for (int i = 1; i < words.size(); i++) {
             Word prev = words.get(i - 1);
             Word cur = words.get(i);
             if (cur.line == prev.line) continue;
             float lineH = Math.max(0.004f, prev.box.height());
             float dy = cur.box.top - prev.box.top;
-            if (dy > lineH * 2.1f || dy < -lineH * 2.4f) flags[i] = true;
+            float gap = median > 0 ? Math.max(median * 1.7f, lineH * 1.6f) : lineH * 2.1f;
+            if (dy > gap || dy < -lineH * 2.4f) flags[i] = true;
         }
         return flags;
     }
