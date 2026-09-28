@@ -1081,7 +1081,7 @@ final class PdfSpeaker {
         try {
             if (!cacheDir.exists()) //noinspection ResultOfMethodCallIgnored
                 cacheDir.mkdirs();
-            File f = File.createTempFile("c", ".mp3", cacheDir);
+            File f = File.createTempFile("tts_", ".mp3", cacheDir);
             try (FileOutputStream out = new FileOutputStream(f)) {
                 out.write(a.data);
             }
