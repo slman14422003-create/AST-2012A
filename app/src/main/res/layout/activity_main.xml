@@ -135,10 +135,9 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="20dp"
-                    android:background="@drawable/bg_glass_card"
+                    android:background="@drawable/bg_glass_card_pressed"
                     android:clickable="true"
                     android:focusable="true"
-                    android:foreground="?attr/selectableItemBackground"
                     android:orientation="vertical"
                     android:padding="16dp">
 
@@ -291,7 +290,6 @@
                 android:drawablePadding="8dp"
                 android:drawableTint="@color/accent_gold"
                 android:focusable="true"
-                android:foreground="?attr/selectableItemBackground"
                 android:gravity="center_vertical"
                 android:paddingStart="16dp"
                 android:paddingTop="9dp"
@@ -314,7 +312,6 @@
                 android:drawablePadding="8dp"
                 android:drawableTint="@color/white"
                 android:focusable="true"
-                android:foreground="?attr/selectableItemBackground"
                 android:gravity="center_vertical"
                 android:minHeight="44dp"
                 android:paddingStart="18dp"
@@ -449,7 +446,13 @@
         android:background="@drawable/bg_bottom_dock_modern"
         android:elevation="0dp"
         android:orientation="vertical"
-        android:paddingTop="6dp">
+        android:paddingTop="0dp">
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginBottom="10dp"
+            android:background="@color/glass_border_soft" />
 
         <HorizontalScrollView
             android:layout_width="match_parent"
