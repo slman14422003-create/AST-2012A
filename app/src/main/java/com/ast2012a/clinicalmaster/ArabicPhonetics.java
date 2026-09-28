@@ -202,6 +202,82 @@ final class ArabicPhonetics {
         return head + base + nm;
     }
 
+    // ------------------------------------------------------------------ 2b) واو الجماعة + الألف الفارقة
+
+    /** أفعال ناقصة ماضية واوها من أصل الفعل (دَعَوْا): تُنطق بفتحة ثم واو ساكنة لا بمدّ. */
+    private static final Map<String, String> DEFECTIVE_PAST = new HashMap<>();
+    /** كلمات تنتهي بـ "وا" وليست واو جماعة (الألف فيها تنوين أو جزء من الكلمة) فلا نمسّها. */
+    private static final java.util.Set<String> KEEP_WAW_ALIF = new java.util.HashSet<>(Arrays.asList(
+            "\u0639\u0641\u0648\u0627", "\u0644\u0647\u0648\u0627", "\u0639\u0644\u0648\u0627", "\u063A\u0644\u0648\u0627",
+            "\u0633\u0645\u0648\u0627", "\u0645\u0627\u0648\u0627"));
+
+    static {
+        DEFECTIVE_PAST.put("\u062F\u0639\u0648\u0627", "\u062F\u064E\u0639\u064E\u0648\u0652");   // دعوا
+        DEFECTIVE_PAST.put("\u0633\u0639\u0648\u0627", "\u0633\u064E\u0639\u064E\u0648\u0652");   // سعوا
+        DEFECTIVE_PAST.put("\u063A\u0632\u0648\u0627", "\u063A\u064E\u0632\u064E\u0648\u0652");   // غزوا
+        DEFECTIVE_PAST.put("\u0631\u062C\u0648\u0627", "\u0631\u064E\u062C\u064E\u0648\u0652");   // رجوا
+        DEFECTIVE_PAST.put("\u0646\u062C\u0648\u0627", "\u0646\u064E\u062C\u064E\u0648\u0652");   // نجوا
+        DEFECTIVE_PAST.put("\u0628\u062F\u0648\u0627", "\u0628\u064E\u062F\u064E\u0648\u0652");   // بدوا
+    }
+
+    private static String stripMarks(String w) {
+        StringBuilder sb = new StringBuilder(w.length());
+        for (int i = 0; i < w.length(); i++) {
+            char c = w.charAt(i);
+            if (!isMark(c)) sb.append(c);
+        }
+        return sb.toString();
+    }
+
+    private static boolean isBaseLetter(char c) {
+        return c >= 0x0621 && c <= 0x064A;
+    }
+
+    /**
+     * واو الجماعة تُكتب بألف بعدها لا تُنطق (تَجَمَّعُوا = tajammaʿū). المحركات الصوتية تقرأ "وا" كـ wā
+     * فيخرج "تجمّعْوَا". نحذف الألف الفارقة ونضمّ ما قبل الواو (لو بلا حركة) فتُنطق مدًّا صافيًا "ــوا" -> "ــُو".
+     * لا تُمَسّ الكلمات التي تنتهي بتنوين على الواو (عَفْوًا) ولا القصيرة (سوا/هوا).
+     */
+    static String fixJamaa(String w) {
+        if (w == null || w.length() < 4) return w;
+        final int n = w.length();
+        if (w.charAt(n - 1) != '\u0627') return w;
+        int j = n - 2;
+        while (j >= 0 && isMark(w.charAt(j))) j--;
+        if (j < 1 || w.charAt(j) != '\u0648') return w;
+        String wawMarks = w.substring(j + 1, n - 1);
+        boolean wawSukun = false;
+        for (int i = 0; i < wawMarks.length(); i++) {
+            char m = wawMarks.charAt(i);
+            if (m == SUKUN) wawSukun = true;
+            else if (m != DAMMA) return w; // فتحة/تنوين/شدّة/كسرة: ليست واو جماعة
+        }
+        int k = j - 1;
+        while (k >= 0 && isMark(w.charAt(k))) k--;
+        if (k < 0) return w;
+        char prev = w.charAt(k);
+        if (!isBaseLetter(prev) || prev == '\u0627' || prev == '\u0648' || prev == '\u0649') return w;
+        String plain = stripMarks(w);
+        if (plain.length() < 4) return w;
+        if (KEEP_WAW_ALIF.contains(plain)) return w;
+        if (w.equals(plain)) {
+            String def = DEFECTIVE_PAST.get(plain);
+            if (def != null) return def;
+        }
+        String prevMarks = w.substring(k + 1, j);
+        boolean prevHasVowel = false;
+        for (int i = 0; i < prevMarks.length(); i++) {
+            char m = prevMarks.charAt(i);
+            if (m >= 0x064B && m <= 0x0652 && m != SHADDA) prevHasVowel = true;
+        }
+        StringBuilder out = new StringBuilder(n);
+        out.append(w, 0, k + 1).append(prevMarks);
+        if (!prevHasVowel && !wawSukun) out.append(DAMMA); // ...عُو : مدّ الضمّ
+        out.append('\u0648');
+        if (wawSukun) out.append(SUKUN);
+        return orderMarks(out.toString());
+    }
+
     // ------------------------------------------------------------------ 3) القاموس
 
     private static final Map<String, String> LEX = new HashMap<>();
@@ -255,11 +331,75 @@ final class ArabicPhonetics {
                 "مرجع=مَرْجِع");
     }
 
+
+    /** كلمات تُطابَق بحروفها فقط (بلا سوابق) حتى لا تُخطَّأ: ظروف منصوبة بالتنوين وكلمات كثيرة الاستعمال. */
+    private static final Map<String, String> EXACT = new HashMap<>();
+
+    private static void ex(String... pairs) {
+        for (String p : pairs) {
+            int k = p.indexOf('=');
+            EXACT.put(p.substring(0, k), p.substring(k + 1));
+        }
+    }
+
+    static {
+        // ظروف وأحوال منصوبة بالتنوين (تُنطق "ـًا" لا "ـا")
+        ex("جدا=جِدًّا", "دائما=دَائِمًا", "غالبا=غَالِبًا", "أحيانا=أَحْيَانًا", "احيانا=أَحْيَانًا",
+                "تقريبا=تَقْرِيبًا", "مثلا=مَثَلًا", "خصوصا=خُصُوصًا", "عموما=عُمُومًا", "أولا=أَوَّلًا",
+                "اولا=أَوَّلًا", "ثانيا=ثَانِيًا", "ثالثا=ثَالِثًا", "رابعا=رَابِعًا", "خامسا=خَامِسًا",
+                "أخيرا=أَخِيرًا", "اخيرا=أَخِيرًا", "حاليا=حَالِيًّا", "سابقا=سَابِقًا", "لاحقا=لَاحِقًا",
+                "فورا=فَوْرًا", "تماما=تَمَامًا", "كثيرا=كَثِيرًا", "قليلا=قَلِيلًا", "نادرا=نَادِرًا",
+                "أساسا=أَسَاسًا", "اساسا=أَسَاسًا", "فعلا=فِعْلًا", "طبعا=طَبْعًا", "شكرا=شُكْرًا",
+                "عفوا=عَفْوًا", "أبدا=أَبَدًا", "ابدا=أَبَدًا", "معا=مَعًا", "حقا=حَقًّا", "ايضا=أَيْضًا",
+                "سريعا=سَرِيعًا", "بطيئا=بَطِيئًا", "جيدا=جَيِّدًا", "كاملا=كَامِلًا", "مؤقتا=مُؤَقَّتًا",
+                "إطلاقا=إِطْلَاقًا", "اطلاقا=إِطْلَاقًا", "نهائيا=نِهَائِيًّا", "تلقائيا=تِلْقَائِيًّا",
+                "مبدئيا=مَبْدَئِيًّا", "نسبيا=نِسْبِيًّا", "تدريجيا=تَدْرِيجِيًّا", "جزئيا=جُزْئِيًّا",
+                "كليا=كُلِّيًّا", "عمليا=عَمَلِيًّا", "نظريا=نَظَرِيًّا", "سريريا=سَرِيرِيًّا", "طبيا=طِبِّيًّا",
+                "علاجيا=عِلَاجِيًّا", "جراحيا=جِرَاحِيًّا", "وظيفيا=وَظِيفِيًّا", "يوميا=يَوْمِيًّا",
+                "أسبوعيا=أُسْبُوعِيًّا", "اسبوعيا=أُسْبُوعِيًّا", "شهريا=شَهْرِيًّا", "سنويا=سَنَوِيًّا",
+                "مرحبا=مَرْحَبًا", "أهلا=أَهْلًا", "سهلا=سَهْلًا", "صباحا=صَبَاحًا", "فقط=فَقَطْ",
+                "ربما=رُبَّمَا", "مائة=مِئَة", "مئة=مِئَة", "مئات=مِئَات", "ألف=أَلْف", "آلاف=آلَاف",
+                "مليون=مِلْيُون", "ملايين=مَلَايِين");
+        // أفعال وأدوات كثيرة الورود في النصوص العلمية (بلا حركة إعراب على الآخر)
+        ex("يمكن=يُمْكِن", "يجب=يَجِب", "ينبغي=يَنْبَغِي", "يؤدي=يُؤَدِّي", "تؤدي=تُؤَدِّي", "يساعد=يُسَاعِد",
+                "تساعد=تُسَاعِد", "يسبب=يُسَبِّب", "تسبب=تُسَبِّب", "يعتمد=يَعْتَمِد", "يختلف=يَخْتَلِف",
+                "تختلف=تَخْتَلِف", "يتراوح=يَتَرَاوَح", "تتراوح=تَتَرَاوَح", "يعمل=يَعْمَل", "تعمل=تَعْمَل",
+                "يحدث=يَحْدُث", "تحدث=تَحْدُث", "يظهر=يَظْهَر", "تظهر=تَظْهَر", "يزيد=يَزِيد", "تزيد=تَزِيد",
+                "يقلل=يُقَلِّل", "تقلل=تُقَلِّل", "يؤثر=يُؤَثِّر", "تؤثر=تُؤَثِّر", "يتم=يَتِمّ", "تتم=تَتِمّ",
+                "يكون=يَكُون", "تكون=تَكُون", "كان=كَانَ", "كانت=كَانَتْ", "كانوا=كَانُو", "يوجد=يُوجَد",
+                "توجد=تُوجَد", "نحتاج=نَحْتَاج", "يحتاج=يَحْتَاج", "تحتاج=تَحْتَاج", "لاحظ=لَاحِظ",
+                "تذكر=تَذَكَّر", "ملاحظة=مُلَاحَظَة", "تنبيه=تَنْبِيه",
+                "تحذير=تَحْذِير", "احتياطات=اِحْتِيَاطَات", "موانع=مَوَانِع", "استطباب=اِسْتِطْبَاب",
+                "استطبابات=اِسْتِطْبَابَات", "مضاد=مُضَاد", "مضادات=مُضَادَّات", "آثار=آثَار",
+                "جانبية=جَانِبِيَّة", "تأثير=تَأْثِير", "تأثيرات=تَأْثِيرَات", "فعالية=فَعَّالِيَّة",
+                "فعال=فَعَّال", "آمن=آمِن", "آمنة=آمِنَة", "خطر=خَطَر", "مخاطر=مَخَاطِر", "خطير=خَطِير");
+    }
+
     private static final String[] CONJ = {"", "\u0648", "\u0641"};
     private static final String[] PREP = {"", "\u0628", "\u0643", "\u0644"};
 
     /** تشكيل كلمة عربية مجرّدة من القاموس (مع سوابقها)، أو null لو غير موجودة. */
     static String lookup(String plain) {
+        if (plain == null || plain.length() < 2) return null;
+        String ex = EXACT.get(plain);
+        if (ex != null) return ex;
+        String v = lookupCore(plain);
+        if (v != null) return v;
+        // كلمة + ضمير متصل (عضلاتها، أعصابهم): نشكّل الجذع من القاموس ونلصق الضمير
+        for (int i = 0; i < SUF_PLAIN.length; i++) {
+            String suf = SUF_PLAIN[i];
+            if (plain.length() - suf.length() < 3 || !plain.endsWith(suf)) continue;
+            String stem = lookupCore(plain.substring(0, plain.length() - suf.length()));
+            if (stem != null) return orderMarks(stem + SUF_SHAPED[i]);
+        }
+        return null;
+    }
+
+    private static final String[] SUF_PLAIN = {"\u0647\u0645\u0627", "\u0647\u0645", "\u0647\u0646", "\u0647\u0627", "\u0643\u0645"};
+    private static final String[] SUF_SHAPED = {"\u0647\u064F\u0645\u064E\u0627", "\u0647\u064F\u0645", "\u0647\u064F\u0646\u0651\u064E",
+            "\u0647\u064E\u0627", "\u0643\u064F\u0645"};
+
+    private static String lookupCore(String plain) {
         if (plain == null || plain.length() < 2) return null;
         for (String cj : CONJ) {
             if (!cj.isEmpty() && !plain.startsWith(cj)) continue;

@@ -717,7 +717,11 @@ final class PdfSpeaker {
     void setCloudEngine(boolean cloud) {
         prefs.edit().putString(KEY_ENGINE, cloud ? "cloud" : "device").apply();
         cloudBroken = false;
+        cloudActive = false;
         badCloudVoices.clear();
+        badVoices.clear();
+        usedVoice.clear();
+        lastAppliedLang = null;
         cloudVoiceSwitches = 0;
         resetCloud();
         if (state != State.IDLE) restartFromCurrentPoint();
@@ -743,6 +747,10 @@ final class PdfSpeaker {
         e.apply();
         badCloudVoices.clear();
         cloudVoiceSwitches = 0;
+        // اختيار المستخدم صوتًا جديدًا يعني أنه يريد الصوت العصبي: نلغي أي تحويل سابق لصوت الجهاز
+        // (كان يبقى مفعّلًا طوال الجلسة فيبدو أن تبديل الصوت لا يعمل).
+        cloudBroken = false;
+        cloudActive = false;
         resetCloud();
         if (state != State.IDLE) restartFromCurrentPoint();
     }
@@ -795,8 +803,10 @@ final class PdfSpeaker {
         else e.putString("voice_" + lang, name);
         e.apply();
         usedVoice.remove(lang);
+        if (name != null) badVoices.remove(name); // صوت فشل سابقًا ثم اختاره المستخدم صراحةً: نجرّبه من جديد
         lastAppliedLang = null;
-        if (state == State.PLAYING && !cloudActive) restartFromCurrentPoint();
+        // نعيد القراءة فورًا بالصوت الجديد لو كانت تعمل على صوت الجهاز (أو متوقفة مؤقتًا)
+        if (state != State.IDLE && (!isCloudEngine() || cloudBroken || !cloudActive)) restartFromCurrentPoint();
     }
 
     List<VoiceOption> listVoices(String lang) {

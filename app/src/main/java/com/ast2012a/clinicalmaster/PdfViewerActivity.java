@@ -1479,8 +1479,10 @@ public class PdfViewerActivity extends AppCompatActivity {
             }
             voiceDialog = new ClaudeDialog(this)
                     .setTitle("صوت " + TTS_LANG_LABELS[langIdx] + " (أونلاين)")
-                    .setSingleChoiceItems(cloudLabels, cloudChecked, (d, which) ->
-                            speaker.setPreferredCloudVoice(lang, which == 0 ? null : cloudOpts.get(which - 1).name))
+                    .setSingleChoiceItems(cloudLabels, cloudChecked, (d, which) -> {
+                        speaker.setPreferredCloudVoice(lang, which == 0 ? null : cloudOpts.get(which - 1).name);
+                        Toast.makeText(this, "تم تغيير الصوت - سيُطبَّق فورًا على القراءة", Toast.LENGTH_SHORT).show();
+                    })
                     .show();
             return;
         }
@@ -1499,8 +1501,10 @@ public class PdfViewerActivity extends AppCompatActivity {
         }
         voiceDialog = new ClaudeDialog(this)
                 .setTitle("صوت " + TTS_LANG_LABELS[langIdx])
-                .setSingleChoiceItems(labels, checked, (d, which) ->
-                        speaker.setPreferredVoice(lang, which == 0 ? null : opts.get(which - 1).name))
+                .setSingleChoiceItems(labels, checked, (d, which) -> {
+                    speaker.setPreferredVoice(lang, which == 0 ? null : opts.get(which - 1).name);
+                    Toast.makeText(this, "تم تغيير الصوت - سيُطبَّق فورًا على القراءة", Toast.LENGTH_SHORT).show();
+                })
                 .show();
     }
 

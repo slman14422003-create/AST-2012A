@@ -503,6 +503,7 @@ final class SpeechPrep {
             String w = parts[k];
             if (ArabicPhonetics.hasArabic(w)) {
                 w = diacritize(w);
+                w = ArabicPhonetics.fixJamaa(w); // تجمعوا: واو الجماعة بلا نطق الألف بعدها
                 if (assist && pausal && k == parts.length - 1) w = ArabicPhonetics.pausal(w);
             } else if (spellAcronyms && englishContext(lang)) {
                 w = acronym(w);
