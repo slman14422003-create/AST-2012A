@@ -1183,6 +1183,7 @@ public class PdfViewerActivity extends AppCompatActivity {
     private TextView ttsStatus;
     private TextView ttsSpeed;
     private ImageButton ttsPlay;
+    private VoiceWaveView ttsWave;
     private int speakingPage = -1;
     private List<RectF> speakingSentence = new ArrayList<>();
     private RectF speakingWord;
@@ -1193,6 +1194,13 @@ public class PdfViewerActivity extends AppCompatActivity {
         ttsStatus = findViewById(R.id.tts_status);
         ttsSpeed = findViewById(R.id.tts_speed);
         ttsPlay = findViewById(R.id.tts_play);
+        ttsWave = findViewById(R.id.tts_wave);
+        // الموجة تقرأ مستوى الصوت الحقيقي من القارئ في كل إطار (الصوت العصبي: من غلاف الصوت، الجهاز: تقديري)
+        ttsWave.setLevelSource(() -> speaker != null ? speaker.getLevel() : 0f);
+        // ارتفاع المشغّل يتغيّر بتغيّر الخط/الشاشة: نُبقي هوامش الصفحات ومؤشر الصفحة مطابقة له
+        ttsBar.addOnLayoutChangeListener((v, left, top, right, bottom, oldL, oldT, oldR, oldB) -> {
+            if (ttsBar.getVisibility() == View.VISIBLE && (bottom - top) != (oldB - oldT)) applyTtsInsets(true);
+        });
         ttsPlay.setOnClickListener(v -> {
             if (speaker != null) speaker.togglePlayPause();
         });
@@ -1217,6 +1225,7 @@ public class PdfViewerActivity extends AppCompatActivity {
         if (pos < 0) pos = layoutManager.findFirstVisibleItemPosition();
         if (pos < 0) pos = 0;
         showTtsBar(true);
+        ttsWave.setPaused(false);
         ttsStatus.setText(BidiText.fix("جارٍ تجهيز القراءة..."));
         updateSpeedLabel();
         speaker.play(currentFile, pos);
@@ -1230,12 +1239,47 @@ public class PdfViewerActivity extends AppCompatActivity {
 
     private void showTtsBar(boolean show) {
         if (ttsBar == null) return;
+        final boolean was = ttsBar.getVisibility() == View.VISIBLE;
+        ttsBar.animate().cancel();
         ttsBar.setVisibility(show ? View.VISIBLE : View.GONE);
-        pages.setPadding(pages.getPaddingLeft(), pages.getPaddingTop(), pages.getPaddingRight(),
-                Ui.dp(this, 28) + (show ? Ui.dp(this, 100) : 0));
-        pageIndicator.setTranslationY(show ? -Ui.dp(this, 104) : 0f);
+        if (show && !was) {
+            // دخول ناعم: ينزلق المشغّل من الأسفل مع ظهور تدريجي
+            ttsBar.setAlpha(0f);
+            ttsBar.setTranslationY(Ui.dp(this, 28));
+            ttsBar.animate().alpha(1f).translationY(0f).setDuration(260)
+                    .setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
+        } else {
+            ttsBar.setAlpha(1f);
+            ttsBar.setTranslationY(0f);
+        }
+        applyTtsInsets(show);
         if (show) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    }
+
+    /** يترك مساحة أسفل الصفحات ومؤشر الصفحة بحسب ارتفاع المشغّل الفعلي. */
+    private void applyTtsInsets(boolean show) {
+        if (pages == null || ttsBar == null) return;
+        int barH = 0;
+        if (show) {
+            int h = ttsBar.getHeight();
+            barH = (h > 0 ? h : Ui.dp(this, 148)) + Ui.dp(this, 14);
+        }
+        pages.setPadding(pages.getPaddingLeft(), pages.getPaddingTop(), pages.getPaddingRight(),
+                Ui.dp(this, 28) + barH);
+        pageIndicator.setTranslationY(show ? -(barH + Ui.dp(this, 4)) : 0f);
+    }
+
+    /** سطر حالة المشغّل: (جارٍ القراءة | متوقف مؤقتًا | جارٍ التحضير) + رقم الصفحة. */
+    private void updateTtsStatus(int page) {
+        if (ttsStatus == null) return;
+        PdfSpeaker.State st = speaker != null ? speaker.getState() : PdfSpeaker.State.LOADING;
+        String label;
+        if (st == PdfSpeaker.State.PAUSED) label = "متوقف مؤقتًا";
+        else if (st == PdfSpeaker.State.LOADING) label = "جارٍ التحضير";
+        else label = "جارٍ القراءة";
+        String text = page >= 0 ? label + " · الصفحة " + (page + 1) + " / " + ratios.length : label + "...";
+        ttsStatus.setText(BidiText.fix(text));
     }
 
     private void cycleSpeed() {
@@ -1269,10 +1313,14 @@ public class PdfViewerActivity extends AppCompatActivity {
                     break;
                 case PAUSED:
                     ttsPlay.setImageResource(R.drawable.ic_tts_play);
+                    ttsWave.setPaused(true);
+                    updateTtsStatus(speakingPage >= 0 ? speakingPage : (speaker != null ? speaker.getCurrentPage() : -1));
                     getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
                     break;
                 default:
                     ttsPlay.setImageResource(R.drawable.ic_tts_pause);
+                    ttsWave.setPaused(false);
+                    updateTtsStatus(speakingPage >= 0 ? speakingPage : (speaker != null ? speaker.getCurrentPage() : -1));
                     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
                     break;
             }
@@ -1285,7 +1333,7 @@ public class PdfViewerActivity extends AppCompatActivity {
             speakingPage = page;
             layoutManager.scrollToPositionWithOffset(page, 0);
             updateIndicator();
-            ttsStatus.setText(BidiText.fix("القراءة · الصفحة " + (page + 1) + " / " + ratios.length));
+            updateTtsStatus(page);
         }
 
         @Override

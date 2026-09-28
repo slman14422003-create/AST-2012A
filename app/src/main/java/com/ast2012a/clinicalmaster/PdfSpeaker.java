@@ -11,6 +11,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
 import android.speech.tts.Voice;
@@ -138,6 +139,9 @@ final class PdfSpeaker {
         final int[] wordChar;
         /** النص المنطوق الفعلي (بعد تنظيفه) وخريطته إلى مواضع النص الأصلي - لسلامة التظليل. */
         final SpeechPrep.Spoken spoken;
+        /** غلاف علو الصوت (0..1 لكل AudioEnvelope.WINDOW_MS) لتحريك موجة المشغّل؛ يُحسب في خيط خلفي. */
+        volatile float[] env;
+        volatile boolean envBusy;
 
         CloudAudio(EdgeTtsClient.Result r, SpeechPrep.Spoken spoken) {
             this.data = r.audio;
@@ -152,6 +156,9 @@ final class PdfSpeaker {
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private final ExecutorService synthPool = Executors.newFixedThreadPool(2);
+    private final ExecutorService envPool = Executors.newSingleThreadExecutor();
+    /** آخر لحظة (uptime) بدأت فيها كلمة على صوت الجهاز - لتحريك الموجة تقديريًا (لا نصل لعينات صوت الجهاز). */
+    private volatile long lastWordAt = 0L;
     private final SharedPreferences prefs;
     private final AudioManager audio;
     private final File cacheDir;
@@ -333,6 +340,7 @@ final class PdfSpeaker {
         if (stale(id)) return;
         if (id[2] < 0 || id[2] >= currentText.chunks.size()) return;
         deviceErrStreak = 0;
+        lastWordAt = SystemClock.uptimeMillis();
         PdfSpeechText.Chunk c = currentText.chunks.get(id[2]);
         currentChunk = id[2];
         currentWord = Math.max(c.firstWord, Math.min(c.lastWord, currentText.wordAtOffset(c.start + id[3])));
@@ -344,6 +352,7 @@ final class PdfSpeaker {
         if (stale(id)) return;
         if (id[2] < 0 || id[2] >= currentText.chunks.size()) return;
         if (end - start > 80) return; // بعض المحركات تعطي نطاق الجملة كلها - نتجاهله
+        lastWordAt = SystemClock.uptimeMillis();
         PdfSpeechText.Chunk c = currentText.chunks.get(id[2]);
         int off = start;
         SpeechPrep.Spoken ds = deviceSpoken;
@@ -389,6 +398,74 @@ final class PdfSpeaker {
 
     State getState() {
         return state;
+    }
+
+    // ------------------------------------------------------------------ مستوى الصوت (لموجة المشغّل)
+
+    /**
+     * مستوى الصوت الحالي 0..1 لرسم الموجة. للصوت العصبي: من غلاف الصوت الحقيقي عند موضع التشغيل
+     * الحالي (نفس تعويض التأخير المستعمل لتظليل الكلمة). لصوت الجهاز (لا نصل لعيّناته): نبضة
+     * تقديرية مع كل كلمة منطوقة. يُستدعى من الخيط الرئيسي فقط.
+     */
+    float getLevel() {
+        if (state != State.PLAYING) return 0f;
+        final MediaPlayer p = player;
+        if (cloudActive && (p == null || !playerPrepared || playerPaused)) {
+            return 0.05f; // فجوة بين جملتين (تجهيز الصوت التالي): موجة هادئة
+        }
+        if (cloudActive) {
+            final CloudAudio a = playerAudio;
+            final float[] env = a != null ? a.env : null;
+            if (env != null && env.length > 1) {
+                int pos;
+                try {
+                    pos = p.getCurrentPosition();
+                } catch (Throwable t) {
+                    return 0f;
+                }
+                pos -= (int) (CLOUD_LAG_MS * Math.max(0.5f, rate));
+                if (pos < 0) return 0f;
+                float f = pos / (float) AudioEnvelope.WINDOW_MS;
+                int i = (int) f;
+                if (i >= env.length) return 0f;
+                float v0 = env[i];
+                float v1 = i + 1 < env.length ? env[i + 1] : v0;
+                return v0 + (v1 - v0) * (f - i);
+            }
+        }
+        return simulatedLevel(SystemClock.uptimeMillis());
+    }
+
+    private float simulatedLevel(long now) {
+        if (cloudActive) { // الغلاف لم يجهز بعد (أو تعذّر فكّه): حركة كلام تقديرية
+            double t = now / 1000.0;
+            double v = 0.36 + 0.24 * Math.sin(t * 11.0) + 0.14 * Math.sin(t * 27.0 + 1.3);
+            return (float) Math.max(0.08, Math.min(1.0, v));
+        }
+        long since = now - lastWordAt;
+        if (lastWordAt > 0L && since >= 0L && since < 1200L) {
+            float pulse = (float) Math.exp(-since / 170.0);
+            float wob = 0.85f + 0.15f * (float) Math.sin(now / 43.0);
+            return Math.min(1f, (0.22f + 0.62f * pulse) * wob);
+        }
+        return 0.05f;
+    }
+
+    /** يحسب غلاف علو الصوت للجملة (مرة واحدة) في خيط خلفي. */
+    private void ensureEnvelope(final CloudAudio a) {
+        if (a == null || a.env != null || a.envBusy || a.data == null) return;
+        a.envBusy = true;
+        try {
+            envPool.execute(() -> {
+                try {
+                    a.env = AudioEnvelope.fromEncoded(a.data);
+                } catch (Throwable ignored) {
+                }
+                a.envBusy = false;
+            });
+        } catch (RejectedExecutionException e) {
+            a.envBusy = false;
+        }
     }
 
     boolean isActive() {
@@ -1367,6 +1444,7 @@ final class PdfSpeaker {
             return;
         }
         applySpeed(mp);
+        ensureEnvelope(playerAudio);
         if (state != State.PLAYING) setState(State.PLAYING);
         if (currentChunk >= 0 && currentChunk < currentText.chunks.size()) {
             PdfSpeechText.Chunk c = currentText.chunks.get(currentChunk);
@@ -1466,6 +1544,7 @@ final class PdfSpeaker {
         }
         CloudAudio a = cloudReady.get(key);
         if (a == null || a.data == null || a.data.length < 200) return;
+        ensureEnvelope(a); // تجهيز غلاف الصوت مسبقًا كي تكون الموجة جاهزة عند بدء الجملة
         try {
             if (!cacheDir.exists()) //noinspection ResultOfMethodCallIgnored
                 cacheDir.mkdirs();
@@ -1697,6 +1776,7 @@ final class PdfSpeaker {
         }
         tts = null;
         synthPool.shutdownNow();
+        envPool.shutdownNow();
         releaseNext();
         io.execute(() -> {
             if (source != null) source.close();
