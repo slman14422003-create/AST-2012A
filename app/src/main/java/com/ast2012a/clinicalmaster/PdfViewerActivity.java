@@ -1144,8 +1144,8 @@ public class PdfViewerActivity extends AppCompatActivity {
     // ------------------------------------------------------------------ القراءة الصوتية (TTS مجاني)
 
     /**
-     * قراءة الملف بصوت عالٍ (مجانًا وبدون إنترنت) عبر محرك النطق المدمج في أندرويد -
-     * التفاصيل في PdfSpeaker / PdfSpeechText. أثناء القراءة تُظلَّل الجملة الحالية والكلمة
+     * قراءة الملف بصوت عالٍ (مجانًا): صوت عصبي أونلاين افتراضيًا، مع رجوع تلقائي لمحرك النطق
+     * المدمج في أندرويد (بدون إنترنت) - التفاصيل في PdfSpeaker / EdgeTtsClient / PdfSpeechText. أثناء القراءة تُظلَّل الجملة الحالية والكلمة
      * المنطوقة فوق الصفحة (PdfHighlightView)، وتنقلب الصفحات تلقائيًا.
      */
     private static final float[] TTS_SPEEDS = {0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f};
@@ -1357,20 +1357,49 @@ public class PdfViewerActivity extends AppCompatActivity {
 
     private void showVoiceSettings() {
         if (speaker == null) return;
-        String[] items = new String[TTS_LANG_LABELS.length + 1];
-        for (int i = 0; i < TTS_LANG_LABELS.length; i++) items[i] = "صوت " + TTS_LANG_LABELS[i];
-        items[TTS_LANG_LABELS.length] = "إعدادات محرك النطق في النظام";
+        final boolean cloud = speaker.isCloudEngine();
+        String[] items = new String[TTS_LANG_LABELS.length + 2];
+        items[0] = cloud
+                ? "المحرك: صوت عصبي أونلاين (مجاني) ✓ - اضغط للتحويل لصوت الجهاز"
+                : "المحرك: صوت الجهاز (يعمل بدون إنترنت) - اضغط للتحويل للصوت العصبي";
+        for (int i = 0; i < TTS_LANG_LABELS.length; i++) items[i + 1] = "صوت " + TTS_LANG_LABELS[i];
+        items[TTS_LANG_LABELS.length + 1] = "إعدادات محرك النطق في النظام";
         voiceDialog = new ClaudeDialog(this)
                 .setTitle("إعدادات القراءة الصوتية")
                 .setItems(items, (d, which) -> {
-                    if (which == TTS_LANG_CODES.length) openSystemTtsSettings();
-                    else showVoicePicker(which);
+                    if (which == 0) {
+                        speaker.setCloudEngine(!cloud);
+                        Toast.makeText(this, cloud ? "تم التحويل لصوت الجهاز." : "تم التحويل للصوت العصبي الأونلاين.",
+                                Toast.LENGTH_SHORT).show();
+                    } else if (which == TTS_LANG_CODES.length + 1) {
+                        openSystemTtsSettings();
+                    } else {
+                        showVoicePicker(which - 1);
+                    }
                 })
                 .show();
     }
 
     private void showVoicePicker(int langIdx) {
         final String lang = TTS_LANG_CODES[langIdx];
+        if (speaker.isCloudEngine()) {
+            // أصوات عصبية أونلاين (مجانية) - قائمة ثابتة لكل لغة
+            final List<PdfSpeaker.VoiceOption> cloudOpts = speaker.listCloudVoices(lang);
+            String[] cloudLabels = new String[cloudOpts.size() + 1];
+            cloudLabels[0] = "تلقائي (الصوت الافتراضي)";
+            int cloudChecked = 0;
+            String cloudSaved = speaker.getPreferredCloudVoice(lang);
+            for (int i = 0; i < cloudOpts.size(); i++) {
+                cloudLabels[i + 1] = cloudOpts.get(i).label;
+                if (cloudOpts.get(i).name.equals(cloudSaved)) cloudChecked = i + 1;
+            }
+            voiceDialog = new ClaudeDialog(this)
+                    .setTitle("صوت " + TTS_LANG_LABELS[langIdx] + " (أونلاين)")
+                    .setSingleChoiceItems(cloudLabels, cloudChecked, (d, which) ->
+                            speaker.setPreferredCloudVoice(lang, which == 0 ? null : cloudOpts.get(which - 1).name))
+                    .show();
+            return;
+        }
         final List<PdfSpeaker.VoiceOption> opts = speaker.listVoices(lang);
         if (opts.isEmpty()) {
             offerInstallVoice(lang, false);

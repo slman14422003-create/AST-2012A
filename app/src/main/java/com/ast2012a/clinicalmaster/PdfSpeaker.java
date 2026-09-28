@@ -5,6 +5,8 @@ import android.content.SharedPreferences;
 import android.media.AudioAttributes;
 import android.media.AudioFocusRequest;
 import android.media.AudioManager;
+import android.media.MediaPlayer;
+import android.media.PlaybackParams;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -14,6 +16,7 @@ import android.speech.tts.UtteranceProgressListener;
 import android.speech.tts.Voice;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -24,20 +27,21 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 
 /**
- * القراءة الصوتية لملف PDF - مجانية بالكامل وتعمل بدون إنترنت، عبر محرك النطق المدمج
- * في أندرويد (android.speech.tts.TextToSpeech). أفضل جودة: "خدمات Google للكلام"
- * (أصوات عصبية عالية الجودة بالعربية والإنجليزية والفرنسية والتركية)؛ والكلاس يختار
- * تلقائيًا أعلى صوت جودةً مثبّتًا على الجهاز لكل لغة (Voice.getQuality)، ويسمح للمستخدم
- * باختيار صوت آخر.
+ * القراءة الصوتية لملف PDF - مجانية بالكامل، بمحرّكين:
  *
- * كيف يحقق الدقة:
- *  - نص الصفحة يُستخرج كلمة-كلمة من طبقة النص الحقيقية (PdfSpeechText) وليس OCR.
- *  - يُقسَّم لجمل قصيرة (نبرة صحيحة) وكل جملة بلغتها (عربي/إنجليزي...) بالصوت المناسب.
- *  - onRangeStart (أندرويد 8+) يعطي الكلمة المنطوقة لحظيًا لتظليلها فوق الصفحة.
- *  - الانتقال التلقائي للصفحة التالية، إيقاف مؤقت واستئناف من نفس الكلمة، وتحكّم بالسرعة.
- *  - احترام تركيز الصوت (مكالمة/موسيقى) وإيقاف تلقائي عند مقاطعته.
+ *  1) صوت عصبي أونلاين (الافتراضي): أصوات Microsoft Neural (عربية بعدة لهجات + إنجليزي + فرنسي + تركي)
+ *     عبر EdgeTtsClient - جودة قريبة جدًا من الصوت البشري، بدون مفتاح ولا حساب. الجمل التالية
+ *     تُجهَّز مسبقًا أثناء نطق الحالية فلا يوجد فراغ بين الجمل.
+ *  2) صوت الجهاز (android.speech.tts.TextToSpeech): يعمل بدون إنترنت، وهو الاحتياطي التلقائي
+ *     لو فشل الصوت الأونلاين.
+ *
+ * تسلسل القراءة: جملة واحدة في كل مرة (مقطع = Chunk)، وعند انتهائها ننتقل للتي بعدها. كل عملية نطق
+ * تحمل "رمزًا" (speakToken) وأي ردّ متأخر أو مكرّر من محرك سابق يُتجاهل تمامًا - وهذا يمنع إعادة
+ * قراءة السطر التالي. ولا نطلب تركيز الصوت (AudioFocus) مع صوت الجهاز لأن محرك النطق يديره بنفسه؛
+ * تنافس التطبيق مع المحرك كان يسبّب إيقافًا/استئنافًا وهميًا بين الجمل وبالتالي إعادة القراءة.
  *
  * كل ردود Listener تصل على الخيط الرئيسي.
  */
@@ -78,14 +82,58 @@ final class PdfSpeaker {
 
     private static final String PREFS = "pdf_tts";
     private static final String KEY_RATE = "rate";
-    private static final int END = -1;
+    private static final String KEY_ENGINE = "engine"; // cloud | device
+    private static final int POLL_MS = 45;
+
+    /** أصوات الأونلاين: {اللغة, اسم الصوت, الوصف}. الأول لكل لغة هو الافتراضي. */
+    private static final String[][] CLOUD_VOICES = {
+            {"ar", "ar-SA-ZariyahNeural", "زارية · سعودية · أنثى"},
+            {"ar", "ar-SA-HamedNeural", "حامد · سعودي · ذكر"},
+            {"ar", "ar-SY-AmanyNeural", "أماني · سورية · أنثى"},
+            {"ar", "ar-SY-LaithNeural", "ليث · سوري · ذكر"},
+            {"ar", "ar-EG-SalmaNeural", "سلمى · مصرية · أنثى"},
+            {"ar", "ar-EG-ShakirNeural", "شاكر · مصري · ذكر"},
+            {"ar", "ar-JO-SanaNeural", "سناء · أردنية · أنثى"},
+            {"ar", "ar-JO-TaimNeural", "تيم · أردني · ذكر"},
+            {"ar", "ar-LB-LaylaNeural", "ليلى · لبنانية · أنثى"},
+            {"ar", "ar-LB-RamiNeural", "رامي · لبناني · ذكر"},
+            {"en", "en-US-EmmaMultilingualNeural", "Emma · أمريكية · أنثى"},
+            {"en", "en-US-AndrewMultilingualNeural", "Andrew · أمريكي · ذكر"},
+            {"en", "en-US-AvaMultilingualNeural", "Ava · أمريكية · أنثى"},
+            {"en", "en-US-BrianMultilingualNeural", "Brian · أمريكي · ذكر"},
+            {"en", "en-US-AriaNeural", "Aria · أمريكية · أنثى"},
+            {"en", "en-US-GuyNeural", "Guy · أمريكي · ذكر"},
+            {"en", "en-GB-SoniaNeural", "Sonia · بريطانية · أنثى"},
+            {"en", "en-GB-RyanNeural", "Ryan · بريطاني · ذكر"},
+            {"fr", "fr-FR-VivienneMultilingualNeural", "Vivienne · أنثى"},
+            {"fr", "fr-FR-RemyMultilingualNeural", "Rémy · ذكر"},
+            {"fr", "fr-FR-DeniseNeural", "Denise · أنثى"},
+            {"fr", "fr-FR-HenriNeural", "Henri · ذكر"},
+            {"tr", "tr-TR-EmelNeural", "Emel · أنثى"},
+            {"tr", "tr-TR-AhmetNeural", "Ahmet · ذكر"},
+    };
+
+    /** صوت جملة واحدة جاهز للتشغيل (أو null عند الفشل). */
+    private static final class CloudAudio {
+        final byte[] data;
+        final int[] wordMs;
+        final int[] wordChar;
+
+        CloudAudio(EdgeTtsClient.Result r) {
+            this.data = r.audio;
+            this.wordMs = r.wordMs;
+            this.wordChar = r.wordChar;
+        }
+    }
 
     private final Context app;
     private final Listener listener;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService io = Executors.newSingleThreadExecutor();
+    private final ExecutorService synthPool = Executors.newFixedThreadPool(2);
     private final SharedPreferences prefs;
     private final AudioManager audio;
+    private final File cacheDir;
 
     private TextToSpeech tts;
     private boolean ttsReady = false;
@@ -100,7 +148,8 @@ final class PdfSpeaker {
 
     // حالة التشغيل (الخيط الرئيسي فقط)
     private State state = State.IDLE;
-    private volatile int session = 0;
+    private volatile int session = 0;   // تحميل الصفحات
+    private int speakToken = 0;         // كل عملية نطق (مقطع) لها رمز؛ الردود القديمة تُهمَل
     private int currentPage = -1;
     private PdfSpeechText.PageText currentText;
     private int currentChunk = 0;
@@ -111,12 +160,31 @@ final class PdfSpeaker {
     private boolean anyText = false;
     private float rate;
     private String lastAppliedLang = null;
+    private int deviceErrStreak = 0;
     private final Set<String> notifiedMissing = new HashSet<>();
     private final Set<String> badVoices = new HashSet<>();
     private final Map<String, Voice> usedVoice = new HashMap<>();
 
-    // تركيز الصوت
+    // الصوت الأونلاين
+    private boolean cloudBroken = false;   // فشل خلال هذه الجلسة -> نستخدم صوت الجهاز
+    private boolean cloudActive = false;   // المقطع الحالي يُنطق عبر الأونلاين
+    private int cloudGen = 0;
+    private int cloudPlayErrStreak = 0;
+    private final Map<String, CloudAudio> cloudReady = new HashMap<>();
+    private final Set<String> cloudPending = new HashSet<>();
+    private final Set<String> cloudRetried = new HashSet<>();
+    private String awaitingKey = null;
+    private int awaitingToken = 0;
+    private int awaitingChunk = 0;
+    private MediaPlayer player;
+    private File playerFile;
+    private CloudAudio playerAudio;
+    private boolean playerPrepared = false;
+    private boolean playerPaused = false;
+
+    // تركيز الصوت (للصوت الأونلاين فقط)
     private AudioFocusRequest focusRequest;
+    private boolean focusHeld = false;
     private boolean resumeOnFocusGain = false;
 
     PdfSpeaker(Context context, Listener listener) {
@@ -125,19 +193,23 @@ final class PdfSpeaker {
         this.prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         this.audio = (AudioManager) app.getSystemService(Context.AUDIO_SERVICE);
         this.rate = Math.max(0.5f, Math.min(2.5f, prefs.getFloat(KEY_RATE, 1.0f)));
+        this.cacheDir = new File(app.getCacheDir(), "tts_cloud");
+        cleanCacheDir();
         initTts();
     }
 
-    // ------------------------------------------------------------------ المحرك
+    // ------------------------------------------------------------------ محرك الجهاز
 
     private void initTts() {
         try {
-            tts = new TextToSpeech(app, status -> {
+            tts = new TextToSpeech(app, status -> main.post(() -> {
                 if (status != TextToSpeech.SUCCESS) {
                     ttsFailed = true;
-                    pendingAfterInit = null;
-                    setState(State.IDLE);
-                    listener.onEngineUnavailable();
+                    if (pendingAfterInit != null) {
+                        pendingAfterInit = null;
+                        setState(State.IDLE);
+                        listener.onEngineUnavailable();
+                    }
                     return;
                 }
                 ttsReady = true;
@@ -154,10 +226,9 @@ final class PdfSpeaker {
                 Runnable r = pendingAfterInit;
                 pendingAfterInit = null;
                 if (r != null) r.run();
-            });
+            }));
         } catch (Throwable t) {
             ttsFailed = true;
-            main.post(listener::onEngineUnavailable);
         }
     }
 
@@ -196,11 +267,11 @@ final class PdfSpeaker {
         }
     };
 
-    private static String makeId(int sess, int page, int chunk, int shift) {
-        return sess + ":" + page + ":" + chunk + ":" + shift;
+    private static String makeId(int token, int page, int chunk, int shift) {
+        return token + ":" + page + ":" + chunk + ":" + shift;
     }
 
-    /** [session, page, chunk, shift] */
+    /** [token, page, chunk, shift] */
     private static int[] parseId(String id) {
         if (id == null) return null;
         try {
@@ -214,12 +285,13 @@ final class PdfSpeaker {
     }
 
     private boolean stale(int[] id) {
-        return id[0] != session || id[1] != currentPage || currentText == null;
+        return id[0] != speakToken || id[1] != currentPage || currentText == null || cloudActive;
     }
 
     private void handleStart(int[] id) {
-        if (stale(id) || id[2] == END) return;
+        if (stale(id)) return;
         if (id[2] < 0 || id[2] >= currentText.chunks.size()) return;
+        deviceErrStreak = 0;
         PdfSpeechText.Chunk c = currentText.chunks.get(id[2]);
         currentChunk = id[2];
         currentWord = Math.max(c.firstWord, Math.min(c.lastWord, currentText.wordAtOffset(c.start + id[3])));
@@ -228,7 +300,7 @@ final class PdfSpeaker {
     }
 
     private void handleRange(int[] id, int start, int end) {
-        if (stale(id) || id[2] == END) return;
+        if (stale(id)) return;
         if (id[2] < 0 || id[2] >= currentText.chunks.size()) return;
         if (end - start > 80) return; // بعض المحركات تعطي نطاق الجملة كلها - نتجاهله
         PdfSpeechText.Chunk c = currentText.chunks.get(id[2]);
@@ -241,37 +313,32 @@ final class PdfSpeaker {
     }
 
     private void handleDone(int[] id) {
-        if (stale(id) || id[2] != END) return;
-        goToPage(currentPage + 1);
+        if (stale(id)) return;
+        if (id[2] != currentChunk) return;
+        advance();
     }
 
     private void handleError(int[] id, int code) {
-        if (id[0] != session) return;
-        // صوت شبكة فشل (غالبًا بدون إنترنت): نعتمد صوتًا محليًا ونكمل من نفس الموضع.
-        String lang = currentText != null && id[2] >= 0 && id[2] < currentText.chunks.size()
+        if (stale(id)) return;
+        // صوت شبكة فشل (غالبًا بدون إنترنت): نعتمد صوتًا محليًا ونكمل من نفس المقطع.
+        String lang = id[2] >= 0 && id[2] < currentText.chunks.size()
                 ? currentText.chunks.get(id[2]).lang : null;
         Voice v = lang != null ? usedVoice.get(lang) : null;
         if (v != null && v.isNetworkConnectionRequired() && !badVoices.contains(v.getName())) {
             badVoices.add(v.getName());
             usedVoice.remove(lang);
-            if (currentText != null && id[2] >= 0) {
-                resumeChunk = id[2];
-                resumeShift = id[3];
-                session++;
-                try {
-                    tts.stop();
-                } catch (Throwable ignored) {
-                }
-                queuePage(currentText, resumeChunk, resumeShift, session);
-                return;
-            }
-        }
-        if (id[2] == END) {
-            goToPage(currentPage + 1);
+            lastAppliedLang = null;
+            speakChunk(id[2], id[3]);
             return;
         }
-        pause();
-        listener.onError("تعذّر نطق النص (رمز الخطأ " + code + "). جرّب تغيير الصوت أو تثبيت بيانات الصوت من إعدادات محرك النطق.");
+        deviceErrStreak++;
+        if (deviceErrStreak >= 3) {
+            deviceErrStreak = 0;
+            pause();
+            listener.onError("تعذّر نطق النص (رمز الخطأ " + code + "). جرّب تغيير الصوت أو تثبيت بيانات الصوت من إعدادات محرك النطق.");
+            return;
+        }
+        advance(); // نتخطى المقطع المشكل ونكمل
     }
 
     // ------------------------------------------------------------------ التحكم العام
@@ -300,14 +367,16 @@ final class PdfSpeaker {
     void play(File file, int startPage) {
         Runnable go = () -> {
             session++;
-            stopEngine();
+            hardStopOutputs();
+            resetCloud();
+            cloudBroken = false;
+            deviceErrStreak = 0;
             notifiedMissing.clear();
             emptyStreak = 0;
             anyText = false;
             lastAppliedLang = null;
             currentText = null;
             currentWord = -1;
-            requestFocus();
             setState(State.LOADING);
             final int sess = session;
             io.execute(() -> {
@@ -331,30 +400,58 @@ final class PdfSpeaker {
                 loadPageOnIo(startPage, sess, 0, 0);
             });
         };
-        runWhenReady(go);
+        if (isCloudEngine()) go.run();
+        else runWhenReady(go);
     }
 
     void pause() {
+        pauseInternal(true);
+    }
+
+    private void pauseInternal(boolean abandon) {
         if (state != State.PLAYING && state != State.LOADING) return;
         captureResumePoint();
-        session++;
-        stopEngine();
-        abandonFocus();
+        if (cloudActive && player != null && playerPrepared && !playerPaused) {
+            try {
+                player.pause();
+                playerPaused = true;
+            } catch (Throwable t) {
+                releasePlayer();
+            }
+            main.removeCallbacks(poll);
+        } else {
+            hardStopOutputs();
+        }
+        if (abandon) abandonFocus();
         setState(State.PAUSED);
     }
 
     void resume() {
         if (state != State.PAUSED) return;
+        if (player != null && playerPrepared && playerPaused) {
+            requestFocus();
+            playerPaused = false;
+            try {
+                player.start();
+                applySpeed(player);
+            } catch (Throwable t) {
+                releasePlayer();
+                setState(State.LOADING);
+                speakChunk(currentChunk, 0);
+                return;
+            }
+            setState(State.PLAYING);
+            startPoll();
+            return;
+        }
         if (currentText == null) {
             // لم تبدأ صفحة بعد - نعيد التحميل
             if (sourceFile != null) play(sourceFile, Math.max(0, currentPage));
             return;
         }
-        session++;
         lastAppliedLang = null;
-        requestFocus();
         setState(State.LOADING);
-        queuePage(currentText, resumeChunk, resumeShift, session);
+        speakChunk(resumeChunk, resumeShift);
     }
 
     void togglePlayPause() {
@@ -364,7 +461,9 @@ final class PdfSpeaker {
 
     void stop() {
         session++;
-        stopEngine();
+        pendingAfterInit = null;
+        hardStopOutputs();
+        resetCloud();
         abandonFocus();
         resumeOnFocusGain = false;
         currentText = null;
@@ -389,15 +488,18 @@ final class PdfSpeaker {
     }
 
     private void jumpToPage(int page, boolean stayPaused) {
+        session++;
+        hardStopOutputs();
+        resetCloud();
+        currentText = null;
+        currentWord = -1;
+        currentChunk = 0;
+        resumeChunk = 0;
+        resumeShift = 0;
+        final int sess = session;
         if (stayPaused) {
             // نجهّز الصفحة ونبقى على الإيقاف المؤقت
             currentPage = page;
-            currentText = null;
-            currentWord = -1;
-            resumeChunk = 0;
-            resumeShift = 0;
-            session++;
-            final int sess = session;
             io.execute(() -> {
                 PdfSpeechText.PageText pt = takePage(page);
                 main.post(() -> {
@@ -409,37 +511,90 @@ final class PdfSpeaker {
             });
             return;
         }
-        session++;
-        stopEngine();
-        currentText = null;
-        currentWord = -1;
         setState(State.LOADING);
-        final int sess = session;
         io.execute(() -> loadPageOnIo(page, sess, 0, 0));
     }
 
     void setRate(float newRate) {
         rate = Math.max(0.5f, Math.min(2.5f, newRate));
         prefs.edit().putFloat(KEY_RATE, rate).apply();
-        if (!ttsReady) return;
-        try {
-            tts.setSpeechRate(rate);
-        } catch (Throwable ignored) {
+        if (ttsReady) {
+            try {
+                tts.setSpeechRate(rate);
+            } catch (Throwable ignored) {
+            }
         }
-        if (state == State.PLAYING) restartFromCurrentWord();
+        if (player != null && playerPrepared && !playerPaused) {
+            applySpeed(player);
+        } else if (state == State.PLAYING && !cloudActive) {
+            restartFromCurrentPoint();
+        }
     }
 
-    /** يعيد القراءة من الكلمة الحالية (يُستخدم بعد تغيير السرعة أو الصوت). */
-    private void restartFromCurrentWord() {
-        if (currentText == null) return;
+    /** يعيد القراءة من الموضع الحالي (بعد تغيير السرعة/الصوت/المحرك). */
+    private void restartFromCurrentPoint() {
+        if (currentText == null || state == State.IDLE) return;
         captureResumePoint();
-        session++;
-        stopEngine();
+        hardStopOutputs();
         lastAppliedLang = null;
-        queuePage(currentText, resumeChunk, resumeShift, session);
+        if (state == State.PLAYING || state == State.LOADING) {
+            setState(State.LOADING);
+            speakChunk(resumeChunk, resumeShift);
+        }
     }
 
-    // ------------------------------------------------------------------ الأصوات
+    // ------------------------------------------------------------------ اختيار المحرك والأصوات
+
+    /** true = صوت عصبي أونلاين (الافتراضي)، false = صوت الجهاز. */
+    boolean isCloudEngine() {
+        return "cloud".equals(prefs.getString(KEY_ENGINE, "cloud"));
+    }
+
+    void setCloudEngine(boolean cloud) {
+        prefs.edit().putString(KEY_ENGINE, cloud ? "cloud" : "device").apply();
+        cloudBroken = false;
+        resetCloud();
+        if (state != State.IDLE) restartFromCurrentPoint();
+    }
+
+    List<VoiceOption> listCloudVoices(String lang) {
+        List<VoiceOption> out = new ArrayList<>();
+        for (String[] v : CLOUD_VOICES) {
+            if (v[0].equals(lang)) out.add(new VoiceOption(v[1], v[2]));
+        }
+        return out;
+    }
+
+    String getPreferredCloudVoice(String lang) {
+        return prefs.getString("cvoice_" + lang, null);
+    }
+
+    /** name = null يعني الصوت الافتراضي للغة. */
+    void setPreferredCloudVoice(String lang, String name) {
+        SharedPreferences.Editor e = prefs.edit();
+        if (name == null) e.remove("cvoice_" + lang);
+        else e.putString("cvoice_" + lang, name);
+        e.apply();
+        resetCloud();
+        if (state != State.IDLE) restartFromCurrentPoint();
+    }
+
+    private String cloudVoiceFor(String lang) {
+        String saved = prefs.getString("cvoice_" + lang, null);
+        String def = null;
+        for (String[] v : CLOUD_VOICES) {
+            if (!v[0].equals(lang)) continue;
+            if (def == null) def = v[1];
+            if (saved != null && v[1].equals(saved)) return saved;
+        }
+        return def != null ? def : "en-US-EmmaMultilingualNeural";
+    }
+
+    private boolean useCloud() {
+        return isCloudEngine() && !cloudBroken;
+    }
+
+    // ------------------------------------------------------------------ أصوات الجهاز
 
     String getEngineName() {
         try {
@@ -460,7 +615,8 @@ final class PdfSpeaker {
         else e.putString("voice_" + lang, name);
         e.apply();
         usedVoice.remove(lang);
-        if (state == State.PLAYING) restartFromCurrentWord();
+        lastAppliedLang = null;
+        if (state == State.PLAYING && !cloudActive) restartFromCurrentPoint();
     }
 
     List<VoiceOption> listVoices(String lang) {
@@ -555,7 +711,7 @@ final class PdfSpeaker {
         }
     }
 
-    /** يضبط صوت اللغة قبل إضافة مقطع للطابور. يرجّع false لو ما في صوت متاح لها. */
+    /** يضبط صوت اللغة قبل نطق مقطع. يرجّع false لو ما في صوت متاح لها. */
     private boolean applyVoice(String lang) {
         if (lang.equals(lastAppliedLang)) return true;
         boolean ok = false;
@@ -581,7 +737,7 @@ final class PdfSpeaker {
         return ok;
     }
 
-    // ------------------------------------------------------------------ تحميل الصفحات والطابور
+    // ------------------------------------------------------------------ تحميل الصفحات
 
     private void runWhenReady(Runnable r) {
         if (ttsFailed) {
@@ -620,6 +776,8 @@ final class PdfSpeaker {
 
     private void goToPage(int page) {
         final int sess = session;
+        speakToken++;
+        releasePlayer();
         if (page >= pageCount) {
             finishAll();
             return;
@@ -649,49 +807,103 @@ final class PdfSpeaker {
         resumeChunk = 0;
         resumeShift = 0;
         listener.onPageStarted(page, pt);
-        queuePage(pt, startChunk, startShift, sess);
-        // تجهيز الصفحة التالية مسبقًا حتى لا يحصل فراغ عند الانتقال
+        speakChunk(startChunk, startShift);
+        // تجهيز الصفحة التالية مسبقًا (نصها، وصوت أول جملة فيها) حتى لا يحصل فراغ عند الانتقال
         final int next = page + 1;
         io.execute(() -> {
             if (source != null && next < pageCount) {
-                PdfSpeechText.PageText p = source.page(next);
-                if (sess == session) prefetched = p;
+                final PdfSpeechText.PageText p = source.page(next);
+                if (sess == session) {
+                    prefetched = p;
+                    if (p != null && !p.isEmpty()) {
+                        main.post(() -> {
+                            if (sess == session && useCloud()) requestCloud(p, 0);
+                        });
+                    }
+                }
             }
         });
     }
 
-    private void queuePage(PdfSpeechText.PageText pt, int startChunk, int startShift, int sess) {
-        if (!ttsReady || sess != session) return;
-        boolean first = true;
-        final int page = pt.pageIndex;
-        for (int j = Math.max(0, startChunk); j < pt.chunks.size(); j++) {
-            PdfSpeechText.Chunk c = pt.chunks.get(j);
-            int shift = (j == startChunk) ? Math.max(0, startShift) : 0;
-            int s = Math.min(c.end, c.start + shift);
-            String text = pt.text.substring(s, c.end);
-            if (text.trim().isEmpty()) continue;
-            if (!applyVoice(c.lang)) continue;
-            Bundle params = new Bundle();
-            int r;
-            try {
-                r = tts.speak(text, first ? TextToSpeech.QUEUE_FLUSH : TextToSpeech.QUEUE_ADD,
-                        params, makeId(sess, page, j, shift));
-            } catch (Throwable t) {
-                r = TextToSpeech.ERROR;
-            }
-            if (r == TextToSpeech.ERROR) {
-                listener.onError("تعذّر تشغيل محرك النطق.");
-                pause();
+    // ------------------------------------------------------------------ نطق المقاطع (جملة بجملة)
+
+    /** يبدأ نطق المقطع idx (وما بعده لو تعذّر)، وعند نهاية الصفحة ينتقل للتالية. */
+    private void speakChunk(int idx, int shift) {
+        if (currentText == null) return;
+        if (!useCloud() && !ttsReady) {
+            if (ttsFailed) {
+                stop();
+                listener.onEngineUnavailable();
                 return;
             }
-            first = false;
+            setState(State.LOADING);
+            final int i = idx;
+            final int s = shift;
+            final int tok = speakToken;
+            pendingAfterInit = () -> {
+                if (tok == speakToken) speakChunk(i, s);
+            };
+            return;
         }
-        // علامة نهاية الصفحة: صمت قصير ثم الانتقال التلقائي للصفحة التالية
+        int n = currentText.chunks.size();
+        while (idx < n) {
+            if (startChunk(idx, shift)) return;
+            idx++;
+            shift = 0;
+        }
+        goToPage(currentPage + 1);
+    }
+
+    /** true = بدأ النطق (أو ينتظر تجهيز الصوت)، false = يجب تخطي هذا المقطع. */
+    private boolean startChunk(int idx, int shift) {
+        PdfSpeechText.Chunk c = currentText.chunks.get(idx);
+        if (currentText.text.substring(c.start, c.end).trim().isEmpty()) return false;
+        currentChunk = idx;
+        currentWord = -1;
+        final int tok = ++speakToken;
+        releasePlayer();
+
+        if (useCloud()) {
+            cloudActive = true;
+            String key = requestCloud(currentText, idx);
+            prefetchAhead(idx);
+            CloudAudio a = cloudReady.remove(key);
+            if (a != null) {
+                startPlayer(a, idx, tok);
+            } else {
+                awaitingKey = key;
+                awaitingToken = tok;
+                awaitingChunk = idx;
+                if (state != State.LOADING) setState(State.LOADING);
+            }
+            return true;
+        }
+
+        // صوت الجهاز
+        cloudActive = false;
+        awaitingKey = null;
+        if (!applyVoice(c.lang)) return false;
+        int s = Math.min(c.end, c.start + Math.max(0, shift));
+        String text = currentText.text.substring(s, c.end);
+        if (text.trim().isEmpty()) return false;
+        int r;
         try {
-            tts.playSilentUtterance(350, first ? TextToSpeech.QUEUE_FLUSH : TextToSpeech.QUEUE_ADD,
-                    makeId(sess, page, END, 0));
-        } catch (Throwable ignored) {
+            r = tts.speak(text, TextToSpeech.QUEUE_FLUSH, new Bundle(), makeId(tok, currentPage, idx, shift));
+        } catch (Throwable t) {
+            r = TextToSpeech.ERROR;
         }
+        if (r == TextToSpeech.ERROR) {
+            pause();
+            listener.onError("تعذّر تشغيل محرك النطق.");
+        }
+        return true;
+    }
+
+    private void advance() {
+        if (currentText == null) return;
+        int next = currentChunk + 1;
+        if (next < currentText.chunks.size()) speakChunk(next, 0);
+        else goToPage(currentPage + 1);
     }
 
     private void captureResumePoint() {
@@ -712,7 +924,8 @@ final class PdfSpeaker {
 
     private void finishAll() {
         session++;
-        stopEngine();
+        hardStopOutputs();
+        resetCloud();
         abandonFocus();
         currentText = null;
         currentWord = -1;
@@ -720,9 +933,17 @@ final class PdfSpeaker {
         listener.onFinished();
     }
 
+    /** يوقف كل ما يُنطق الآن (المحرك والمشغّل) ويُبطل أي ردود متأخرة. */
+    private void hardStopOutputs() {
+        speakToken++;
+        awaitingKey = null;
+        stopEngine();
+        releasePlayer();
+    }
+
     private void stopEngine() {
         try {
-            if (tts != null) tts.stop();
+            if (tts != null && ttsReady) tts.stop();
         } catch (Throwable ignored) {
         }
     }
@@ -733,22 +954,284 @@ final class PdfSpeaker {
         listener.onStateChanged(s);
     }
 
-    // ------------------------------------------------------------------ تركيز الصوت
+    // ------------------------------------------------------------------ الصوت الأونلاين
+
+    private String cloudKey(String voice, int page, int chunk) {
+        return voice + "#" + page + "#" + chunk;
+    }
+
+    /** يطلب تجهيز صوت المقطع (لو لم يكن جاهزًا أو قيد التجهيز) ويرجّع مفتاحه. */
+    private String requestCloud(PdfSpeechText.PageText pt, int idx) {
+        PdfSpeechText.Chunk c = pt.chunks.get(idx);
+        final String voice = cloudVoiceFor(c.lang);
+        final String key = cloudKey(voice, pt.pageIndex, idx);
+        if (cloudReady.containsKey(key) || cloudPending.contains(key)) return key;
+        final String sent = EdgeTtsClient.sanitize(pt.text.substring(c.start, c.end));
+        final int gen = cloudGen;
+        cloudPending.add(key);
+        try {
+            synthPool.execute(() -> {
+                EdgeTtsClient.Result r = null;
+                try {
+                    r = EdgeTtsClient.synthesize(sent, voice);
+                } catch (Throwable ignored) {
+                }
+                final EdgeTtsClient.Result rr = r;
+                main.post(() -> onCloudResult(key, rr == null ? null : new CloudAudio(rr), gen));
+            });
+        } catch (RejectedExecutionException e) {
+            cloudPending.remove(key);
+        }
+        return key;
+    }
+
+    private void prefetchAhead(int idx) {
+        if (currentText == null) return;
+        int n = currentText.chunks.size();
+        for (int k = idx + 1; k <= idx + 2 && k < n; k++) requestCloud(currentText, k);
+    }
+
+    private void onCloudResult(String key, CloudAudio a, int gen) {
+        if (gen != cloudGen) return;
+        cloudPending.remove(key);
+        boolean waiting = key.equals(awaitingKey) && awaitingToken == speakToken;
+        if (a == null) {
+            if (!waiting) return; // فشل تجهيز مسبق: سنعيد الطلب عند الحاجة
+            if (currentText != null && cloudRetried.add(key)) {
+                requestCloud(currentText, awaitingChunk); // محاولة ثانية
+            } else {
+                awaitingKey = null;
+                fallbackToDevice("تعذّر الاتصال بالصوت العصبي، تم التحويل لصوت الجهاز تلقائيًا.");
+            }
+            return;
+        }
+        if (waiting) {
+            awaitingKey = null;
+            startPlayer(a, awaitingChunk, awaitingToken);
+        } else {
+            cloudReady.put(key, a);
+        }
+    }
+
+    private void fallbackToDevice(String message) {
+        cloudBroken = true;
+        cloudActive = false;
+        listener.onError(message);
+        if (currentText == null) return;
+        lastAppliedLang = null;
+        speakChunk(currentChunk, 0);
+    }
+
+    private void startPlayer(CloudAudio a, int idx, int tok) {
+        if (tok != speakToken || currentText == null) return;
+        if (a.data == null || a.data.length < 200) { // لا يوجد ما يُنطق (رموز فقط) - نتخطاه
+            advance();
+            return;
+        }
+        try {
+            if (!cacheDir.exists()) //noinspection ResultOfMethodCallIgnored
+                cacheDir.mkdirs();
+            File f = File.createTempFile("c", ".mp3", cacheDir);
+            try (FileOutputStream out = new FileOutputStream(f)) {
+                out.write(a.data);
+            }
+            MediaPlayer p = new MediaPlayer();
+            p.setAudioAttributes(new AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build());
+            p.setDataSource(f.getAbsolutePath());
+            p.setOnPreparedListener(mp -> onPlayerPrepared(mp, tok));
+            p.setOnCompletionListener(mp -> {
+                if (tok == speakToken && mp == player) advance();
+            });
+            p.setOnErrorListener((mp, what, extra) -> {
+                if (tok == speakToken && mp == player) onPlayerError();
+                return true;
+            });
+            player = p;
+            playerFile = f;
+            playerAudio = a;
+            playerPrepared = false;
+            playerPaused = false;
+            p.prepareAsync();
+        } catch (Throwable t) {
+            releasePlayer();
+            onPlayerError();
+        }
+    }
+
+    private void onPlayerPrepared(MediaPlayer mp, int tok) {
+        if (tok != speakToken || mp != player || currentText == null) return;
+        playerPrepared = true;
+        cloudPlayErrStreak = 0;
+        requestFocus();
+        try {
+            mp.start();
+            applySpeed(mp);
+        } catch (Throwable t) {
+            onPlayerError();
+            return;
+        }
+        if (state != State.PLAYING) setState(State.PLAYING);
+        if (currentChunk >= 0 && currentChunk < currentText.chunks.size()) {
+            PdfSpeechText.Chunk c = currentText.chunks.get(currentChunk);
+            currentWord = c.firstWord;
+            listener.onSpeaking(currentPage, currentText, currentChunk, currentWord);
+        }
+        startPoll();
+    }
+
+    private void onPlayerError() {
+        releasePlayer();
+        cloudPlayErrStreak++;
+        if (cloudPlayErrStreak >= 3) {
+            cloudPlayErrStreak = 0;
+            fallbackToDevice("تعذّر تشغيل الصوت العصبي، تم التحويل لصوت الجهاز تلقائيًا.");
+        } else {
+            advance(); // نتخطى هذه الجملة ونكمل
+        }
+    }
+
+    private void applySpeed(MediaPlayer mp) {
+        try {
+            PlaybackParams pp = mp.getPlaybackParams();
+            pp.setSpeed(rate);
+            mp.setPlaybackParams(pp);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private void startPoll() {
+        main.removeCallbacks(poll);
+        main.postDelayed(poll, POLL_MS);
+    }
+
+    private final Runnable poll = new Runnable() {
+        @Override
+        public void run() {
+            if (player == null || !playerPrepared || playerPaused || state != State.PLAYING) return;
+            cloudProgress();
+            main.postDelayed(this, POLL_MS);
+        }
+    };
+
+    /** يحدّد الكلمة المنطوقة من موضع التشغيل (بتوقيت الخادم لو متوفر، وإلا بالتناسب مع طول الصوت). */
+    private void cloudProgress() {
+        MediaPlayer p = player;
+        CloudAudio a = playerAudio;
+        PdfSpeechText.PageText t = currentText;
+        if (p == null || a == null || t == null) return;
+        if (currentChunk < 0 || currentChunk >= t.chunks.size()) return;
+        int pos;
+        try {
+            pos = p.getCurrentPosition();
+        } catch (Throwable e) {
+            return;
+        }
+        PdfSpeechText.Chunk c = t.chunks.get(currentChunk);
+        int len = Math.max(1, c.end - c.start);
+        int off;
+        if (a.wordMs != null && a.wordMs.length > 0) {
+            int found = -1;
+            for (int k = 0; k < a.wordMs.length; k++) {
+                if (a.wordMs[k] <= pos) found = k;
+                else break;
+            }
+            off = found < 0 ? 0 : a.wordChar[found];
+        } else {
+            int dur = 0;
+            try {
+                dur = p.getDuration();
+            } catch (Throwable ignored) {
+            }
+            off = dur > 0 ? (int) (len * Math.min(1f, pos / (float) dur)) : 0;
+        }
+        off = Math.max(0, Math.min(len - 1, off));
+        int w = Math.max(c.firstWord, Math.min(c.lastWord, t.wordAtOffset(c.start + off)));
+        if (w != currentWord) {
+            currentWord = w;
+            listener.onSpeaking(currentPage, t, currentChunk, w);
+        }
+    }
+
+    private void releasePlayer() {
+        main.removeCallbacks(poll);
+        MediaPlayer p = player;
+        player = null;
+        if (p != null) {
+            try {
+                p.setOnPreparedListener(null);
+                p.setOnCompletionListener(null);
+                p.setOnErrorListener(null);
+            } catch (Throwable ignored) {
+            }
+            try {
+                p.release();
+            } catch (Throwable ignored) {
+            }
+        }
+        if (playerFile != null) {
+            //noinspection ResultOfMethodCallIgnored
+            playerFile.delete();
+            playerFile = null;
+        }
+        playerAudio = null;
+        playerPrepared = false;
+        playerPaused = false;
+    }
+
+    /** يمسح كل الأصوات المجهّزة/الجارية ويُبطل نتائج الطلبات المتأخرة. */
+    private void resetCloud() {
+        cloudGen++;
+        cloudReady.clear();
+        cloudPending.clear();
+        cloudRetried.clear();
+        awaitingKey = null;
+        cloudPlayErrStreak = 0;
+    }
+
+    private void cleanCacheDir() {
+        try {
+            File[] files = cacheDir.listFiles();
+            if (files == null) return;
+            for (File f : files) //noinspection ResultOfMethodCallIgnored
+                f.delete();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    // ------------------------------------------------------------------ تركيز الصوت (للصوت الأونلاين فقط)
 
     private final AudioManager.OnAudioFocusChangeListener focusListener = change -> main.post(() -> {
-        if (change == AudioManager.AUDIOFOCUS_LOSS || change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
-            if (state == State.PLAYING || state == State.LOADING) {
-                resumeOnFocusGain = change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT;
-                pause();
-            }
-        } else if (change == AudioManager.AUDIOFOCUS_GAIN && resumeOnFocusGain) {
+        if (change == AudioManager.AUDIOFOCUS_LOSS) {
+            focusHeld = false;
             resumeOnFocusGain = false;
-            resume();
+            if (state == State.PLAYING || state == State.LOADING) pauseInternal(false);
+        } else if (change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
+            if (state == State.PLAYING || state == State.LOADING) {
+                resumeOnFocusGain = true;
+                pauseInternal(false); // نُبقي الطلب حتى يصلنا GAIN
+            }
+        } else if (change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK) {
+            try {
+                if (player != null) player.setVolume(0.25f, 0.25f);
+            } catch (Throwable ignored) {
+            }
+        } else if (change == AudioManager.AUDIOFOCUS_GAIN) {
+            try {
+                if (player != null) player.setVolume(1f, 1f);
+            } catch (Throwable ignored) {
+            }
+            if (resumeOnFocusGain) {
+                resumeOnFocusGain = false;
+                resume();
+            }
         }
     });
 
     private void requestFocus() {
-        if (audio == null) return;
+        if (audio == null || focusHeld) return;
         try {
             if (Build.VERSION.SDK_INT >= 26) {
                 focusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
@@ -763,11 +1246,13 @@ final class PdfSpeaker {
                 //noinspection deprecation
                 audio.requestAudioFocus(focusListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
             }
+            focusHeld = true;
         } catch (Throwable ignored) {
         }
     }
 
     private void abandonFocus() {
+        focusHeld = false;
         if (audio == null) return;
         try {
             if (Build.VERSION.SDK_INT >= 26) {
@@ -785,6 +1270,9 @@ final class PdfSpeaker {
     void shutdown() {
         session++;
         pendingAfterInit = null;
+        speakToken++;
+        releasePlayer();
+        resetCloud();
         abandonFocus();
         try {
             if (tts != null) {
@@ -794,10 +1282,12 @@ final class PdfSpeaker {
         } catch (Throwable ignored) {
         }
         tts = null;
+        synthPool.shutdownNow();
         io.execute(() -> {
             if (source != null) source.close();
             source = null;
         });
         io.shutdown();
+        cleanCacheDir();
     }
 }
