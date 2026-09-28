@@ -316,7 +316,9 @@ final class EdgeTtsClient {
     }
 
     private static String ssmlMessage(String text, String voice) {
-        String ssml = "<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'>"
+        String[] vp = voice.split("-");
+        String xmlLang = vp.length >= 2 ? vp[0] + "-" + vp[1] : "en-US"; // لغة الصوت الفعلية (ar-SA...) لا en-US ثابتة
+        String ssml = "<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='" + xmlLang + "'>"
                 + "<voice name='" + longVoiceName(voice) + "'>"
                 + "<prosody pitch='+0Hz' rate='+0%' volume='+0%'>" + xmlEscape(text) + "</prosody>"
                 + "</voice></speak>";

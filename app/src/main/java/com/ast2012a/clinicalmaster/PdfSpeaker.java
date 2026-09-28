@@ -118,11 +118,14 @@ final class PdfSpeaker {
         final byte[] data;
         final int[] wordMs;
         final int[] wordChar;
+        /** النص المنطوق الفعلي (بعد تنظيفه) وخريطته إلى مواضع النص الأصلي - لسلامة التظليل. */
+        final SpeechPrep.Spoken spoken;
 
-        CloudAudio(EdgeTtsClient.Result r) {
+        CloudAudio(EdgeTtsClient.Result r, SpeechPrep.Spoken spoken) {
             this.data = r.audio;
             this.wordMs = r.wordMs;
             this.wordChar = r.wordChar;
+            this.spoken = spoken;
         }
     }
 
@@ -175,6 +178,9 @@ final class PdfSpeaker {
     private final Set<String> cloudRetried = new HashSet<>();
     private final Set<String> badCloudVoices = new HashSet<>(); // أصوات فشلت في هذه الجلسة (نتجاوزها لصوت بديل)
     private int cloudVoiceSwitches = 0;
+    /** النص المنطوق على صوت الجهاز (بعد التنظيف) وخريطته، لربط onRangeStart بالكلمة الأصلية. */
+    private volatile SpeechPrep.Spoken deviceSpoken = null;
+    private volatile int deviceSpokenToken = -1;
     private String playerDiag = "";   // آخر خطأ من MediaPlayer (للتشخيص)
     private boolean playerFdMode = false; // المحاولة الثانية: تشغيل عبر FileDescriptor
     private String awaitingKey = null;
@@ -308,7 +314,10 @@ final class PdfSpeaker {
         if (id[2] < 0 || id[2] >= currentText.chunks.size()) return;
         if (end - start > 80) return; // بعض المحركات تعطي نطاق الجملة كلها - نتجاهله
         PdfSpeechText.Chunk c = currentText.chunks.get(id[2]);
-        int w = currentText.wordAtOffset(c.start + id[3] + start);
+        int off = start;
+        SpeechPrep.Spoken ds = deviceSpoken;
+        if (ds != null && deviceSpokenToken == id[0]) off = ds.toOriginal(start);
+        int w = currentText.wordAtOffset(c.start + id[3] + off);
         w = Math.max(c.firstWord, Math.min(c.lastWord, w));
         if (w == currentWord && id[2] == currentChunk) return;
         currentChunk = id[2];
@@ -914,8 +923,13 @@ final class PdfSpeaker {
         awaitingKey = null;
         if (!applyVoice(c.lang)) return false;
         int s = Math.min(c.end, c.start + Math.max(0, shift));
-        String text = currentText.text.substring(s, c.end);
-        if (text.trim().isEmpty()) return false;
+        String rawText = currentText.text.substring(s, c.end);
+        if (rawText.trim().isEmpty()) return false;
+        SpeechPrep.Spoken spoken = SpeechPrep.prepare(EdgeTtsClient.sanitize(rawText), c.lang);
+        String text = spoken.text;
+        if (text.trim().isEmpty()) return false; // رموز فقط
+        deviceSpoken = spoken;
+        deviceSpokenToken = tok;
         int r;
         try {
             r = tts.speak(text, TextToSpeech.QUEUE_FLUSH, new Bundle(), makeId(tok, currentPage, idx, shift));
@@ -996,7 +1010,9 @@ final class PdfSpeaker {
         final String voice = cloudVoiceFor(c.lang);
         final String key = cloudKey(voice, pt.pageIndex, idx);
         if (cloudReady.containsKey(key) || cloudPending.contains(key)) return key;
-        final String sent = EdgeTtsClient.sanitize(pt.text.substring(c.start, c.end));
+        final SpeechPrep.Spoken spoken = SpeechPrep.prepare(
+                EdgeTtsClient.sanitize(pt.text.substring(c.start, c.end)), c.lang);
+        final String sent = spoken.text;
         final int gen = cloudGen;
         cloudPending.add(key);
         try {
@@ -1004,13 +1020,17 @@ final class PdfSpeaker {
                 EdgeTtsClient.Result r = null;
                 Throwable err = null;
                 try {
-                    r = EdgeTtsClient.synthesize(sent, voice);
+                    if (sent.trim().isEmpty()) { // مقطع كله رموز: لا يوجد ما يُنطق - نتخطاه بدون اتصال
+                        r = new EdgeTtsClient.Result(new byte[0], new int[0], new int[0]);
+                    } else {
+                        r = EdgeTtsClient.synthesize(sent, voice);
+                    }
                 } catch (Throwable t) {
                     err = t;
                 }
                 final EdgeTtsClient.Result rr = r;
                 final Throwable ee = err;
-                main.post(() -> onCloudResult(key, rr == null ? null : new CloudAudio(rr), gen, ee));
+                main.post(() -> onCloudResult(key, rr == null ? null : new CloudAudio(rr, spoken), gen, ee));
             });
         } catch (RejectedExecutionException e) {
             cloudPending.remove(key);
@@ -1219,7 +1239,8 @@ final class PdfSpeaker {
             return;
         }
         PdfSpeechText.Chunk c = t.chunks.get(currentChunk);
-        int len = Math.max(1, c.end - c.start);
+        final boolean mapped = a.spoken != null && a.spoken.text.length() > 0;
+        int len = Math.max(1, mapped ? a.spoken.text.length() : c.end - c.start);
         int off;
         if (a.wordMs != null && a.wordMs.length > 0) {
             int found = -1;
@@ -1237,6 +1258,7 @@ final class PdfSpeaker {
             off = dur > 0 ? (int) (len * Math.min(1f, pos / (float) dur)) : 0;
         }
         off = Math.max(0, Math.min(len - 1, off));
+        if (mapped) off = a.spoken.toOriginal(off);
         int w = Math.max(c.firstWord, Math.min(c.lastWord, t.wordAtOffset(c.start + off)));
         if (w != currentWord) {
             currentWord = w;
