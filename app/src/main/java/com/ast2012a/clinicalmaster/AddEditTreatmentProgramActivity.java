@@ -98,6 +98,6 @@ public class AddEditTreatmentProgramActivity extends AppCompatActivity {
     @Override
     public void finish() {
         super.finish();
-        overridePendingTransition(R.anim.slide_down_out, R.anim.fade_out);
+        overridePendingTransition(R.anim.fade_in, R.anim.slide_down_out);
     }
 }

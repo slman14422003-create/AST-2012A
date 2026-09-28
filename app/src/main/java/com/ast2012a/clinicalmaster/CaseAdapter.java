@@ -51,6 +51,7 @@ public class CaseAdapter extends RecyclerView.Adapter<CaseAdapter.ViewHolder> {
         CaseItem item = items.get(position);
         holder.title.setText(item.title);
         holder.itemView.setOnClickListener(v -> {
+            if (Ui.isDoubleClick()) return;
             if (listener != null) listener.onCaseClick(item);
         });
         Ui.applyPressFeedback(holder.itemView);

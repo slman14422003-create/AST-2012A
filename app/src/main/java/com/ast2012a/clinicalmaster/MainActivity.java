@@ -459,6 +459,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void navigateTo(Class<?> activityClass) {
+        if (Ui.isDoubleClick()) return;
         startActivity(new Intent(this, activityClass));
         overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
     }
@@ -484,14 +485,27 @@ public class MainActivity extends AppCompatActivity {
                 .show();
     }
 
+    /** يُظهر العنصر بتلاشي ناعم فقط عند انتقاله فعليًا من مخفي إلى ظاهر
+     *  (لا تُعاد الحركة مع كل حرف يكتبه المستخدم). */
+    private void showSmooth(View v) {
+        if (v.getVisibility() != View.VISIBLE) Ui.fadeInPlain(v, 220);
+    }
+
+    /** يُخفي العنصر فورًا مع إعادة الشفافية لوضعها الطبيعي لو كانت حركة جارية. */
+    private void hideNow(View v) {
+        v.animate().cancel();
+        v.setAlpha(1f);
+        v.setVisibility(View.GONE);
+    }
+
     private void doSearch(String query) {
         lastQuery = query == null ? "" : query;
         resetAiInlineState();
         suggestionNote.setVisibility(View.GONE);
 
         if (query == null || query.trim().isEmpty()) {
-            emptyHintContainer.setVisibility(View.VISIBLE);
-            resultsContainer.setVisibility(View.GONE);
+            showSmooth(emptyHintContainer);
+            hideNow(resultsContainer);
             resultNote.setVisibility(View.GONE);
             askAiFallback.setVisibility(View.GONE);
             resultsList.setVisibility(View.VISIBLE);
@@ -499,8 +513,8 @@ public class MainActivity extends AppCompatActivity {
             setResults(new ArrayList<>());
             return;
         }
-        emptyHintContainer.setVisibility(View.GONE);
-        resultsContainer.setVisibility(View.VISIBLE);
+        hideNow(emptyHintContainer);
+        showSmooth(resultsContainer);
 
         // البحث نفسه (تحميل الحالات + محرك البحث بما فيه مطابقة Levenshtein
         // للاقتراحات) ينتقل لخيط خلفية بدل UI thread، حتى لا يتجمّد الرسم
@@ -600,7 +614,7 @@ public class MainActivity extends AppCompatActivity {
         suggestionNote.setVisibility(View.GONE);
         resultsList.setVisibility(View.GONE);
         aiInlineAnswerScroll.setVisibility(View.GONE);
-        aiInlineLoading.setVisibility(View.VISIBLE);
+        Ui.fadeIn(aiInlineLoading, 200);
         setAiInlineLoadingText("بيفهم قصدك...");
 
         executor.execute(() -> AiOrchestrator.answer(this, query,
@@ -616,7 +630,7 @@ public class MainActivity extends AppCompatActivity {
                             aiInlineLoading.setVisibility(View.GONE);
                             lastAiAnswer = reply;
                             aiInlineAnswerText.setText(reply);
-                            aiInlineAnswerScroll.setVisibility(View.VISIBLE);
+                            Ui.fadeIn(aiInlineAnswerScroll, 280);
                         });
                     }
 
@@ -627,7 +641,7 @@ public class MainActivity extends AppCompatActivity {
                             lastAiAnswer = reply;
                             String sourceNote = sourceLabel != null ? "المصدر: " + sourceLabel : null;
                             aiInlineAnswerText.setText(sourceNote != null ? reply + "\n\n" + sourceNote : reply);
-                            aiInlineAnswerScroll.setVisibility(View.VISIBLE);
+                            Ui.fadeIn(aiInlineAnswerScroll, 280);
                         });
                     }
 
@@ -655,6 +669,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void openDetail(CaseItem item) {
+        if (Ui.isDoubleClick()) return;
         Intent i = new Intent(this, CaseDetailActivity.class);
         i.putExtra("case_id", item.id);
         i.putExtra("is_custom", item.custom);
