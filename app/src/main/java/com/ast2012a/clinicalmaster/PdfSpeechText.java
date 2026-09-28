@@ -446,8 +446,9 @@ final class PdfSpeechText {
         return flags;
     }
 
-    private static final int MAX_CHUNK_CHARS = 320;
-    private static final int MIN_SENTENCE_CHARS = 36;
+    // مقاطع أطول = فجوات أقل بين الجمل ونبرة أكثر سلاسة (الجمل القصيرة تُدمج مع التي تليها)
+    private static final int MAX_CHUNK_CHARS = 420;
+    private static final int MIN_SENTENCE_CHARS = 90;
 
     private static List<Chunk> makeChunks(List<Word> words, String text, boolean[] para, String latin) {
         List<Chunk> out = new ArrayList<>();

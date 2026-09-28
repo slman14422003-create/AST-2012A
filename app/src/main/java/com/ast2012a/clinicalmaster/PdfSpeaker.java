@@ -83,7 +83,10 @@ final class PdfSpeaker {
     private static final String PREFS = "pdf_tts";
     private static final String KEY_RATE = "rate";
     private static final String KEY_ENGINE = "engine"; // cloud | device
-    private static final int POLL_MS = 45;
+    private static final int POLL_MS = 40;
+    /** تأخير الصوت الفعلي عن موضع التشغيل (مخزن المخرج/البلوتوث): نؤخّر التظليل بمقداره حتى لا يسبق الكلمة. */
+    private static final int CLOUD_LAG_MS = 190;
+    private static final int DEVICE_LAG_MS = 140;
 
     /** أصوات الأونلاين: {اللغة, اسم الصوت, الوصف}. الأول لكل لغة هو الافتراضي. */
     private static final String[][] CLOUD_VOICES = {
@@ -180,6 +183,12 @@ final class PdfSpeaker {
     private int cloudVoiceSwitches = 0;
     /** النص المنطوق على صوت الجهاز (بعد التنظيف) وخريطته، لربط onRangeStart بالكلمة الأصلية. */
     private volatile SpeechPrep.Spoken deviceSpoken = null;
+    // مشغّل الجملة التالية: يُجهَّز (prepare) أثناء نطق الحالية فيبدأ فور انتهائها بدون فجوة
+    private MediaPlayer nextPlayer = null;
+    private File nextFile = null;
+    private String nextKey = null;
+    private CloudAudio nextAudio = null;
+    private boolean nextPrepared = false;
     private volatile int deviceSpokenToken = -1;
     private String playerDiag = "";   // آخر خطأ من MediaPlayer (للتشخيص)
     private boolean playerFdMode = false; // المحاولة الثانية: تشغيل عبر FileDescriptor
@@ -273,7 +282,7 @@ final class PdfSpeaker {
         public void onRangeStart(String utteranceId, int start, int end, int frame) {
             final int[] id = parseId(utteranceId);
             if (id == null) return;
-            main.post(() -> handleRange(id, start, end));
+            main.postDelayed(() -> handleRange(id, start, end), DEVICE_LAG_MS);
         }
     };
 
@@ -906,6 +915,8 @@ final class PdfSpeaker {
             cloudActive = true;
             String key = requestCloud(currentText, idx);
             prefetchAhead(idx);
+            if (nextPlayer != null && !key.equals(nextKey)) releaseNext();
+            if (nextPlayer != null && nextPrepared && adoptPreloaded(idx, tok, key)) return true;
             CloudAudio a = cloudReady.remove(key);
             if (a != null) {
                 startPlayer(a, idx, tok);
@@ -980,6 +991,7 @@ final class PdfSpeaker {
     /** يوقف كل ما يُنطق الآن (المحرك والمشغّل) ويُبطل أي ردود متأخرة. */
     private void hardStopOutputs() {
         speakToken++;
+        releaseNext();
         awaitingKey = null;
         stopEngine();
         releasePlayer();
@@ -1041,7 +1053,7 @@ final class PdfSpeaker {
     private void prefetchAhead(int idx) {
         if (currentText == null) return;
         int n = currentText.chunks.size();
-        for (int k = idx + 1; k <= idx + 2 && k < n; k++) requestCloud(currentText, k);
+        for (int k = idx + 1; k <= idx + 3 && k < n; k++) requestCloud(currentText, k);
     }
 
     private void onCloudResult(String key, CloudAudio a, int gen, Throwable err) {
@@ -1083,6 +1095,7 @@ final class PdfSpeaker {
             startPlayer(a, awaitingChunk, awaitingToken);
         } else {
             cloudReady.put(key, a);
+            preloadNext();
         }
     }
 
@@ -1189,6 +1202,7 @@ final class PdfSpeaker {
             listener.onSpeaking(currentPage, currentText, currentChunk, currentWord);
         }
         startPoll();
+        preloadNext();
     }
 
     private void onPlayerError() {
@@ -1238,6 +1252,7 @@ final class PdfSpeaker {
         } catch (Throwable e) {
             return;
         }
+        pos -= (int) (CLOUD_LAG_MS * Math.max(0.5f, rate)); // زمن الوسائط لا الزمن الحقيقي
         PdfSpeechText.Chunk c = t.chunks.get(currentChunk);
         final boolean mapped = a.spoken != null && a.spoken.text.length() > 0;
         int len = Math.max(1, mapped ? a.spoken.text.length() : c.end - c.start);
@@ -1264,6 +1279,121 @@ final class PdfSpeaker {
             currentWord = w;
             listener.onSpeaking(currentPage, t, currentChunk, w);
         }
+    }
+
+    /** يجهّز مشغّل الجملة التالية (لو صوتها جاهز) أثناء نطق الحالية. */
+    private void preloadNext() {
+        if (!cloudActive || currentText == null || player == null) return;
+        int idx = currentChunk + 1;
+        if (idx >= currentText.chunks.size()) return;
+        PdfSpeechText.Chunk c = currentText.chunks.get(idx);
+        String key = cloudKey(cloudVoiceFor(c.lang), currentText.pageIndex, idx);
+        if (nextPlayer != null) {
+            if (key.equals(nextKey)) return;
+            releaseNext();
+        }
+        CloudAudio a = cloudReady.get(key);
+        if (a == null || a.data == null || a.data.length < 200) return;
+        try {
+            if (!cacheDir.exists()) //noinspection ResultOfMethodCallIgnored
+                cacheDir.mkdirs();
+            File f = File.createTempFile("tts_", ".mp3", cacheDir);
+            try (FileOutputStream out = new FileOutputStream(f)) {
+                out.write(a.data);
+            }
+            MediaPlayer p = new MediaPlayer();
+            p.setAudioAttributes(new AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build());
+            p.setDataSource(f.getAbsolutePath());
+            p.setOnPreparedListener(mp -> {
+                if (mp == nextPlayer) nextPrepared = true;
+            });
+            p.setOnErrorListener((mp, what, extra) -> {
+                if (mp == nextPlayer) releaseNext();
+                return true;
+            });
+            nextPlayer = p;
+            nextFile = f;
+            nextKey = key;
+            nextAudio = a;
+            nextPrepared = false;
+            p.prepareAsync();
+        } catch (Throwable t) {
+            releaseNext();
+        }
+    }
+
+    /** يبدأ الجملة الجاهزة مسبقًا فورًا (بدون كتابة ملف ولا prepare). false = غير ممكن فنكمل بالطريقة العادية. */
+    private boolean adoptPreloaded(int idx, int tok, String key) {
+        MediaPlayer p = nextPlayer;
+        File f = nextFile;
+        CloudAudio a = nextAudio;
+        nextPlayer = null;
+        nextFile = null;
+        nextKey = null;
+        nextAudio = null;
+        nextPrepared = false;
+        if (p == null || a == null) return false;
+        try {
+            p.setOnPreparedListener(null);
+            p.setOnCompletionListener(mp -> {
+                if (tok == speakToken && mp == player) advance();
+            });
+            p.setOnErrorListener((mp, what, extra) -> {
+                if (tok == speakToken && mp == player) {
+                    playerDiag = "mp=" + what + "/" + extra + " bytes=" + a.data.length + " (preloaded)";
+                    retryOrFail(a, idx, tok);
+                }
+                return true;
+            });
+            cloudReady.remove(key);
+            player = p;
+            playerFile = f;
+            playerAudio = a;
+            playerPrepared = true;
+            playerPaused = false;
+            onPlayerPrepared(p, tok);
+            return true;
+        } catch (Throwable t) {
+            try {
+                p.release();
+            } catch (Throwable ignored) {
+            }
+            if (f != null) //noinspection ResultOfMethodCallIgnored
+                f.delete();
+            player = null;
+            playerFile = null;
+            playerAudio = null;
+            playerPrepared = false;
+            return false;
+        }
+    }
+
+    private void releaseNext() {
+        MediaPlayer p = nextPlayer;
+        nextPlayer = null;
+        if (p != null) {
+            try {
+                p.setOnPreparedListener(null);
+                p.setOnCompletionListener(null);
+                p.setOnErrorListener(null);
+            } catch (Throwable ignored) {
+            }
+            try {
+                p.release();
+            } catch (Throwable ignored) {
+            }
+        }
+        if (nextFile != null) {
+            //noinspection ResultOfMethodCallIgnored
+            nextFile.delete();
+            nextFile = null;
+        }
+        nextKey = null;
+        nextAudio = null;
+        nextPrepared = false;
     }
 
     private void releasePlayer() {
@@ -1294,6 +1424,7 @@ final class PdfSpeaker {
 
     /** يمسح كل الأصوات المجهّزة/الجارية ويُبطل نتائج الطلبات المتأخرة. */
     private void resetCloud() {
+        releaseNext();
         cloudGen++;
         cloudReady.clear();
         cloudPending.clear();
@@ -1394,6 +1525,7 @@ final class PdfSpeaker {
         }
         tts = null;
         synthPool.shutdownNow();
+        releaseNext();
         io.execute(() -> {
             if (source != null) source.close();
             source = null;

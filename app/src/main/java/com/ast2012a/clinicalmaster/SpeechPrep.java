@@ -1,9 +1,11 @@
 package com.ast2012a.clinicalmaster;
 
 import java.text.Normalizer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -48,20 +50,56 @@ final class SpeechPrep {
 
     static Spoken prepare(String src, String lang) {
         if (src == null || src.isEmpty()) return new Spoken("", new int[0]);
-        StringBuilder out = new StringBuilder(src.length() + 32);
-        int[] map = new int[src.length() + 64];
-        int mlen = 0;
-        String prevBare = "";
-        boolean prevNum = false;
-        boolean first = true;
+        final boolean ar = "ar".equals(lang);
         int n = src.length();
+
+        // 1) تقطيع إلى كلمات مع موضع بداية كل واحدة في النص الأصلي
+        List<Integer> starts = new ArrayList<>();
+        List<String> toks = new ArrayList<>();
         int i = 0;
         while (i < n) {
             while (i < n && isSpace(src.charAt(i))) i++;
             if (i >= n) break;
             int s = i;
             while (i < n && !isSpace(src.charAt(i))) i++;
-            String tok = src.substring(s, i);
+            starts.add(s);
+            toks.add(src.substring(s, i));
+        }
+
+        // 2) دمج الكلمات العربية المتقطّعة في الـ PDF: "ال" منفصلة عن كلمتها، أو حروف متباعدة
+        //    (كانت تُنطق "ألف لام" أو تُقطَّع الكلمة). التظليل يبقى على أول جزء.
+        if (ar) {
+            List<Integer> ms = new ArrayList<>();
+            List<String> mt = new ArrayList<>();
+            for (int k = 0; k < toks.size(); k++) {
+                String cur = toks.get(k);
+                final int firstIdx = k;
+                boolean run = false;
+                while (k + 1 < toks.size()) {
+                    String nx = toks.get(k + 1);
+                    int mode = glueMode(clean(cur), clean(nx), run);
+                    if (mode == 0) break;
+                    if (mode == 2) run = true;
+                    cur = cur + nx;
+                    k++;
+                }
+                ms.add(starts.get(firstIdx));
+                mt.add(cur);
+            }
+            starts = ms;
+            toks = mt;
+        }
+
+        // 3) تحويل كل كلمة إلى صيغتها المنطوقة مع خريطة المواضع
+        StringBuilder out = new StringBuilder(src.length() + 32);
+        int[] map = new int[src.length() + 64];
+        int mlen = 0;
+        String prevBare = "";
+        boolean prevNum = false;
+        boolean first = true;
+        for (int t = 0; t < toks.size(); t++) {
+            String tok = toks.get(t);
+            int s = starts.get(t);
             String sp;
             try {
                 sp = speakToken(tok, lang, first, prevBare, prevNum);
@@ -87,6 +125,27 @@ final class SpeechPrep {
             }
         }
         return new Spoken(out.toString(), Arrays.copyOf(map, mlen));
+    }
+
+    /** 0 = لا دمج، 1 = دمج عادي (ال / حرف عطف)، 2 = دمج حروف متباعدة. */
+    private static int glueMode(String a, String b, boolean inRun) {
+        if (a.isEmpty() || b.isEmpty()) return 0;
+        if (!isArabicLetter(a.charAt(a.length() - 1)) || !isArabicLetter(b.charAt(0))) return 0;
+        // أداة التعريف منفصلة: ال / وال / فال / بال / كال / لل
+        if (AL_ONLY.contains(a) && b.length() >= 2) return 1;
+        // حرف عطف/جر منفرد قبل كلمة: و علي -> وعلي
+        if (a.length() == 1 && "\u0648\u0641\u0628\u0644\u0643".indexOf(a.charAt(0)) >= 0 && b.length() >= 2) return 1;
+        // حروف متباعدة: ع ض ل ة
+        if (b.length() == 1 && (inRun || (a.length() == 1 && a.charAt(0) != '\u0648'))) return 2;
+        return 0;
+    }
+
+    private static final Set<String> AL_ONLY = new HashSet<>(Arrays.asList(
+            "\u0627\u0644", "\u0648\u0627\u0644", "\u0641\u0627\u0644", "\u0628\u0627\u0644",
+            "\u0643\u0627\u0644", "\u0644\u0644", "\u0648\u0644\u0644", "\u0641\u0644\u0644"));
+
+    private static boolean isArabicLetter(char c) {
+        return (c >= 0x0621 && c <= 0x064A) || (c >= 0x064B && c <= 0x065F) || c == 0x0671;
     }
 
     private static int[] ensure(int[] a, int need) {
