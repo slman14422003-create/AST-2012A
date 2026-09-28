@@ -69,12 +69,104 @@ final class EdgeTtsClient {
         final byte[] audio;
         final int[] wordMs;
         final int[] wordChar;
+        /** مدة الصوت (ms) - تُحسب من حجم MP3 ثابت المعدل؛ تُستخدم لوصل أجزاء الطلب الطويل بتوقيت صحيح. */
+        final int durationMs;
 
         Result(byte[] audio, int[] wordMs, int[] wordChar) {
+            this(audio, wordMs, wordChar, 0);
+        }
+
+        Result(byte[] audio, int[] wordMs, int[] wordChar, int durationMs) {
             this.audio = audio;
             this.wordMs = wordMs;
             this.wordChar = wordChar;
+            this.durationMs = durationMs;
         }
+    }
+
+    /**
+     * الخادم يغلق الاتصال فورًا (edge tts closed early) لو تجاوزت رسالة SSML نحو 4KB. النص العربي 2 بايت للحرف
+     * وكل حركة 2 بايت أخرى، ووقفات الفواصل تضيف وسومًا - فالمقطع الطويل يتجاوز الحد بسهولة. لذلك نقسم أي
+     * طلب كبير إلى أجزاء ونصل أصواتها بتوقيت كلمات متصل.
+     */
+    private static final int MAX_SSML_BYTES = 3300;
+
+    private static int utf8Len(String s) {
+        return s.getBytes(StandardCharsets.UTF_8).length;
+    }
+
+    /** موضع القسمة: أقرب نهاية جملة/فاصلة قبل منتصف النص، وإلا آخر مسافة قبله. */
+    static int splitPoint(String text) {
+        int n = text.length();
+        int mid = n / 2;
+        int lo = Math.max(1, mid / 2);
+        for (int i = mid; i >= lo; i--) {
+            char c = text.charAt(i - 1);
+            if (".!?\u061F\u061B;\u060C,:".indexOf(c) >= 0 && i < n && Character.isWhitespace(text.charAt(i))) return i;
+        }
+        for (int i = mid; i >= lo; i--) {
+            if (Character.isWhitespace(text.charAt(i - 1))) return i;
+        }
+        for (int i = mid; i < n - 1; i++) {
+            if (Character.isWhitespace(text.charAt(i))) return i + 1;
+        }
+        return mid;
+    }
+
+    private static List<Run> sliceRuns(List<Run> runs, int a, int b) {
+        List<Run> out = new ArrayList<>();
+        for (Run r : runs) {
+            int s = Math.max(r.start, a);
+            int e = Math.min(r.end, b);
+            if (e > s) out.add(new Run(s - a, e - a, r.voice));
+        }
+        return out;
+    }
+
+    private static Result concat(Result a, Result b, int charShift) {
+        byte[] audio = new byte[a.audio.length + b.audio.length];
+        System.arraycopy(a.audio, 0, audio, 0, a.audio.length);
+        System.arraycopy(b.audio, 0, audio, a.audio.length, b.audio.length);
+        int[] ms = new int[a.wordMs.length + b.wordMs.length];
+        int[] ch = new int[ms.length];
+        System.arraycopy(a.wordMs, 0, ms, 0, a.wordMs.length);
+        System.arraycopy(a.wordChar, 0, ch, 0, a.wordChar.length);
+        for (int i = 0; i < b.wordMs.length; i++) {
+            ms[a.wordMs.length + i] = b.wordMs[i] + a.durationMs;
+            ch[a.wordChar.length + i] = b.wordChar[i] + charShift;
+        }
+        return new Result(audio, ms, ch, a.durationMs + b.durationMs);
+    }
+
+    /** يرسل النص كما هو لو صغر عن الحد، وإلا يقسمه (تكراريًا) ويصل الأجزاء. */
+    private static Result synthesizeSplit(String text, List<Run> runs, String voice, Style style, int depth)
+            throws IOException {
+        String ssml = buildSsml(text, runs, voice, style);
+        boolean big = utf8Len(ssml) > MAX_SSML_BYTES;
+        boolean canSplit = depth < 5 && text.length() >= 120;
+        if (!big || !canSplit) {
+            try {
+                return doSynth(text, ssml, voice, runs != null && runs.size() >= 2);
+            } catch (ServiceException e) {
+                // الخادم أغلق الاتصال بلا سبب واضح (غالبًا طول الطلب): نجرّب نصفين قبل الاستسلام
+                if (e.httpCode != 0 || !canSplit || text.length() < 240) throw e;
+            }
+        }
+        int sp = splitPoint(text);
+        String p1 = text.substring(0, sp);
+        String p2 = text.substring(sp);
+        Result r1 = synthPart(p1, runs, 0, sp, voice, style, depth + 1);
+        Result r2 = synthPart(p2, runs, sp, text.length(), voice, style, depth + 1);
+        return concat(r1, r2, sp);
+    }
+
+    private static Result synthPart(String piece, List<Run> runs, int a, int b, String voice, Style style, int depth)
+            throws IOException {
+        if (runs == null || runs.size() < 2) return synthesizeSplit(piece, null, voice, style, depth);
+        List<Run> sub = sliceRuns(runs, a, b);
+        if (sub.size() >= 2) return synthesizeSplit(piece, sub, voice, style, depth);
+        String v = sub.size() == 1 ? sub.get(0).voice : voice; // جزء بصوت واحد
+        return synthesizeSplit(piece, null, v, style, depth);
     }
 
     /** أسلوب النطق: سرعة العربي (نسبة)، طبقة الصوت (Hz)، وقفات إضافية بعد الجمل/الفواصل (ms). */
@@ -162,7 +254,7 @@ final class EdgeTtsClient {
     }
 
     static Result synthesize(String text, String voice, Style style) throws IOException {
-        return doSynth(text, buildSsml(text, null, voice, style), voice, false);
+        return synthesizeSplit(text, null, voice, style, 0);
     }
 
     /**
@@ -172,7 +264,7 @@ final class EdgeTtsClient {
     static Result synthesizeRuns(String text, List<Run> runs, String baseVoice, Style style) throws IOException {
         if (runs == null || runs.size() < 2 || mixedFails >= 2) return synthesize(text, baseVoice, style);
         try {
-            Result r = doSynth(text, buildSsml(text, runs, baseVoice, style), baseVoice, true);
+            Result r = synthesizeSplit(text, runs, baseVoice, style, 0);
             mixedFails = 0;
             return r;
         } catch (ServiceException e) {
@@ -366,7 +458,7 @@ final class EdgeTtsClient {
                 wMs = a1;
                 wChar = a2;
             }
-            return new Result(data, wMs, wChar);
+            return new Result(data, wMs, wChar, (int) (data.length * 8L / (hq ? 96 : 48)));
         }
     }
 
