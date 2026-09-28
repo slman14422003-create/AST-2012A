@@ -15,9 +15,9 @@
     <color name="glass_fill">#1F1F1F</color>
     <color name="glass_fill_strong">#1F1F1F</color>
     <color name="glass_fill_soft">#1A1A1A</color>
-    <color name="glass_border">#333333</color>
+    <color name="glass_border">#363636</color>
     <color name="glass_border_soft">#2A2A2A</color>
-    <color name="glass_highlight">#18FFFFFF</color>
+    <color name="glass_highlight">#26FFFFFF</color>
     <color name="glass_top_sheen">#20FFFFFF</color>
     <color name="shadow_soft">#55000000</color>
     <color name="shadow_strong">#70000000</color>
@@ -53,4 +53,12 @@
     <color name="m3_on_error_container">#FFDAD2</color>
     <color name="m3_surface_container">#1B1B1B</color>
     <color name="m3_surface_container_high">#2B2B2B</color>
+
+    <!-- ===== رموز تصميم جديدة (تحسين الواجهة) ===== -->
+    <color name="card_shadow">#66000000</color>
+    <color name="primary_soft">#2E211B</color>
+    <color name="ripple_on_accent">#33FFFFFF</color>
+    <color name="primary_pressed">#C56A4B</color>
+    <color name="primary_disabled">#4A3229</color>
+    <color name="field_focus_border">#E0916D</color>
 </resources>

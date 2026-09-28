@@ -39,6 +39,13 @@
         <item name="shapeAppearanceCornerMedium">@style/ShapeAppearance.M3.Corner.Medium</item>
         <item name="shapeAppearanceCornerLarge">@style/ShapeAppearance.M3.Corner.Large</item>
         <item name="materialAlertDialogTheme">@style/ThemeOverlay.ClinicalMaster.Dialog</item>
+        <item name="android:windowAnimationStyle">@style/Animation.ClinicalMaster.Activity</item>
+        <item name="android:colorControlHighlight">@color/glass_highlight</item>
+        <item name="colorControlHighlight">@color/glass_highlight</item>
+        <item name="android:colorEdgeEffect" tools:targetApi="lollipop">@color/primary_cyan</item>
+        <item name="android:textColorHighlight">@color/m3_primary_container</item>
+        <item name="android:textColorLink">@color/primary_cyan_dark</item>
+        <item name="android:textCursorDrawable" tools:targetApi="q">@drawable/cursor_brand</item>
     </style>
 
     <!-- شاشة splash (الوضع الليلي): خلفية داكنة محايدة مثل splash تطبيق Claude -->
