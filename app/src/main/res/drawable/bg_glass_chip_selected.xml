@@ -1,9 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<shape xmlns:android="http://schemas.android.com/apk/res/android">
-    <gradient
-        android:type="linear"
-        android:angle="135"
-        android:startColor="@color/primary_cyan_light"
-        android:endColor="?attr/colorPrimary" />
-    <corners android:radius="22dp" />
-</shape>
+<!-- شريحة محددة: تدرّج بلون العلامة + ripple أبيض، بنفس نصف قطر الشريحة العادية
+     كي لا يتغيّر حجمها بصريًا عند التبديل بين الحالتين. -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="@color/ripple_on_accent">
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="135"
+                android:endColor="?attr/colorPrimary"
+                android:startColor="@color/primary_cyan_light"
+                android:type="linear" />
+            <corners android:radius="20dp" />
+        </shape>
+    </item>
+</ripple>

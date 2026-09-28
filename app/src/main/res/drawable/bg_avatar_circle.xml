@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- أفاتار المريض: دائرة بتعبئة برتقالية ناعمة وحلقة رفيعة بلون العلامة -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="oval">
-    <solid android:color="@color/glass_fill_soft" />
-    <stroke android:width="1dp" android:color="@color/primary_cyan" />
+    <solid android:color="@color/primary_soft" />
+    <stroke android:width="1dp" android:color="@color/primary_cyan_light" />
 </shape>
