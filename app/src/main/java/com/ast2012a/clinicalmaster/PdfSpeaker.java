@@ -175,6 +175,8 @@ final class PdfSpeaker {
     private final Set<String> cloudRetried = new HashSet<>();
     private final Set<String> badCloudVoices = new HashSet<>(); // أصوات فشلت في هذه الجلسة (نتجاوزها لصوت بديل)
     private int cloudVoiceSwitches = 0;
+    private String playerDiag = "";   // آخر خطأ من MediaPlayer (للتشخيص)
+    private boolean playerFdMode = false; // المحاولة الثانية: تشغيل عبر FileDescriptor
     private String awaitingKey = null;
     private int awaitingToken = 0;
     private int awaitingChunk = 0;
@@ -1066,6 +1068,11 @@ final class PdfSpeaker {
     }
 
     private void startPlayer(CloudAudio a, int idx, int tok) {
+        playerFdMode = false;
+        startPlayerInternal(a, idx, tok, false);
+    }
+
+    private void startPlayerInternal(CloudAudio a, int idx, int tok, boolean useFd) {
         if (tok != speakToken || currentText == null) return;
         if (a.data == null || a.data.length < 200) { // لا يوجد ما يُنطق (رموز فقط) - نتخطاه
             advance();
@@ -1083,13 +1090,22 @@ final class PdfSpeaker {
                     .setUsage(AudioAttributes.USAGE_MEDIA)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                     .build());
-            p.setDataSource(f.getAbsolutePath());
+            if (useFd) {
+                try (java.io.FileInputStream in = new java.io.FileInputStream(f)) {
+                    p.setDataSource(in.getFD());
+                }
+            } else {
+                p.setDataSource(f.getAbsolutePath());
+            }
             p.setOnPreparedListener(mp -> onPlayerPrepared(mp, tok));
             p.setOnCompletionListener(mp -> {
                 if (tok == speakToken && mp == player) advance();
             });
             p.setOnErrorListener((mp, what, extra) -> {
-                if (tok == speakToken && mp == player) onPlayerError();
+                if (tok == speakToken && mp == player) {
+                    playerDiag = "mp=" + what + "/" + extra + " bytes=" + a.data.length + " head=" + headHex(a.data);
+                    retryOrFail(a, idx, tok);
+                }
                 return true;
             });
             player = p;
@@ -1099,9 +1115,29 @@ final class PdfSpeaker {
             playerPaused = false;
             p.prepareAsync();
         } catch (Throwable t) {
-            releasePlayer();
-            onPlayerError();
+            playerDiag = "ex=" + t.getClass().getSimpleName() + ":" + t.getMessage()
+                    + " bytes=" + (a.data == null ? -1 : a.data.length) + " head=" + headHex(a.data);
+            retryOrFail(a, idx, tok);
         }
+    }
+
+    private static String headHex(byte[] d) {
+        if (d == null) return "-";
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < Math.min(4, d.length); i++) sb.append(String.format(Locale.ROOT, "%02X", d[i]));
+        return sb.toString();
+    }
+
+    /** أول فشل تشغيل لنفس الجملة: نعيد بمشغّل جديد عبر FileDescriptor؛ الفشل الثاني يُحتسب. */
+    private void retryOrFail(CloudAudio a, int idx, int tok) {
+        releasePlayer();
+        if (!playerFdMode) {
+            playerFdMode = true;
+            startPlayerInternal(a, idx, tok, true);
+            return;
+        }
+        playerFdMode = false;
+        onPlayerError();
     }
 
     private void onPlayerPrepared(MediaPlayer mp, int tok) {
@@ -1112,11 +1148,12 @@ final class PdfSpeaker {
         requestFocus();
         try {
             mp.start();
-            applySpeed(mp);
         } catch (Throwable t) {
+            playerDiag = "start:" + t.getClass().getSimpleName();
             onPlayerError();
             return;
         }
+        applySpeed(mp);
         if (state != State.PLAYING) setState(State.PLAYING);
         if (currentChunk >= 0 && currentChunk < currentText.chunks.size()) {
             PdfSpeechText.Chunk c = currentText.chunks.get(currentChunk);
@@ -1131,7 +1168,7 @@ final class PdfSpeaker {
         cloudPlayErrStreak++;
         if (cloudPlayErrStreak >= 3) {
             cloudPlayErrStreak = 0;
-            fallbackToDevice("تعذّر تشغيل الصوت العصبي، تم التحويل لصوت الجهاز تلقائيًا.");
+            fallbackToDevice("تعذّر تشغيل الصوت العصبي، تم التحويل لصوت الجهاز تلقائيًا. [" + playerDiag + "]");
         } else {
             advance(); // نتخطى هذه الجملة ونكمل
         }
