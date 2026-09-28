@@ -48,6 +48,29 @@
         <item name="shapeAppearanceCornerMedium">@style/ShapeAppearance.M3.Corner.Medium</item>
         <item name="shapeAppearanceCornerLarge">@style/ShapeAppearance.M3.Corner.Large</item>
         <item name="materialAlertDialogTheme">@style/ThemeOverlay.ClinicalMaster.Dialog</item>
+        <!-- انتقالات افتراضية سلسة لكل الشاشات (بما فيها زر الرجوع بالنظام)،
+             بدل الاعتماد على overridePendingTransition فقط. -->
+        <item name="android:windowAnimationStyle">@style/Animation.ClinicalMaster.Activity</item>
+        <item name="android:colorControlHighlight">@color/glass_highlight</item>
+        <item name="colorControlHighlight">@color/glass_highlight</item>
+        <item name="android:colorEdgeEffect" tools:targetApi="lollipop">@color/primary_cyan_light</item>
+        <item name="android:textColorHighlight">@color/m3_primary_container</item>
+        <item name="android:textColorLink">@color/primary_cyan_dark</item>
+        <item name="android:textCursorDrawable" tools:targetApi="q">@drawable/cursor_brand</item>
+    </style>
+
+    <!-- انتقالات الشاشات الافتراضية: للأمام ينزلق من اليمين، وللخلف يعود بسلاسة -->
+    <style name="Animation.ClinicalMaster.Activity" parent="@android:style/Animation.Activity">
+        <item name="android:activityOpenEnterAnimation">@anim/slide_in_right</item>
+        <item name="android:activityOpenExitAnimation">@anim/slide_out_left</item>
+        <item name="android:activityCloseEnterAnimation">@anim/slide_in_left</item>
+        <item name="android:activityCloseExitAnimation">@anim/slide_out_right</item>
+    </style>
+
+    <!-- حركة ظهور/اختفاء مربعات الحوار: تكبير ناعم بدل الظهور المفاجئ -->
+    <style name="Animation.ClinicalMaster.Dialog" parent="@android:style/Animation.Dialog">
+        <item name="android:windowEnterAnimation">@anim/dialog_enter</item>
+        <item name="android:windowExitAnimation">@anim/dialog_exit</item>
     </style>
 
     <!-- شاشة splash بأسلوب Claude: خلفية بلون خلفية التطبيق (كريمية في النهاري،
@@ -84,6 +107,7 @@
         <item name="colorOnSurface">@color/text_primary</item>
         <item name="materialAlertDialogTitleTextStyle">@style/MaterialAlertDialog.ClinicalMaster.Title</item>
         <item name="shapeAppearanceOverlay">@style/ShapeAppearance.M3.Corner.Large</item>
+        <item name="android:windowAnimationStyle">@style/Animation.ClinicalMaster.Dialog</item>
     </style>
 
     <style name="MaterialAlertDialog.ClinicalMaster.Title" parent="MaterialAlertDialog.Material3.Title.Text">
@@ -124,9 +148,10 @@
         <item name="android:layout_height">wrap_content</item>
         <item name="android:layout_marginHorizontal">4dp</item>
         <item name="android:background">@drawable/bg_glass_chip</item>
+        <item name="android:minHeight">40dp</item>
+        <item name="android:gravity">center_vertical</item>
         <item name="android:clickable">true</item>
         <item name="android:focusable">true</item>
-        <item name="android:foreground">?attr/selectableItemBackground</item>
         <item name="android:paddingHorizontal">14dp</item>
         <item name="android:paddingVertical">9dp</item>
         <item name="android:textColor">@color/text_secondary</item>
@@ -155,13 +180,13 @@
     <style name="GlassButton">
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>
-        <item name="android:background">@drawable/bg_glass_card</item>
+        <item name="android:background">@drawable/bg_glass_card_pressed</item>
+        <item name="android:minHeight">48dp</item>
         <item name="android:paddingVertical">13dp</item>
         <item name="android:gravity">center</item>
         <item name="android:textAllCaps">false</item>
         <item name="android:clickable">true</item>
         <item name="android:focusable">true</item>
-        <item name="android:foreground">?attr/selectableItemBackground</item>
         <item name="android:textColor">@color/text_primary</item>
         <item name="android:textSize">13.5sp</item>
     </style>

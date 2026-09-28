@@ -18,11 +18,11 @@
     <color name="glass_fill">#FFFFFF</color>
     <color name="glass_fill_strong">#FFFFFF</color>
     <color name="glass_fill_soft">#FAF9F5</color>
-    <color name="glass_border">#E7E4DA</color>
+    <color name="glass_border">#E6E2D6</color>
     <color name="glass_border_soft">#EEEBE2</color>
-    <color name="glass_highlight">#20FFFFFF</color>
+    <color name="glass_highlight">#1FC96442</color>
     <color name="glass_top_sheen">#55FFFFFF</color>
-    <color name="shadow_soft">#120F0A05</color>
+    <color name="shadow_soft">#150F0A05</color>
     <color name="shadow_strong">#1E0F0A05</color>
 
     <color name="surface_dark">#FFFFFF</color>
@@ -62,4 +62,18 @@
     <color name="m3_on_error_container">#571C0E</color>
     <color name="m3_surface_container">#F2F0E8</color>
     <color name="m3_surface_container_high">#EAE7DD</color>
+
+    <!-- ===== رموز تصميم جديدة (تحسين الواجهة) ===== -->
+    <!-- ظل البطاقات الناعم: شريط رفيع أسفل البطاقة يعطي إحساس رفع خفيف -->
+    <color name="card_shadow">#1A3D3929</color>
+    <!-- تعبئة برتقالية ناعمة (للأيقونات والشرائح المميّزة) -->
+    <color name="primary_soft">#F8EBE3</color>
+    <!-- لون ripple محايد للعناصر المصمتة (زر رئيسي، شريحة مميّزة) -->
+    <color name="ripple_on_accent">#33FFFFFF</color>
+    <!-- ضغط الزر الرئيسي -->
+    <color name="primary_pressed">#B3573A</color>
+    <!-- حالة تعطيل الزر الرئيسي -->
+    <color name="primary_disabled">#E4C3B4</color>
+    <!-- حد الحقل عند التركيز -->
+    <color name="field_focus_border">#C96442</color>
 </resources>
