@@ -357,6 +357,7 @@ final class PdfSpeechText {
             // الأسطر المخزّنة بترتيب مختلط (أرقام/كلمات لاتينية وسط العربي، أو ملفات Word المحوّلة)،
             // فيظهر التظليل (وتُنطق الكلمات) بالعكس في بعض الأسطر فقط. الآن نرتّب بحسب الموضع الفعلي
             // على الصفحة، ونُبقي الجمل اللاتينية المتتالية بترتيبها الطبيعي (يسار -> يمين).
+            regroupLines();
             int i = 0;
             while (i < raw.size()) {
                 int j = i;
@@ -367,6 +368,70 @@ final class PdfSpeechText {
             List<Word> out = new ArrayList<>(raw.size());
             for (RawWord r : raw) out.add(new Word(r.text, r.box, r.line));
             return out;
+        }
+
+        /** أقصى فجوة أفقية (نسبة من عرض الصفحة) بين كلمة ومجموعة سطر لتُضمّ إليها؛ أكبر من ذلك = عمود آخر. */
+        private static final float MAX_SAME_LINE_GAP = 0.05f;
+        /** كم مجموعة سطر سابقة نبحث فيها عن سطر تنتمي إليه الكلمة (لمعالجة التداخل في ترتيب الملف). */
+        private static final int LINE_LOOKBACK = 8;
+
+        private static final class LineGroup {
+            float cy;
+            float h;
+            float minX;
+            float maxX;
+            final List<RawWord> words = new ArrayList<>();
+        }
+
+        /**
+         * يعيد تجميع الكلمات في أسطر بحسب موضعها الفعلي على الصفحة لا بحسب ترتيب ورودها في الملف.
+         * بعض الملفات (خصوصًا العربية المحوّلة من Word) تخزّن أجزاء السطر الواحد متقطّعة ومتداخلة مع
+         * سطر آخر (جزء من السطر 4 ثم جزء من السطر 5 ثم بقية السطر 4)، فكان الرقم التسلسلي للسطر يقفز
+         * ذهابًا وإيابًا فتُقرأ الكلمات مختلطة بين السطرين (مثل: "يعانون من مواكبة الأفكار في مجرى
+         * الأحداث" بدل قراءة السطر كاملًا ثم الذي بعده). الآن كل كلمة تنضم لسطرها الحقيقي (نفس
+         * الارتفاع + قريبة أفقيًا)، فيُقرأ السطر كاملًا من اليمين لليسار ثم ننتقل للسطر التالي.
+         * الكلمات البعيدة أفقيًا (عمود مختلف) تبقى في مجموعة منفصلة فلا تختلط الأعمدة.
+         */
+        private void regroupLines() {
+            if (raw.size() < 2) return;
+            List<LineGroup> groups = new ArrayList<>();
+            for (RawWord w : raw) {
+                float cy = (w.box.top + w.box.bottom) / 2f;
+                float h = Math.max(0.004f, w.box.height());
+                LineGroup target = null;
+                int stop = Math.max(0, groups.size() - LINE_LOOKBACK);
+                for (int gi = groups.size() - 1; gi >= stop; gi--) {
+                    LineGroup g = groups.get(gi);
+                    float tol = 0.45f * Math.max(h, g.h);
+                    if (Math.abs(cy - g.cy) > tol) continue;
+                    float gap = Math.max(0f, Math.max(w.box.left - g.maxX, g.minX - w.box.right));
+                    if (gap > MAX_SAME_LINE_GAP) continue;
+                    target = g;
+                    break;
+                }
+                if (target == null) {
+                    target = new LineGroup();
+                    target.cy = cy;
+                    target.h = h;
+                    target.minX = w.box.left;
+                    target.maxX = w.box.right;
+                    groups.add(target);
+                } else {
+                    int n = target.words.size();
+                    target.cy = (target.cy * n + cy) / (n + 1);
+                    target.h = Math.max(target.h, h);
+                    target.minX = Math.min(target.minX, w.box.left);
+                    target.maxX = Math.max(target.maxX, w.box.right);
+                }
+                target.words.add(w);
+            }
+            raw.clear();
+            for (int gi = 0; gi < groups.size(); gi++) {
+                for (RawWord w : groups.get(gi).words) {
+                    w.line = gi;
+                    raw.add(w);
+                }
+            }
         }
 
         /** يعيد ترتيب كلمات سطر واحد (في مكانه) إذا كان السطر عربيًا؛ لا يلمس الأسطر اللاتينية. */
