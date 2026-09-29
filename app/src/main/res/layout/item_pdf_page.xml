@@ -1,28 +1,48 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- بطاقة صفحة واحدة داخل قارئ PDF: إطار زجاجي بحواف مستديرة وظل خفيف (نفس أسلوب
-     بطاقات التطبيق bg_card)، وصورة الصفحة المرسومة بداخله كأنها ورقة داخل برواز.
-     فوق الصورة طبقة شفافة (pdf_page_highlight) لتظليل الكلمة/الجملة أثناء القراءة الصوتية. -->
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- صفحة واحدة داخل قارئ PDF: ورقة (bg_pdf_page) تحوي صورة الصفحة + طبقة تظليل شفافة
+     (القراءة الصوتية ونتائج البحث)، وتحتها رقم الصفحة (وعلامة ★ إن كانت عليها إشارة مرجعية).
+     هوامش الورقة الأفقية الكلية = 26dp (12+12 هامش + 1+1 حشوة) - راجع PAGE_CARD_HORIZONTAL_CHROME_DP. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginStart="14dp"
-    android:layout_marginTop="8dp"
-    android:layout_marginEnd="14dp"
-    android:layout_marginBottom="8dp"
-    android:background="@drawable/bg_card"
-    android:padding="10dp">
+    android:layout_marginStart="12dp"
+    android:layout_marginTop="6dp"
+    android:layout_marginEnd="12dp"
+    android:layout_marginBottom="2dp"
+    android:orientation="vertical">
 
-    <ImageView
-        android:id="@+id/pdf_page_image"
+    <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="400dp"
-        android:adjustViewBounds="true"
-        android:background="@color/white"
-        android:importantForAccessibility="no"
-        android:scaleType="fitXY" />
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_pdf_page"
+        android:paddingStart="1dp"
+        android:paddingTop="1dp"
+        android:paddingEnd="1dp"
+        android:paddingBottom="3dp">
 
-    <com.ast2012a.clinicalmaster.PdfHighlightView
-        android:id="@+id/pdf_page_highlight"
+        <ImageView
+            android:id="@+id/pdf_page_image"
+            android:layout_width="match_parent"
+            android:layout_height="400dp"
+            android:adjustViewBounds="true"
+            android:background="@color/white"
+            android:importantForAccessibility="no"
+            android:scaleType="fitXY" />
+
+        <com.ast2012a.clinicalmaster.PdfHighlightView
+            android:id="@+id/pdf_page_highlight"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+    </FrameLayout>
+
+    <TextView
+        android:id="@+id/pdf_page_number"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
-</FrameLayout>
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp"
+        android:textColor="@color/text_tertiary"
+        android:textSize="11.5sp"
+        android:textStyle="bold" />
+</LinearLayout>

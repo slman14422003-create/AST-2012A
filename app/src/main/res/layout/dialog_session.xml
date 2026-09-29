@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- نافذة تسجيل/تعديل جلسة -->
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:scrollbars="none">
@@ -27,18 +28,27 @@
             style="@style/Phizyo.Button.Secondary"
             android:layout_marginBottom="12dp" />
 
+        <!-- حقل البروتوكول: الضغط عليه (أو على السهم) يفتح نافذة اختيار قابلة للبحث
+             بدل القائمة المنسدلة القديمة التي لم تكن تظهر إلا بعد الكتابة. -->
         <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/dlg_protocol_layout"
             style="@style/Phizyo.Field"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="البروتوكول المستخدم">
+            android:hint="البروتوكول / الحالة المستخدمة"
+            app:endIconDrawable="@drawable/ic_chevron_down"
+            app:endIconMode="custom"
+            app:endIconTint="@color/text_secondary">
 
-            <com.google.android.material.textfield.MaterialAutoCompleteTextView
+            <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/dlg_protocol"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:completionThreshold="1"
-                android:inputType="text"
+                android:clickable="true"
+                android:cursorVisible="false"
+                android:focusable="false"
+                android:inputType="none"
+                android:longClickable="false"
                 android:textAlignment="viewStart"
                 android:textColor="@color/text_primary"
                 android:textDirection="rtl"
