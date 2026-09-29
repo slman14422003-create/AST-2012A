@@ -131,6 +131,11 @@ final class SpeechPrep {
             toks = mt;
         }
 
+        // 2-ب) تهيئة الكلمات بحسب سياقها: د. -> دكتور، دقيقه بعد رقم -> دقيقة، 120/80 mmHg، e.g. / et al. ...
+        //      (تعمل على نص الكلمة فقط؛ المواضع الأصلية لا تتغير فيبقى التظليل صحيحًا)
+        toks = new ArrayList<>(toks);
+        normalizeTokens(toks, lang);
+
         // 3-أ) الصيغة المنطوقة لكل كلمة أولًا (بلا تجميع) كي نعرف الكلمة التالية عند ضبط أواخر الكلمات
         //      (التاء المربوطة: تاء داخل الجملة وهاء عند الوقف)
         final String[] sps = new String[toks.size()];
@@ -152,13 +157,20 @@ final class SpeechPrep {
                 } catch (RuntimeException e) {
                     sp = tok; // أي خطأ غير متوقع: ننطق الكلمة كما هي
                 }
+                // بند مرقّم في وسط المقطع (بعد نهاية جملة/فقرة): "2-" "3)" -> رقم ووقفة لا رقمًا ملصوقًا بالجملة
+                if (!fst && t > 0 && endsWithStop(toks.get(t - 1)) && t + 1 < toks.size()) {
+                    Matcher lm = LIST_MARK.matcher(clean(tok));
+                    if (lm.matches() && !NUMBER.matcher(bareOf(clean(toks.get(t + 1)))).matches()) {
+                        sp = lm.group(1) + pause(lang);
+                    }
+                }
                 sps[t] = sp;
                 String bare = bareOf(clean(tok));
                 pn = NUMBER.matcher(bare).matches();
                 pb = bare;
                 if (!sp.isEmpty()) fst = false;
             }
-            if (ar && (taaMode != ArabicPhonetics.TAA_AUTO || noIrab)) shapeEndingsAll(sps);
+            if (ar && (taaMode != ArabicPhonetics.TAA_AUTO || noIrab)) shapeEndingsAll(sps, toks);
         }
 
         // 3) تحويل كل كلمة إلى صيغتها المنطوقة مع خريطة المواضع
@@ -182,7 +194,14 @@ final class SpeechPrep {
             first = false;
             // أقواس: نضع وقفة قبل المحتوى وبعده ليُفهم أنه تفسير جانبي (ترقيم فقط - لا كلمات)
             String ct = clean(tok);
-            if (out.length() > 0 && (ct.startsWith("(") || ct.startsWith("[") || ct.startsWith("\uFF08"))
+            boolean spPunctOnly = true;
+            for (int k = 0; k < sp.length(); k++) {
+                if (PUNCT.indexOf(sp.charAt(k)) < 0) {
+                    spPunctOnly = false;
+                    break;
+                }
+            }
+            if (out.length() > 0 && !spPunctOnly && (ct.startsWith("(") || ct.startsWith("[") || ct.startsWith("\uFF08"))
                     && PUNCT.indexOf(out.charAt(out.length() - 1)) < 0) {
                 map = ensure(map, mlen + 1);
                 out.append(pause(lang));
@@ -221,8 +240,12 @@ final class SpeechPrep {
         return new Spoken(out.toString(), Arrays.copyOf(map, mlen), runs);
     }
 
-    /** يضبط أواخر الكلمات العربية (ة/ه وسكون الأواخر) بمعرفة الكلمة التالية لكل كلمة. */
-    private static void shapeEndingsAll(String[] sps) {
+    /**
+     * يضبط أواخر الكلمات العربية (ة/ه وسكون الأواخر) بمعرفة الكلمة التالية لكل كلمة.
+     * الوقف (هاء) عند: علامة ترقيم، قوس يفتح بعد الكلمة أو يغلق عليها، كلمة غير عربية.
+     * الوصل (تاء) عند: كلمة عربية تالية، أو رقم تالٍ (\"لمدة 15 دقيقة\" لا \"لمدهْ 15\").
+     */
+    private static void shapeEndingsAll(String[] sps, List<String> toks) {
         final int tm = taaMode;
         final boolean ni = noIrab;
         for (int t = 0; t < sps.length; t++) {
@@ -232,11 +255,159 @@ final class SpeechPrep {
             for (int u = t + 1; u < sps.length; u++) {
                 String nx = sps[u];
                 if (nx == null || nx.isEmpty()) continue;
-                nextArabic = ArabicPhonetics.isArabicLetter(nx.charAt(0));
+                char c0 = nx.charAt(0);
+                nextArabic = ArabicPhonetics.isArabicLetter(c0) || (c0 >= '0' && c0 <= '9');
+                String nt = clean(toks.get(u));
+                if (nt.startsWith("(") || nt.startsWith("[") || nt.startsWith("\uFF08")) nextArabic = false;
                 break;
             }
-            sps[t] = ArabicPhonetics.shapeEndings(sp, nextArabic, tm, ni);
+            String ct = clean(toks.get(t));
+            boolean closes = ct.endsWith(")") || ct.endsWith("]") || ct.endsWith("\uFF09");
+            String shaped = ArabicPhonetics.shapeEndings(closes ? sp + "\u060C" : sp, nextArabic, tm, ni);
+            if (closes && shaped.endsWith("\u060C")) shaped = shaped.substring(0, shaped.length() - 1);
+            sps[t] = shaped;
         }
+    }
+
+    private static boolean endsWithStop(String tok) {
+        String c = clean(tok);
+        if (c.isEmpty()) return false;
+        char e = c.charAt(c.length() - 1);
+        return e == '.' || e == '!' || e == '?' || e == ':' || e == '\u061F' || e == '\u061B' || e == '\u2026';
+    }
+
+    // ------------------------------------------------------------------ تهيئة الكلمات بحسب السياق
+
+    private static final Pattern SLASH_PAIR = Pattern.compile("^(\\d{2,3})/(\\d{2,3})([.,;:!?\u060C\u061B\u061F]*)$");
+    private static final String LEAD_TRAIL = ".,;:!?\u060C\u061B\u061F()[]\"'\u00AB\u00BB\u201C\u201D";
+
+    /** أسماء مؤنثة شائعة بعد الأرقام تُكتب كثيرًا بالهاء خطأً (10 دقيقه، 3 جلسه) - تُصحَّح للتاء المربوطة. */
+    private static final Set<String> NUM_TAA = new HashSet<>(Arrays.asList(
+            "دقيقة", "ثانية", "ساعة", "مرة", "جلسة", "درجة", "وحدة", "نبضة", "حصة", "دورة", "عضلة", "نقطة",
+            "مجموعة", "تكرارة", "فترة", "لحظة", "سنة", "حالة", "مرحلة", "خطوة", "جرعة", "نسبة", "كلمة", "صفحة"));
+
+    /**
+     * تعديلات على نص الكلمة قبل نطقها (لا تغيّر عدد الكلمات ولا مواضعها الأصلية):
+     *  - د. أحمد -> دكتور أحمد، أ.د. -> أستاذ دكتور، د/أحمد -> دكتور أحمد.
+     *  - 15 دقيقه -> 15 دقيقة (كي تُنطق تاءً لا هاءً).
+     *  - 120/80 mmHg -> 120 على 80 (ضغط الدم يُقرأ هكذا لا كتاريخ أو كسر).
+     *  - e.g. / i.e. / vs. / Fig. / Dr. / et al. -> تُقرأ كلمات كاملة (المحرك كان يهجّئها حروفًا).
+     */
+    private static void normalizeTokens(List<String> toks, String lang) {
+        final boolean ar = "ar".equals(lang);
+        final boolean enCtx = englishContext(lang);
+        final int n = toks.size();
+        for (int t = 0; t < n; t++) {
+            final String tok = toks.get(t);
+            final String ct = clean(tok);
+            if (ct.isEmpty()) continue;
+            final String prevCt = t > 0 ? clean(toks.get(t - 1)) : "";
+            final String nextCt = t + 1 < n ? clean(toks.get(t + 1)) : "";
+
+            // ---- عربي: ألقاب
+            if (ar || ArabicPhonetics.hasArabic(ct)) {
+                if (ct.equals("\u0623.\u062F.") || ct.equals("\u0623.\u062F") || ct.equals("\u0623\u062F.")) {
+                    toks.set(t, "\u0623\u0633\u062A\u0627\u0630 \u062F\u0643\u062A\u0648\u0631");
+                    continue;
+                }
+                if (ct.equals("\u0648\u0623.\u062F.") || ct.equals("\u0648\u0623.\u062F")) {
+                    toks.set(t, "\u0648\u0623\u0633\u062A\u0627\u0630 \u062F\u0643\u062A\u0648\u0631");
+                    continue;
+                }
+                if (ct.equals("\u062F.") || ct.equals("\u062F/")) {
+                    // \"د.\" قبل اسم (كلمة عربية طويلة) وليست بند تعداد (أ. ب. ج. د.)
+                    boolean nameNext = nextCt.length() >= 3 && ArabicPhonetics.hasArabic(nextCt)
+                            && ArabicPhonetics.isArabicLetter(nextCt.charAt(0));
+                    boolean listItem = false; // أ. ب. ج. د. : بند تعداد وليس لقبًا
+                    for (int k = Math.max(0, t - 10); k < t && !listItem; k++) {
+                        String pk = clean(toks.get(k));
+                        listItem = pk.length() == 2 && pk.charAt(1) == '.' && ArabicPhonetics.isArabicLetter(pk.charAt(0));
+                    }
+                    if (nameNext && !listItem) {
+                        toks.set(t, "\u062F\u0643\u062A\u0648\u0631");
+                        continue;
+                    }
+                }
+                if (ct.startsWith("\u062F/") && ct.length() > 4 && ArabicPhonetics.isArabicLetter(ct.charAt(2))) {
+                    toks.set(t, "\u062F\u0643\u062A\u0648\u0631 " + ct.substring(2));
+                    continue;
+                }
+                // ---- تاء مربوطة كُتبت هاءً بعد رقم
+                if (taaFix && !prevCt.isEmpty()) {
+                    String pb = bareOf(prevCt);
+                    if (NUMBER.matcher(pb).matches()) {
+                        String fixed = fixTaaAfterNumber(tok);
+                        if (fixed != null) {
+                            toks.set(t, fixed);
+                            continue;
+                        }
+                    }
+                }
+            }
+
+            // ---- 5 - 60 (شرطة منفصلة بين رقمين) = نطاق
+            if (ct.length() == 1 && DASHES.indexOf(ct.charAt(0)) >= 0 && t > 0 && t + 1 < n
+                    && NUMBER.matcher(bareOf(prevCt)).matches() && NUMBER.matcher(bareOf(nextCt)).matches()
+                    && RANGE_AS_TO && !prevCt.endsWith(",") && !prevCt.endsWith(".")) {
+                toks.set(t, rangeWord(lang).trim());
+                continue;
+            }
+
+            // ---- ضغط الدم: 120/80 mmHg
+            Matcher sm = SLASH_PAIR.matcher(ct);
+            if (sm.matches() && bareOf(nextCt).equalsIgnoreCase("mmHg")) {
+                toks.set(t, sm.group(1) + (ar ? " \u0639\u0644\u0649 " : " over ") + sm.group(2) + sm.group(3));
+                continue;
+            }
+
+            // ---- اختصارات إنجليزية
+            if (enCtx || "en".equals(lang)) {
+                int lead = 0, trail = ct.length();
+                while (trail > lead && ",;:!?)]\"'\u201D".indexOf(ct.charAt(trail - 1)) >= 0) trail--;
+                String key = ct.substring(lead, trail).toLowerCase(Locale.ROOT);
+                String tailPunct = ct.substring(trail);
+                if (key.equals("et") && nextCt.toLowerCase(Locale.ROOT).startsWith("al.")) {
+                    // et al. -> and colleagues (الكلمتان تُدمجان في الثانية؛ الأولى تُترك فارغة)
+                    int e = nextCt.length();
+                    while (e > 0 && ",;:!?)]\"'\u201D".indexOf(nextCt.charAt(e - 1)) >= 0) e--;
+                    String nTail = nextCt.substring(e);
+                    boolean endSent = t + 2 >= n || startsUpper(clean(toks.get(t + 2)));
+                    toks.set(t, "");
+                    toks.set(t + 1, "and colleagues" + (endSent ? "." : "") + nTail);
+                    t++;
+                    continue;
+                }
+                String rep;
+                if (key.equals("etc.")) {
+                    rep = "et cetera";
+                    if (t + 1 >= n || startsUpper(nextCt)) rep += ".";
+                } else {
+                    rep = EN_ABBR.get(key);
+                }
+                if (rep != null) {
+                    toks.set(t, rep + tailPunct);
+                }
+            }
+        }
+    }
+
+    private static boolean startsUpper(String s) {
+        String b = bareOf(s);
+        return !b.isEmpty() && Character.isUpperCase(b.charAt(0));
+    }
+
+    /** 15 دقيقه. -> 15 دقيقة. (يحفظ علامات الترقيم حول الكلمة). null = لا تصحيح. */
+    private static String fixTaaAfterNumber(String tok) {
+        int a = 0, b = tok.length();
+        while (a < b && LEAD_TRAIL.indexOf(tok.charAt(a)) >= 0) a++;
+        while (b > a && LEAD_TRAIL.indexOf(tok.charAt(b - 1)) >= 0) b--;
+        if (b - a < 4) return null;
+        String core = tok.substring(a, b);
+        if (core.charAt(core.length() - 1) != '\u0647') return null;
+        String withTaa = core.substring(0, core.length() - 1) + "\u0629";
+        // بلا سوابق ولا لواحق: الكلمة نفسها فقط (\"دقيقه\" وليس \"دقيقتها\")
+        if (!NUM_TAA.contains(withTaa)) return null;
+        return tok.substring(0, a) + withTaa + tok.substring(b);
     }
 
     private static final ThreadLocal<String> LATIN = new ThreadLocal<>();
@@ -338,6 +509,9 @@ final class SpeechPrep {
             "^(\\d+(?:[.,]\\d+)?)[-\u2212\u2013\u2014](\\d+(?:[.,]\\d+)?)([A-Za-z\u00B5\u03BC][A-Za-z\u00B5\u03BC/\u00B2\u00B3\\d]*)$");
     private static final Pattern NUMUNIT = Pattern.compile(
             "^(\\d+(?:[.,]\\d+)?)([A-Za-z\u00B5\u03BC][A-Za-z\u00B5\u03BC/\u00B2\u00B3\\d]*)$");
+    private static final Pattern DEG_TOKEN = Pattern.compile("^(\\d+(?:[.,]\\d+)?)\u00B0([CFcf])?$");
+    private static final Pattern MICRO_NUMUNIT = Pattern.compile("^(\\d+(?:[.,]\\d+)?)([\u00B5\u03BC][A-Za-z]{1,3})$");
+    private static final Pattern MICRO_UNIT = Pattern.compile("^[\u00B5\u03BC][A-Za-z]{1,3}$");
     private static final Pattern UNITPART = Pattern.compile("^([A-Za-z\u00B5]+)([23])?$");
 
     /**
@@ -346,6 +520,9 @@ final class SpeechPrep {
      * true = يشرح الرموز والوحدات بكلمات (mA -> ملي أمبير، % -> بالمئة، / -> أو ...).
      */
     static final boolean EXPAND_SYMBOLS = false;
+
+    /** true = النطاق الرقمي (20-80) يُقرأ \"20 إلى 80\" بدل رقمين بينهما وقفة. */
+    static final boolean RANGE_AS_TO = true;
 
     /** رموز نتركها كما هي في النص للمحرك (هو يعرف نطقها) ولا نشرحها نحن. */
     private static final String KEEP_SYM = "+=<>\u00B1\u00D7\u00F7\u2265\u2264%\u00B0";
@@ -399,8 +576,16 @@ final class SpeechPrep {
         String pre = keepSyms(t.substring(0, a));
         String core = t.substring(a, b);
         String tail = t.substring(b);
+        // -5 / \u22125 : سالب (وليست شرطة تُهمل فيضيع المعنى)، أما بعد رقم (10 -20) فهي نطاق
+        String signWord = "";
+        if (a > 0 && Character.isDigit(core.charAt(0))) {
+            char lc = t.charAt(a - 1);
+            if (lc == '-' || lc == '\u2212') {
+                signWord = prevNum ? rangeWord(lang).trim() : minusWord(lang);
+            }
+        }
         String body = speakCore(core, lang, !lastPunctIn(tail).isEmpty());
-        String res = pre + body + keepSyms(tail);
+        String res = pre + (signWord.isEmpty() ? "" : signWord + " ") + body + keepSyms(tail);
         return res + lastPunctIn(tail);
     }
 
@@ -474,6 +659,27 @@ final class SpeechPrep {
     private static String speakCore(String core, String lang, boolean pausal) {
         String ul = userLex.get(lexKey(core));
         if (ul != null) return ul;
+        {
+            final boolean arL = "ar".equals(lang);
+            final boolean enL = "en".equals(lang);
+            Matcher dm = DEG_TOKEN.matcher(core);
+            if (dm.matches() && (arL || enL || "fr".equals(lang) || "tr".equals(lang))) {
+                String cs = dm.group(2);
+                return dm.group(1) + " " + (cs == null ? degWord(lang) : degreeWord(lang, cs.charAt(0)));
+            }
+            if ((core.equals("\u00B5s") || core.equals("\u03BCs")) && !arL && !enL) {
+                return "fr".equals(lang) ? "microsecondes" : "tr".equals(lang) ? "mikrosaniye" : core;
+            }
+            Matcher mu = MICRO_NUMUNIT.matcher(core);
+            if (mu.matches()) {
+                String u = unitSpoken(mu.group(2), arL, enL, true);
+                if (u != null) return mu.group(1) + " " + u;
+            }
+            if (MICRO_UNIT.matcher(core).matches()) {
+                String u = unitSpoken(core, arL, enL, true);
+                if (u != null) return u;
+            }
+        }
         boolean hasAr = ArabicPhonetics.hasArabic(core);
         if (hasAr && hasLatinOrDigit(core)) {
             String mixedScript = speakMixedScript(core, lang, pausal);
@@ -658,9 +864,22 @@ final class SpeechPrep {
     private static String faithfulCore(String core, String lang) {
         final boolean ar = "ar".equals(lang);
         Matcher m = RANGE_ANY.matcher(core);
-        if (m.matches()) { // 50-100 -> "50، 100" (وقفة بدل كلمة "إلى")
+        if (m.matches()) {
             String rest = m.group(3);
-            return m.group(1) + pause(lang) + " " + m.group(2) + (rest.isEmpty() ? "" : faithfulCore(rest, lang));
+            // تاريخ/رقم هاتف/ترقيم متعدد (12-05-2020): وقفات كما كان
+            boolean multi = !rest.isEmpty() && DASHES.indexOf(rest.charAt(0)) >= 0
+                    && rest.length() > 1 && Character.isDigit(rest.charAt(1));
+            if (multi) { // 12-05-2020 / 0100-123-4567 -> كل جزء منفصل بوقفة
+                return m.group(1) + pause(lang) + " " + m.group(2) + pause(lang) + " "
+                        + faithfulCore(rest.substring(1), lang);
+            }
+            String restSp = rest.isEmpty() ? "" : faithfulCore(rest, lang);
+            if (!restSp.isEmpty() && Character.isLetter(restSp.charAt(0))) restSp = " " + restSp; // 80Hz -> 80 Hz
+            if (!RANGE_AS_TO) { // 50-100 -> "50، 100"
+                return m.group(1) + pause(lang) + " " + m.group(2) + restSp;
+            }
+            // 20-80 -> "20 إلى 80" : هكذا يقرؤه الإنسان (النطاق لا يُقرأ رقمين متتاليين)
+            return m.group(1) + rangeWord(lang) + m.group(2) + restSp;
         }
         String c2 = core;
         if (ar) c2 = c2.replace("\u0648/\u0623\u0648", "\u0648 \u0623\u0648").replace("\u0648/\u0627\u0648", "\u0648 \u0623\u0648");
@@ -674,6 +893,14 @@ final class SpeechPrep {
             } else if (c == '/' && k > 0 && k + 1 < len && Character.isDigit(c2.charAt(k - 1))
                     && Character.isDigit(c2.charAt(k + 1))) {
                 sb.append('/'); // 1/2 تبقى كسرًا
+            } else if (c == '/' && k > 0 && k + 1 < len && isPerDenominator(c2, k + 1)
+                    && (Character.isLetterOrDigit(c2.charAt(k - 1)))
+                    && (ar || "en".equals(lang))) {
+                sb.append(ar ? " \u0644\u0643\u0644 " : " per "); // 72/min, mg/kg -> per
+            } else if (c == '/' && k > 0 && k + 1 < len && (ar || "en".equals(lang)) && wordsAroundSlash(c2, k)) {
+                // الصدر/القلب -> الصدر أو القلب (لا مضاف ومضاف إليه)؛ Wrist/Finger -> Wrist or Finger
+                boolean latinSide = c2.charAt(k - 1) < 0x0600;
+                sb.append(ar && !latinSide ? " \u0623\u0648 " : " or ");
             } else if ("\"\u00AB\u00BB\u201C\u201D\u201E\u2018\u2039\u203A".indexOf(c) >= 0) {
                 // علامات الاقتباس لا تُنطق
             } else {
@@ -681,6 +908,35 @@ final class SpeechPrep {
             }
         }
         return sb.toString().replaceAll("\\s+", " ").trim();
+    }
+
+    /** كلمتان (حرفان فأكثر لكل منهما) على جانبي الشرطة المائلة في الموضع k؟ (بلا أرقام: 24/7 و N/A تبقى). */
+    private static boolean wordsAroundSlash(String s, int k) {
+        int a = k - 1;
+        int left = 0;
+        while (a >= 0 && Character.isLetter(s.charAt(a))) {
+            left++;
+            a--;
+        }
+        int b = k + 1;
+        int right = 0;
+        while (b < s.length() && Character.isLetter(s.charAt(b))) {
+            right++;
+            b++;
+        }
+        boolean digitEdge = (a >= 0 && Character.isDigit(s.charAt(a))) || (b < s.length() && Character.isDigit(s.charAt(b)));
+        return left >= 2 && right >= 2 && !digitEdge;
+    }
+
+    private static final Set<String> PER_DENOM = new HashSet<>(Arrays.asList(
+            "min", "sec", "s", "h", "hr", "kg", "l", "ml", "dl", "day", "d", "week", "wk", "m2", "cm2", "cm", "m", "mm"));
+
+    /** هل ما بعد الشرطة المائلة (من الموضع i) وحدة مقسوم عليها كاملة (min, kg, day...) ؟ */
+    private static boolean isPerDenominator(String s, int i) {
+        int e = i;
+        while (e < s.length() && (Character.isLetterOrDigit(s.charAt(e)))) e++;
+        if (e == i) return false;
+        return PER_DENOM.contains(s.substring(i, e).toLowerCase(Locale.ROOT));
     }
 
     private static String speakTokenExpanded(String raw, String lang, boolean first, String prevBare, boolean prevNum) {
@@ -978,6 +1234,11 @@ final class SpeechPrep {
     }
 
     static {
+        unit("\u00B5s", "\u0645\u064A\u0643\u0631\u0648 \u062B\u0627\u0646\u064A\u0629", "microseconds");
+        unit("\u00B5m", "\u0645\u064A\u0643\u0631\u0648\u0645\u062A\u0631", "micrometers");
+        unit("\u00B5l", "\u0645\u064A\u0643\u0631\u0648\u0644\u062A\u0631", "microliters");
+        unit("\u00B5v", "\u0645\u064A\u0643\u0631\u0648 \u0641\u0648\u0644\u062A", "microvolts");
+        unit("\u00B5a", "\u0645\u064A\u0643\u0631\u0648 \u0623\u0645\u0628\u064A\u0631", "microamps");
         unit("mg", "\u0645\u0644\u064A\u063A\u0631\u0627\u0645", "milligrams");
         unit("g", "\u063A\u0631\u0627\u0645", "grams");
         unit("kg", "\u0643\u064A\u0644\u0648\u063A\u0631\u0627\u0645", "kilograms");
