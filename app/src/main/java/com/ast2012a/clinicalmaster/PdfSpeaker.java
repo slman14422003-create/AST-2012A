@@ -90,6 +90,25 @@ final class PdfSpeaker {
     private static final String KEY_ASSIST = "arabic_assist";
     private static final String KEY_ACRO = "spell_acronyms";
     private static final String KEY_LEXICON = "user_lexicon";
+    private static final String KEY_EQ = "voice_eq";          // صفاء الصوت (مؤثر Equalizer)
+    private static final String KEY_GAIN = "voice_gain";      // تعزيز مستوى الصوت (LoudnessEnhancer)
+    private static final String KEY_TAA = "taa_mode";         // نطق التاء المربوطة
+    private static final String KEY_TAAFIX = "taa_fix";       // تصحيح إملاء ة/ه
+    private static final String KEY_NOIRAB = "no_irab";       // قراءة بلا إعراب
+    private static final String[] EQ_LABELS = {"طبيعي", "صافٍ (يُبرز الحروف)", "دافئ", "عميق"};
+    private static final String[] GAIN_LABELS = {"عادي", "+3 ديسيبل", "+6 ديسيبل"};
+    private static final int[] GAIN_MB = {0, 300, 600};
+    private static final String[] TAA_LABELS = {"تلقائي (يقرّر المحرك)", "فصيح: تاء داخل الجملة وهاء عند الوقف", "هاء خفيفة دائمًا"};
+    /** منحنيات التعديل (تردد Hz، تغيير dB): تُستنبط منها قيم نطاقات الـ Equalizer أيًّا كان عددها في الجهاز. */
+    private static final float[][][] EQ_CURVES = {
+            null,
+            // صافٍ: يخفّف الدمدمة السفلية ويرفع نطاق الوضوح (2-5 كيلوهرتز) حيث تتميّز الحروف
+            {{60, -5}, {120, -4}, {250, -2}, {500, 0}, {1000, 1}, {2000, 2.5f}, {3500, 4}, {6000, 3}, {10000, 1}, {16000, 0}},
+            // دافئ: صوت أنعم وأثقل قليلًا
+            {{60, 3}, {150, 3}, {300, 2}, {1000, 0}, {3000, -1}, {6000, -2.5f}, {12000, -3}},
+            // عميق: قاع أقوى وحدّة أقل
+            {{60, 5}, {120, 4}, {250, 2}, {500, 0}, {2000, -1}, {6000, -1.5f}, {12000, -2}},
+    };
     private static final int[] PITCH_HZ = {0, 8, 16, -8, -16};
     private static final String[] PITCH_LABELS = {"عادية", "أعلى قليلًا", "أعلى", "أخفض قليلًا", "أخفض"};
     private static final String[] PROFILE_LABELS = {"طبيعي", "واضح (مُوصى به)", "دراسة (بطيء مع وقفات)"};
@@ -157,6 +176,14 @@ final class PdfSpeaker {
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private final ExecutorService synthPool = Executors.newFixedThreadPool(2);
     private final ExecutorService envPool = Executors.newSingleThreadExecutor();
+    // مؤثرات الصوت: جلسة صوت واحدة ثابتة نربطها بكل مشغّل (عصبي/جهاز/تجربة) فيسري عليها المعادل والتعزيز
+    private int fxSession = 0;
+    private boolean fxInit = false;
+    private android.media.audiofx.Equalizer eq;
+    private android.media.audiofx.LoudnessEnhancer loud;
+    private MediaPlayer previewPlayer;
+    private File previewFile;
+    private int previewGen = 0;
     /** آخر لحظة (uptime) بدأت فيها كلمة على صوت الجهاز - لتحريك الموجة تقديريًا (لا نصل لعينات صوت الجهاز). */
     private volatile long lastWordAt = 0L;
     private final SharedPreferences prefs;
@@ -243,6 +270,9 @@ final class PdfSpeaker {
         SpeechPrep.setArabicAssist(isArabicAssist());
         SpeechPrep.setSpellAcronyms(isSpellAcronyms());
         SpeechPrep.setUserLexicon(getUserLexicon());
+        SpeechPrep.setTaaMode(getTaaMode());
+        SpeechPrep.setTaaTypoFix(isTaaFix());
+        SpeechPrep.setNoIrab(isNoIrab());
         initTts();
     }
 
@@ -753,6 +783,264 @@ final class PdfSpeaker {
         onSpeechSettingChanged();
     }
 
+    // ---- نطق التاء المربوطة / تصحيح ة-ه / قراءة بلا إعراب
+
+    int getTaaMode() {
+        return Math.max(0, Math.min(2, prefs.getInt(KEY_TAA, 1)));
+    }
+
+    String getTaaLabel() {
+        return TAA_LABELS[getTaaMode()];
+    }
+
+    void cycleTaaMode() {
+        int m = (getTaaMode() + 1) % 3;
+        prefs.edit().putInt(KEY_TAA, m).apply();
+        SpeechPrep.setTaaMode(m);
+        onSpeechSettingChanged();
+    }
+
+    boolean isTaaFix() {
+        return prefs.getBoolean(KEY_TAAFIX, true);
+    }
+
+    void setTaaFix(boolean v) {
+        prefs.edit().putBoolean(KEY_TAAFIX, v).apply();
+        SpeechPrep.setTaaTypoFix(v);
+        onSpeechSettingChanged();
+    }
+
+    boolean isNoIrab() {
+        return prefs.getBoolean(KEY_NOIRAB, false);
+    }
+
+    void setNoIrab(boolean v) {
+        prefs.edit().putBoolean(KEY_NOIRAB, v).apply();
+        SpeechPrep.setNoIrab(v);
+        onSpeechSettingChanged();
+    }
+
+    // ---- صفاء الصوت وتعزيزه (مؤثرات صوتية حقيقية على خرج المشغّل)
+
+    int getEqPreset() {
+        return Math.max(0, Math.min(EQ_LABELS.length - 1, prefs.getInt(KEY_EQ, 1)));
+    }
+
+    String getEqLabel() {
+        return EQ_LABELS[getEqPreset()];
+    }
+
+    void cycleEq() {
+        prefs.edit().putInt(KEY_EQ, (getEqPreset() + 1) % EQ_LABELS.length).apply();
+        applyEffects();
+    }
+
+    int getGainIdx() {
+        return Math.max(0, Math.min(GAIN_MB.length - 1, prefs.getInt(KEY_GAIN, 0)));
+    }
+
+    String getGainLabel() {
+        return GAIN_LABELS[getGainIdx()];
+    }
+
+    void cycleGain() {
+        prefs.edit().putInt(KEY_GAIN, (getGainIdx() + 1) % GAIN_MB.length).apply();
+        applyEffects();
+    }
+
+    private int fxSessionId() {
+        if (fxSession <= 0) {
+            try {
+                fxSession = audio != null ? audio.generateAudioSessionId() : 0;
+            } catch (Throwable t) {
+                fxSession = 0;
+            }
+            if (fxSession < 0) fxSession = 0;
+        }
+        return fxSession;
+    }
+
+    /** يربط المشغّل بجلسة المؤثرات (قبل setDataSource) ويفعّلها عند أول استعمال. */
+    private void attachFx(MediaPlayer p) {
+        int sid = fxSessionId();
+        if (sid <= 0) return;
+        try {
+            p.setAudioSessionId(sid);
+        } catch (Throwable ignored) {
+        }
+        if (!fxInit) {
+            fxInit = true;
+            applyEffects();
+        }
+    }
+
+    private static float eqGainDb(int preset, int hz) {
+        float[][] c = EQ_CURVES[preset];
+        if (hz <= c[0][0]) return c[0][1];
+        for (int i = 1; i < c.length; i++) {
+            if (hz <= c[i][0]) {
+                double t = (Math.log(hz) - Math.log(c[i - 1][0])) / (Math.log(c[i][0]) - Math.log(c[i - 1][0]));
+                return (float) (c[i - 1][1] + (c[i][1] - c[i - 1][1]) * t);
+            }
+        }
+        return c[c.length - 1][1];
+    }
+
+    /** يطبّق المعادل والتعزيز الحاليين؛ يفشل بصمت على الأجهزة التي لا تدعمهما (يبقى الصوت طبيعيًا). */
+    private void applyEffects() {
+        final int sid = fxSessionId();
+        if (sid <= 0) return;
+        final int preset = getEqPreset();
+        try {
+            if (preset == 0) {
+                if (eq != null) eq.setEnabled(false);
+            } else {
+                if (eq == null) eq = new android.media.audiofx.Equalizer(0, sid);
+                short[] range = eq.getBandLevelRange();
+                short bands = eq.getNumberOfBands();
+                for (short b = 0; b < bands; b++) {
+                    int hz = Math.max(20, eq.getCenterFreq(b) / 1000);
+                    int mb = Math.round(eqGainDb(preset, hz) * 100f);
+                    mb = Math.max(range[0], Math.min(range[1], mb));
+                    eq.setBandLevel(b, (short) mb);
+                }
+                eq.setEnabled(true);
+            }
+        } catch (Throwable t) {
+            try {
+                if (eq != null) eq.release();
+            } catch (Throwable ignored) {
+            }
+            eq = null;
+        }
+        try {
+            int mb = GAIN_MB[getGainIdx()];
+            if (mb <= 0) {
+                if (loud != null) loud.setEnabled(false);
+            } else {
+                if (loud == null) loud = new android.media.audiofx.LoudnessEnhancer(sid);
+                loud.setTargetGain(mb);
+                loud.setEnabled(true);
+            }
+        } catch (Throwable t) {
+            try {
+                if (loud != null) loud.release();
+            } catch (Throwable ignored) {
+            }
+            loud = null;
+        }
+    }
+
+    private void releaseEffects() {
+        try {
+            if (eq != null) eq.release();
+        } catch (Throwable ignored) {
+        }
+        try {
+            if (loud != null) loud.release();
+        } catch (Throwable ignored) {
+        }
+        eq = null;
+        loud = null;
+        fxInit = false;
+    }
+
+    // ---- تجربة النطق: جملة نموذجية بالصوت والإعدادات الحالية (للتحقق من ة/ه والتشكيل والصفاء)
+
+    interface PreviewListener {
+        /** النص كما أُرسل للمحرك بعد التشكيل والضبط (على الخيط الرئيسي). */
+        void onPrepared(String spokenText);
+
+        void onFailed(String message);
+    }
+
+    void previewSample(final String sample, final PreviewListener cb) {
+        if (!isCloudEngine()) {
+            cb.onFailed("تجربة النطق متاحة مع الصوت العصبي الأونلاين فقط.");
+            return;
+        }
+        if (state == State.PLAYING) pause();
+        releasePreview();
+        final String voice = cloudVoiceFor("ar");
+        final SpeechPrep.Spoken spoken = SpeechPrep.prepare(EdgeTtsClient.sanitize(sample), "ar", "en", false);
+        final EdgeTtsClient.Style style = cloudStyle();
+        final int gen = ++previewGen;
+        try {
+            synthPool.execute(() -> {
+                EdgeTtsClient.Result r = null;
+                try {
+                    r = EdgeTtsClient.synthesize(spoken.text, voice, style);
+                } catch (Throwable ignored) {
+                }
+                final EdgeTtsClient.Result rr = r;
+                main.post(() -> {
+                    if (gen != previewGen) return;
+                    if (rr == null || rr.audio == null || rr.audio.length < 200) {
+                        cb.onFailed("تعذّر تجهيز التجربة (تأكد من الإنترنت).");
+                        return;
+                    }
+                    if (startPreview(rr.audio)) cb.onPrepared(spoken.text);
+                    else cb.onFailed("تعذّر تشغيل التجربة.");
+                });
+            });
+        } catch (RejectedExecutionException e) {
+            cb.onFailed("تعذّر بدء التجربة.");
+        }
+    }
+
+    private boolean startPreview(byte[] data) {
+        try {
+            if (!cacheDir.exists()) //noinspection ResultOfMethodCallIgnored
+                cacheDir.mkdirs();
+            File f = File.createTempFile("prev_", ".mp3", cacheDir);
+            try (FileOutputStream out = new FileOutputStream(f)) {
+                out.write(data);
+            }
+            previewFile = f;
+            MediaPlayer p = new MediaPlayer();
+            p.setAudioAttributes(new AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build());
+            attachFx(p);
+            p.setDataSource(f.getAbsolutePath());
+            p.setOnPreparedListener(MediaPlayer::start);
+            p.setOnCompletionListener(mp -> releasePreview());
+            p.setOnErrorListener((mp, what, extra) -> {
+                releasePreview();
+                return true;
+            });
+            previewPlayer = p;
+            p.prepareAsync();
+            return true;
+        } catch (Throwable t) {
+            releasePreview();
+            return false;
+        }
+    }
+
+    private void releasePreview() {
+        MediaPlayer p = previewPlayer;
+        previewPlayer = null;
+        if (p != null) {
+            try {
+                p.setOnPreparedListener(null);
+                p.setOnCompletionListener(null);
+                p.setOnErrorListener(null);
+            } catch (Throwable ignored) {
+            }
+            try {
+                p.release();
+            } catch (Throwable ignored) {
+            }
+        }
+        if (previewFile != null) {
+            //noinspection ResultOfMethodCallIgnored
+            previewFile.delete();
+            previewFile = null;
+        }
+    }
+
     /** أي تغيير في النطق يُبطل الأصوات المجهّزة مسبقًا ويعيد القراءة من الموضع الحالي. */
     private void onSpeechSettingChanged() {
         resetCloud();
@@ -1172,7 +1460,16 @@ final class PdfSpeaker {
         deviceSpokenToken = tok;
         int r;
         try {
-            r = tts.speak(text, TextToSpeech.QUEUE_FLUSH, new Bundle(), makeId(tok, currentPage, idx, shift));
+            Bundle speakParams = new Bundle();
+            int fxSid = fxSessionId();
+            if (fxSid > 0) {
+                speakParams.putInt("sessionId", fxSid); // TextToSpeech.Engine.KEY_PARAM_SESSION_ID: نفس المؤثرات على صوت الجهاز
+                if (!fxInit) {
+                    fxInit = true;
+                    applyEffects();
+                }
+            }
+            r = tts.speak(text, TextToSpeech.QUEUE_FLUSH, speakParams, makeId(tok, currentPage, idx, shift));
         } catch (Throwable t) {
             r = TextToSpeech.ERROR;
         }
@@ -1380,6 +1677,7 @@ final class PdfSpeaker {
                     .setUsage(AudioAttributes.USAGE_MEDIA)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                     .build());
+            attachFx(p);
             if (useFd) {
                 try (java.io.FileInputStream in = new java.io.FileInputStream(f)) {
                     p.setDataSource(in.getFD());
@@ -1557,6 +1855,7 @@ final class PdfSpeaker {
                     .setUsage(AudioAttributes.USAGE_MEDIA)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                     .build());
+            attachFx(p);
             p.setDataSource(f.getAbsolutePath());
             p.setOnPreparedListener(mp -> {
                 if (mp == nextPlayer) nextPrepared = true;
@@ -1777,6 +2076,8 @@ final class PdfSpeaker {
         tts = null;
         synthPool.shutdownNow();
         envPool.shutdownNow();
+        releasePreview();
+        releaseEffects();
         releaseNext();
         io.execute(() -> {
             if (source != null) source.close();

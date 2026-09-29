@@ -1461,24 +1461,93 @@ public class PdfViewerActivity extends AppCompatActivity {
 
     // ---- إعدادات الصوت
 
+    // ---- مؤقت النوم + تجربة النطق
+
+    private static final int[] SLEEP_MINUTES = {0, 15, 30, 45, 60};
+    private int sleepIdx = 0;
+    private long sleepEndAt = 0L;
+    private final Runnable sleepStopRunnable = () -> {
+        sleepIdx = 0;
+        sleepEndAt = 0L;
+        if (speaker != null && speaker.getState() != PdfSpeaker.State.IDLE) {
+            stopReading();
+            Toast.makeText(this, "انتهى مؤقت النوم - تم إيقاف القراءة.", Toast.LENGTH_LONG).show();
+        }
+    };
+
+    private String sleepLabel() {
+        if (SLEEP_MINUTES[sleepIdx] == 0) return "متوقف";
+        long left = Math.max(0L, sleepEndAt - android.os.SystemClock.uptimeMillis());
+        int minLeft = (int) Math.max(1L, (left + 59_999L) / 60_000L);
+        return "بعد " + SLEEP_MINUTES[sleepIdx] + " دقيقة (متبقي نحو " + minLeft + " د)";
+    }
+
+    private void cycleSleepTimer() {
+        sleepIdx = (sleepIdx + 1) % SLEEP_MINUTES.length;
+        uiHandler.removeCallbacks(sleepStopRunnable);
+        if (SLEEP_MINUTES[sleepIdx] == 0) {
+            sleepEndAt = 0L;
+        } else {
+            long ms = SLEEP_MINUTES[sleepIdx] * 60_000L;
+            sleepEndAt = android.os.SystemClock.uptimeMillis() + ms;
+            uiHandler.postDelayed(sleepStopRunnable, ms);
+        }
+    }
+
+    /** جملة تجريبية فيها ة/ه في مواضع مختلفة (داخل الجملة، عند الوقف، ضمير متصل) لسماع الفرق. */
+    private static final String VOICE_SAMPLE =
+            "العضلة القوية تحمي المفصل، وله وظيفة مهمة. هذه رقبة الطفل ورقبته سليمة.";
+
+    private void previewVoice() {
+        Toast.makeText(this, "جارٍ تجهيز التجربة...", Toast.LENGTH_SHORT).show();
+        speaker.previewSample(VOICE_SAMPLE, new PdfSpeaker.PreviewListener() {
+            @Override
+            public void onPrepared(String spokenText) {
+                if (isFinishing() || isDestroyed()) return;
+                voiceDialog = new ClaudeDialog(PdfViewerActivity.this)
+                        .setTitle("تجربة النطق")
+                        .setMessage("النص الأصلي:\n" + VOICE_SAMPLE
+                                + "\n\nما يُرسل للمحرك (بعد التشكيل وضبط ة/ه):\n" + spokenText)
+                        .setPositiveButton("تمام", null)
+                        .show();
+            }
+
+            @Override
+            public void onFailed(String message) {
+                if (!isFinishing() && !isDestroyed()) Toast.makeText(PdfViewerActivity.this, message, Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
+    // ---- إعدادات الصوت
+
     private void showVoiceSettings() {
         if (speaker == null) return;
         final boolean cloud = speaker.isCloudEngine();
         final int nl = TTS_LANG_LABELS.length;
-        // 0 المحرك | 1..nl أصوات اللغات | ثم خيارات المرونة | آخرها إعدادات النظام
-        final int iProfile = nl + 1, iPitch = nl + 2, iAssist = nl + 3, iMixed = nl + 4, iAcro = nl + 5,
-                iLex = nl + 6, iSystem = nl + 7;
-        String[] items = new String[nl + 8];
+        // 0 المحرك | 1..nl أصوات اللغات | ثم صفاء الصوت والنطق العربي والخيارات | آخرها إعدادات النظام
+        int k = nl + 1;
+        final int iEq = k++, iGain = k++, iTaa = k++, iTaaFix = k++, iNoIrab = k++, iPreview = k++,
+                iProfile = k++, iPitch = k++, iAssist = k++, iMixed = k++, iAcro = k++, iLex = k++,
+                iSleep = k++, iSystem = k++;
+        String[] items = new String[k];
         items[0] = cloud
                 ? "المحرك: صوت عصبي أونلاين (مجاني) ✓ - اضغط للتحويل لصوت الجهاز"
                 : "المحرك: صوت الجهاز (يعمل بدون إنترنت) - اضغط للتحويل للصوت العصبي";
         for (int i = 0; i < nl; i++) items[i + 1] = "صوت " + TTS_LANG_LABELS[i];
+        items[iEq] = "صفاء الصوت: " + speaker.getEqLabel() + " - اضغط للتبديل";
+        items[iGain] = "تعزيز مستوى الصوت: " + speaker.getGainLabel() + " - اضغط للتبديل";
+        items[iTaa] = "نطق التاء المربوطة (ة): " + speaker.getTaaLabel() + " - اضغط للتبديل";
+        items[iTaaFix] = "تصحيح إملاء ة/ه تلقائيًا (الحركه ← الحركة): " + (speaker.isTaaFix() ? "مفعّل ✓" : "معطّل");
+        items[iNoIrab] = "قراءة بلا إعراب (تسكين أواخر الكلمات - تجريبي): " + (speaker.isNoIrab() ? "مفعّل ✓" : "معطّل");
+        items[iPreview] = "تجربة النطق (جملة فيها ة وه)";
         items[iProfile] = "أسلوب النطق: " + speaker.getProfileLabel() + " - اضغط للتبديل";
         items[iPitch] = "طبقة الصوت: " + speaker.getPitchLabel() + " - اضغط للتبديل";
         items[iAssist] = "تشكيل ذكي للعربي (شدّة/حركات/تنوين/مصطلحات): " + (speaker.isArabicAssist() ? "مفعّل ✓" : "معطّل");
         items[iMixed] = "تبديل الصوت للكلمات الأجنبية داخل الجملة: " + (speaker.isMixedVoices() ? "مفعّل ✓" : "معطّل");
         items[iAcro] = "نطق الاختصارات حرفًا حرفًا (EMG, MRI...): " + (speaker.isSpellAcronyms() ? "مفعّل ✓" : "معطّل");
         items[iLex] = "قاموس النطق الخاص (تصحيح كلمات بعينها)";
+        items[iSleep] = "مؤقت النوم: " + sleepLabel() + " - اضغط للتبديل";
         items[iSystem] = "إعدادات محرك النطق في النظام";
         voiceDialog = new ClaudeDialog(this)
                 .setTitle("إعدادات القراءة الصوتية")
@@ -1489,6 +1558,23 @@ public class PdfViewerActivity extends AppCompatActivity {
                                 Toast.LENGTH_SHORT).show();
                     } else if (which == iSystem) {
                         openSystemTtsSettings();
+                    } else if (which == iEq) {
+                        speaker.cycleEq();
+                        showVoiceSettings();
+                    } else if (which == iGain) {
+                        speaker.cycleGain();
+                        showVoiceSettings();
+                    } else if (which == iTaa) {
+                        speaker.cycleTaaMode();
+                        showVoiceSettings();
+                    } else if (which == iTaaFix) {
+                        speaker.setTaaFix(!speaker.isTaaFix());
+                        showVoiceSettings();
+                    } else if (which == iNoIrab) {
+                        speaker.setNoIrab(!speaker.isNoIrab());
+                        showVoiceSettings();
+                    } else if (which == iPreview) {
+                        previewVoice();
                     } else if (which == iProfile) {
                         speaker.cycleProfile();
                         showVoiceSettings();
@@ -1506,6 +1592,9 @@ public class PdfViewerActivity extends AppCompatActivity {
                         showVoiceSettings();
                     } else if (which == iLex) {
                         showLexiconEditor();
+                    } else if (which == iSleep) {
+                        cycleSleepTimer();
+                        showVoiceSettings();
                     } else {
                         showVoicePicker(which - 1);
                     }

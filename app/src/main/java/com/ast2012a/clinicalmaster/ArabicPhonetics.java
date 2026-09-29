@@ -465,6 +465,187 @@ final class ArabicPhonetics {
         return null;
     }
 
+    // ------------------------------------------------------------------ 4) التاء المربوطة (ة) والهاء (ه)
+
+    static final char TAA_MARBUTA = '\u0629';
+    static final char HAA = '\u0647';
+    static final char TAA = '\u062A';
+
+    /** المحرك يقرّر بنفسه (السلوك القديم). */
+    static final int TAA_AUTO = 0;
+    /** قاعدة العربية الفصحى: تاء (ـَتْ) داخل الجملة عند اتصال الكلمة بما بعدها، وهاء خفيفة (ـَهْ) عند الوقف. */
+    static final int TAA_FUSHA = 1;
+    /** هاء خفيفة دائمًا (ـَهْ) كما في القراءة بالوقف واللهجات. */
+    static final int TAA_HAA = 2;
+
+    private static final String STOP_CHARS = ".,;:!?\u060C\u061B\u061F\u2026)]\"\u00BB";
+    /** كلمات لا نضع سكونًا على آخرها أبدًا (لفظ الجلالة له نطق خاص عند المحركات). */
+    private static final String[] NO_SUKUN_PARTS = {"\u0644\u0644\u0647"}; // ...لله (الله، لله، بالله، والله، اللهم)
+
+    private static boolean isPureArabicWord(String w) {
+        for (int i = 0; i < w.length(); i++) {
+            char c = w.charAt(i);
+            if (!isArabicLetter(c) && !isMark(c)) return false;
+        }
+        return true;
+    }
+
+    private static boolean hasStop(String trail) {
+        for (int i = 0; i < trail.length(); i++) {
+            if (STOP_CHARS.indexOf(trail.charAt(i)) >= 0) return true;
+        }
+        return false;
+    }
+
+    /**
+     * يضبط أواخر الكلمات العربية في الجملة المنطوقة (يُستدعى بعد التشكيل الذكي):
+     *  - التاء المربوطة: تاء داخل الجملة وهاء عند الوقف (أو هاء دائمًا) حسب {@code taaMode}.
+     *  - {@code noIrab}: سكون على آخر الكلمة (قراءة بلا إعراب) فلا يخترع المحرك حركات إعراب خاطئة.
+     *
+     * @param sp         الكلمة المنطوقة (قد تحوي علامات ترقيم أو أكثر من كلمة)
+     * @param nextArabic هل الكلمة التالية في الجملة عربية (بلا وقف بينهما)
+     */
+    static String shapeEndings(String sp, boolean nextArabic, int taaMode, boolean noIrab) {
+        if (sp == null || sp.isEmpty()) return sp;
+        if (taaMode == TAA_AUTO && !noIrab) return sp;
+        String[] parts = sp.split(" ", -1);
+        boolean changed = false;
+        for (int i = 0; i < parts.length; i++) {
+            String part = parts[i];
+            int a = 0;
+            int b = part.length();
+            while (a < b && !isArabicLetter(part.charAt(a))) a++;
+            while (b > a && !isArabicLetter(part.charAt(b - 1)) && !isMark(part.charAt(b - 1))) b--;
+            if (a >= b) continue;
+            String word = part.substring(a, b);
+            if (!isPureArabicWord(word)) continue;
+            String trail = part.substring(b);
+            boolean last = i == parts.length - 1;
+            boolean connected = !hasStop(trail) && (!last || nextArabic);
+            String w2 = shapeWord(word, connected, taaMode, noIrab);
+            if (!w2.equals(word)) {
+                parts[i] = part.substring(0, a) + w2 + trail;
+                changed = true;
+            }
+        }
+        if (!changed) return sp;
+        StringBuilder sb = new StringBuilder(sp.length() + 8);
+        for (int i = 0; i < parts.length; i++) {
+            if (i > 0) sb.append(' ');
+            sb.append(parts[i]);
+        }
+        return sb.toString();
+    }
+
+    private static String shapeWord(String w, boolean connected, int taaMode, boolean noIrab) {
+        String r = shapeTaa(w, connected, taaMode);
+        if (noIrab && r.equals(w)) r = sukunEnding(r);
+        return r;
+    }
+
+    /**
+     * كلمة تنتهي بـ ة (بلا حركة عليها) -> نطق واضح بحسب الأسلوب:
+     *  وقف : "عضلة" -> "عَضَلَهْ"   (الهاء الخفيفة كما في تجويد الوقف على تاء التأنيث)
+     *  وصل : "عضلة" -> "عَضَلَتْ"   (تاء ساكنة داخل الجملة: عضلةُ الفخذ)
+     * الكلمات المشكولة صراحةً (عَضَلَةُ) لا نمسّها. وما قبل التاء إن كان واوًا/ياءً بلا شدّة نتركه للمحرك
+     * (علاجية، دعوة) حتى لا نغيّر مدّ الحرف.
+     */
+    static String shapeTaa(String w, boolean connected, int mode) {
+        if (mode == TAA_AUTO || w == null) return w;
+        int t = w.length() - 1;
+        if (t < 1 || w.charAt(t) != TAA_MARBUTA) return w;
+        int p = t - 1;
+        while (p >= 0 && isMark(w.charAt(p))) p--;
+        if (p < 0) return w;
+        char prev = w.charAt(p);
+        String prevMarks = w.substring(p + 1, t);
+        boolean hasShadda = prevMarks.indexOf(SHADDA) >= 0;
+        boolean hasVowel = false;
+        for (int i = 0; i < prevMarks.length(); i++) {
+            char m = prevMarks.charAt(i);
+            if (m >= FATHATAN && m <= SUKUN && m != SHADDA) hasVowel = true;
+        }
+        final boolean alif = prev == '\u0627';
+        final boolean semi = prev == '\u0648' || prev == '\u064A' || prev == '\u0649';
+        final boolean waqf = !connected || mode == TAA_HAA;
+        StringBuilder sb = new StringBuilder(w.length() + 2);
+        sb.append(w, 0, p).append(prev).append(prevMarks);
+        if (waqf) {
+            if (semi) return w;
+            if (!alif && !hasVowel) sb.append(FATHA);
+            return sb.append(HAA).append(SUKUN).toString();
+        }
+        if (semi && !hasShadda) return w;
+        if (!alif && !semi && !hasVowel) sb.append(FATHA);
+        return sb.append(TAA).append(SUKUN).toString();
+    }
+
+    /** سكون على آخر حرف صامت من كلمة بلا علامة عليه (قراءة بلا إعراب). لا يمسّ حروف المدّ ولا ة ولا لفظ الجلالة. */
+    static String sukunEnding(String w) {
+        if (w == null || w.length() < 3) return w;
+        char last = w.charAt(w.length() - 1);
+        if (isMark(last)) return w;
+        if ("\u0627\u0648\u0649\u064A\u0629\u0621\u0623\u0625\u0624\u0626\u0622".indexOf(last) >= 0) return w;
+        String plain = stripMarks(w);
+        if (plain.length() < 3) return w;
+        for (String bad : NO_SUKUN_PARTS) {
+            if (plain.contains(bad)) return w;
+        }
+        return w + SUKUN;
+    }
+
+    // ---- تصحيح إملاء ة/ه: "الحركه" -> "الحركة" (فقط بعد "ال" حيث لا يمكن أن تكون ضمير غائب متصلًا)
+
+    /** كلمات مؤنثة شائعة (مفرد/صفة) - تُستعمل لتصحيح الإملاء فقط (بلا تشكيل). */
+    private static final java.util.Set<String> TAA_NOUNS = new java.util.HashSet<>(Arrays.asList((
+            "مدرسة جامعة كلية حالة مشكلة مسألة قضية نقطة منطقة مساحة مجموعة عملية وسيلة أداة مهمة فكرة رسالة قاعدة "
+                    + "قدرة طاقة سرعة دقة صعوبة سهولة أهمية خبرة تجربة معلومة نظرية تقنية برمجة ممارسة مراجعة متابعة "
+                    + "مقارنة مناقشة محاضرة مادة مناسبة مساعدة مشاركة مسؤولية نسبة كمية كتابة قراءة رياضة صحة سلامة "
+                    + "راحة عادة رغبة حاجة فرصة فترة لحظة ساعة دقيقة ثانية سنة ليلة مرة طبيعة بيئة ثقافة إدارة "
+                    + "شركة مؤسسة منظمة هيئة لجنة وزارة حكومة دولة مدينة عائلة أسرة شخصية طفولة شيخوخة ولادة أزمة "
+                    + "صدمة جلطة سكتة نوبة عدوى حساسية خلية صفيحة شبكة رقبة معدة قصبة حنجرة سلسلة فئة مادة جملة "
+                    + "كلمة لغة قصة حكاية صفة ميزة خاصية نقطة زاوية دائرة مسافة كتلة كثافة مقاومة استجابة "
+                    + "عضلية عصبية فقارية علاجية طبية وظيفية جسدية جسمية بدنية حركية نفسية عقلية مفصلية عظمية رباطية "
+                    + "وعائية قلبية تنفسية هضمية هرمونية مناعية التهابية مزمنة حادة شديدة خفيفة بسيطة معقدة أساسية "
+                    + "رئيسية ثانوية مباشرة مستمرة متكررة مؤقتة دائمة سريرية تشخيصية وقائية تأهيلية قوية ضعيفة "
+                    + "سريعة بطيئة كبيرة صغيرة طويلة قصيرة جديدة قديمة مهمة صحيحة خاطئة سليمة مؤلمة طبيعية عادية").split(" ")));
+
+    /** كلمات بعد "ال" تنتهي بـ ـيه وهاؤها أصلية (مصادر تفعيل من جذور معتلة/هائية) فلا تُصحَّح إلى ة. */
+    private static final java.util.Set<String> HAA_KEEP = new java.util.HashSet<>(Arrays.asList(
+            "\u0627\u0644\u062A\u0648\u062C\u064A\u0647", "\u0627\u0644\u062A\u0646\u0628\u064A\u0647", "\u0627\u0644\u062A\u0634\u0628\u064A\u0647",
+            "\u0627\u0644\u062A\u0645\u0648\u064A\u0647", "\u0627\u0644\u062A\u0631\u0641\u064A\u0647", "\u0627\u0644\u062A\u0646\u0648\u064A\u0647",
+            "\u0627\u0644\u062A\u0634\u0648\u064A\u0647", "\u0627\u0644\u062A\u0633\u0641\u064A\u0647", "\u0627\u0644\u062A\u0646\u0632\u064A\u0647",
+            "\u0627\u0644\u062A\u0648\u0642\u064A\u0647", "\u0627\u0644\u062A\u0641\u0642\u064A\u0647", "\u0627\u0644\u062A\u0648\u0631\u064A\u0647",
+            "\u0627\u0644\u062A\u0648\u062C\u064A\u0647", "\u0627\u0644\u062A\u0648\u0628\u064A\u0647", "\u0627\u0644\u062A\u0645\u0647\u064A\u062F"));
+
+    /**
+     * كلمة مجرّدة معرّفة بـ "ال" وتنتهي بـ ه وهي في الحقيقة مؤنث بتاء مربوطة كُتب بالهاء (خطأ إملائي شائع في
+     * النصوص المكتوبة سريعًا أو الممسوحة ضوئيًا): "الحركه" -> "الحركة". تُترك الكلمة كما هي لو لم نتأكد.
+     */
+    static String fixTaaTypo(String plain) {
+        if (plain == null || plain.length() < 5 || plain.charAt(plain.length() - 1) != HAA) return plain;
+        for (int i = 0; i < plain.length(); i++) {
+            char c = plain.charAt(i);
+            if (c < 0x0621 || c > 0x064A) return plain; // مجرّدة من العلامات والحروف الغريبة فقط
+        }
+        // السابقة (و/ف) ثم (ب/ك/ل) ثم "ال" - لازم "ال" ليستحيل الضمير المتصل
+        String r = plain;
+        if ((r.startsWith("\u0648") || r.startsWith("\u0641")) && r.length() > 5) r = r.substring(1);
+        String core = null;
+        if (r.startsWith("\u0627\u0644")) core = r;
+        else if ((r.startsWith("\u0628") || r.startsWith("\u0643")) && r.startsWith("\u0627\u0644", 1)) core = r.substring(1);
+        else if (r.startsWith("\u0644\u0644")) core = "\u0627\u0644" + r.substring(2);
+        if (core == null || core.length() < 5) return plain;
+        if (HAA_KEEP.contains(core) || core.contains("\u0644\u0644\u0647")) return plain; // الله، الوجه...
+        String stem = core.substring(2, core.length() - 1); // بلا ال وبلا ه
+        String withTaa = stem + TAA_MARBUTA;
+        boolean known = TAA_NOUNS.contains(withTaa) || LEX.containsKey(withTaa);
+        // نسبة طويلة (علاجي، وظيفي): 5 أحرف فأكثر؛ الأقصر قد تكون فعيلًا هاؤه أصلية (الفقيه، السفيه، النبيه)
+        boolean nisba = stem.length() >= 5 && stem.endsWith("\u064A");
+        if (!known && !nisba) return plain;
+        return plain.substring(0, plain.length() - 1) + TAA_MARBUTA;
+    }
+
     static List<String> words(String s) {
         return new ArrayList<>(Arrays.asList(s.split(" ")));
     }

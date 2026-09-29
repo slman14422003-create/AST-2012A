@@ -131,6 +131,36 @@ final class SpeechPrep {
             toks = mt;
         }
 
+        // 3-أ) الصيغة المنطوقة لكل كلمة أولًا (بلا تجميع) كي نعرف الكلمة التالية عند ضبط أواخر الكلمات
+        //      (التاء المربوطة: تاء داخل الجملة وهاء عند الوقف)
+        final String[] sps = new String[toks.size()];
+        {
+            String pb = "";
+            boolean pn = false;
+            boolean fst = true;
+            for (int t = 0; t < toks.size(); t++) {
+                String tok = toks.get(t);
+                String sp;
+                try {
+                    sp = speakToken(tok, lang, fst, pb, pn);
+                    // "بال" / "وال" منفصلة قبل كلمة لاتينية (بالـ TENS): تُنطق al لا "با ل"
+                    if (t + 1 < toks.size() && startsLatin(clean(toks.get(t + 1)))) {
+                        String cb = bareOf(clean(tok));
+                        String cl = AL_ONLY.contains(cb) ? ArabicPhonetics.clitic(cb) : null;
+                        if (cl != null) sp = cl;
+                    }
+                } catch (RuntimeException e) {
+                    sp = tok; // أي خطأ غير متوقع: ننطق الكلمة كما هي
+                }
+                sps[t] = sp;
+                String bare = bareOf(clean(tok));
+                pn = NUMBER.matcher(bare).matches();
+                pb = bare;
+                if (!sp.isEmpty()) fst = false;
+            }
+            if (ar && (taaMode != ArabicPhonetics.TAA_AUTO || noIrab)) shapeEndingsAll(sps);
+        }
+
         // 3) تحويل كل كلمة إلى صيغتها المنطوقة مع خريطة المواضع
         StringBuilder out = new StringBuilder(src.length() + 32);
         int[] map = new int[src.length() + 64];
@@ -144,18 +174,7 @@ final class SpeechPrep {
         for (int t = 0; t < toks.size(); t++) {
             String tok = toks.get(t);
             int s = starts.get(t);
-            String sp;
-            try {
-                sp = speakToken(tok, lang, first, prevBare, prevNum);
-                // "بال" / "وال" منفصلة قبل كلمة لاتينية (بالـ TENS): تُنطق al لا "با ل"
-                if (t + 1 < toks.size() && startsLatin(clean(toks.get(t + 1)))) {
-                    String cb = bareOf(clean(tok));
-                    String cl = AL_ONLY.contains(cb) ? ArabicPhonetics.clitic(cb) : null;
-                    if (cl != null) sp = cl;
-                }
-            } catch (RuntimeException e) {
-                sp = tok; // أي خطأ غير متوقع: ننطق الكلمة كما هي
-            }
+            String sp = sps[t];
             String bare = bareOf(clean(tok));
             prevNum = NUMBER.matcher(bare).matches();
             prevBare = bare;
@@ -200,6 +219,24 @@ final class SpeechPrep {
         }
         List<Run> runs = mixed ? buildRuns(runS, runL, runU, out.length(), lang) : null;
         return new Spoken(out.toString(), Arrays.copyOf(map, mlen), runs);
+    }
+
+    /** يضبط أواخر الكلمات العربية (ة/ه وسكون الأواخر) بمعرفة الكلمة التالية لكل كلمة. */
+    private static void shapeEndingsAll(String[] sps) {
+        final int tm = taaMode;
+        final boolean ni = noIrab;
+        for (int t = 0; t < sps.length; t++) {
+            String sp = sps[t];
+            if (sp == null || sp.isEmpty() || !ArabicPhonetics.hasArabic(sp)) continue;
+            boolean nextArabic = false;
+            for (int u = t + 1; u < sps.length; u++) {
+                String nx = sps[u];
+                if (nx == null || nx.isEmpty()) continue;
+                nextArabic = ArabicPhonetics.isArabicLetter(nx.charAt(0));
+                break;
+            }
+            sps[t] = ArabicPhonetics.shapeEndings(sp, nextArabic, tm, ni);
+        }
     }
 
     private static final ThreadLocal<String> LATIN = new ThreadLocal<>();
@@ -383,6 +420,25 @@ final class SpeechPrep {
         spellAcronyms = v;
     }
 
+    /** أسلوب نطق التاء المربوطة: ArabicPhonetics.TAA_AUTO / TAA_FUSHA (الافتراضي) / TAA_HAA. */
+    private static volatile int taaMode = ArabicPhonetics.TAA_FUSHA;
+    /** تصحيح إملاء "الحركه" -> "الحركة" قبل النطق (فقط حيث لا يمكن أن تكون ضميرًا متصلًا). */
+    private static volatile boolean taaFix = true;
+    /** قراءة بلا إعراب: سكون على أواخر الكلمات حتى لا يخترع المحرك حركات إعراب خاطئة. */
+    private static volatile boolean noIrab = false;
+
+    static void setTaaMode(int m) {
+        taaMode = Math.max(ArabicPhonetics.TAA_AUTO, Math.min(ArabicPhonetics.TAA_HAA, m));
+    }
+
+    static void setTaaTypoFix(boolean v) {
+        taaFix = v;
+    }
+
+    static void setNoIrab(boolean v) {
+        noIrab = v;
+    }
+
     /** أسطر بصيغة: كلمة=نطقها  (أو  كلمة=>نطقها). النطق يمكن أن يكون بحروف عربية لكلمة أجنبية. */
     static void setUserLexicon(String text) {
         Map<String, String> m = new HashMap<>();
@@ -502,6 +558,7 @@ final class SpeechPrep {
             if (k > 0) sb.append(' ');
             String w = parts[k];
             if (ArabicPhonetics.hasArabic(w)) {
+                if (taaFix) w = ArabicPhonetics.fixTaaTypo(w); // الحركه -> الحركة (لتُنطق تاءً لا هاءً)
                 w = diacritize(w);
                 w = ArabicPhonetics.fixJamaa(w); // تجمعوا: واو الجماعة بلا نطق الألف بعدها
                 if (assist && pausal && k == parts.length - 1) w = ArabicPhonetics.pausal(w);
@@ -1100,6 +1157,53 @@ final class SpeechPrep {
         d("ليست", "لَيْسَتْ", false);
         d("إنما", "إِنَّمَا", false);
         d("أيضا", "أَيْضًا", false);
+
+        // ضمير الغائب المتصل (ـه / ـها / ـهم): تشكيل صريح كي تُنطق الهاء واضحة (لَهُ، بِهِ) ولا تُخلط بالتاء المربوطة
+        d("له", "لَهُ", false);
+        d("به", "بِهِ", false);
+        d("منه", "مِنْهُ", false);
+        d("عنه", "عَنْهُ", false);
+        d("فيه", "فِيهِ", false);
+        d("إليه", "إِلَيْهِ", false);
+        d("اليه", "إِلَيْهِ", false);
+        d("عليه", "عَلَيْهِ", false);
+        d("لديه", "لَدَيْهِ", false);
+        d("معه", "مَعَهُ", false);
+        d("عنده", "عِنْدَهُ", false);
+        d("بعده", "بَعْدَهُ", false);
+        d("قبله", "قَبْلَهُ", false);
+        d("حوله", "حَوْلَهُ", false);
+        d("أنه", "أَنَّهُ", false);
+        d("إنه", "إِنَّهُ", false);
+        d("لأنه", "لِأَنَّهُ", false);
+        d("لانه", "لِأَنَّهُ", false);
+        d("بأنه", "بِأَنَّهُ", false);
+        d("كأنه", "كَأَنَّهُ", false);
+        d("لكنه", "لَكِنَّهُ", false);
+        d("لها", "لَهَا", false);
+        d("بها", "بِهَا", false);
+        d("منها", "مِنْهَا", false);
+        d("عنها", "عَنْهَا", false);
+        d("فيها", "فِيهَا", false);
+        d("عليها", "عَلَيْهَا", false);
+        d("إليها", "إِلَيْهَا", false);
+        d("معها", "مَعَهَا", false);
+        d("أنها", "أَنَّهَا", false);
+        d("إنها", "إِنَّهَا", false);
+        d("لأنها", "لِأَنَّهَا", false);
+        d("بأنها", "بِأَنَّهَا", false);
+        d("لكنها", "لَكِنَّهَا", false);
+        d("لهم", "لَهُمْ", false);
+        d("بهم", "بِهِمْ", false);
+        d("منهم", "مِنْهُمْ", false);
+        d("عنهم", "عَنْهُمْ", false);
+        d("فيهم", "فِيهِمْ", false);
+        d("عليهم", "عَلَيْهِمْ", false);
+        d("إليهم", "إِلَيْهِمْ", false);
+        d("معهم", "مَعَهُمْ", false);
+        d("أنهم", "أَنَّهُمْ", false);
+        d("إنهم", "إِنَّهُمْ", false);
+        d("لأنهم", "لِأَنَّهُمْ", false);
     }
 
     private static boolean hasArabic(String s) {
