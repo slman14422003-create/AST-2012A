@@ -342,6 +342,11 @@ public class PatientDetailActivity extends AppCompatActivity {
             protocol.setVisibility(View.GONE);
         } else {
             protocol.setText(BidiText.fix(s.protocol.trim()));
+            final CaseItem quick = findCaseByTitle(s.protocol);
+            if (quick != null) {
+                protocol.setTextColor(getColor(R.color.primary_cyan_dark));
+                protocol.setOnClickListener(v -> openCase(quick));
+            }
         }
 
         LinearLayout chips = row.findViewById(R.id.session_chips);
@@ -538,13 +543,36 @@ public class PatientDetailActivity extends AppCompatActivity {
         return null;
     }
 
+    /** يبحث عن الحالة بالعنوان: تطابق تام أولًا، ثم تطابق مُطبَّع (مسافات/همزات/تاء مربوطة)،
+     *  ثم احتواء متبادل - حتى لا يفشل فتح البروتوكول لمجرد اختلاف بسيط في الكتابة. */
     private CaseItem findCaseByTitle(String title) {
         if (title == null || title.trim().isEmpty()) return null;
         String wanted = title.trim();
-        for (CaseItem c : DataManager.allCases(this)) {
-            if (wanted.equals(c.title.trim())) return c;
+        List<CaseItem> all = DataManager.allCases(this);
+        for (CaseItem c : all) {
+            if (c.title != null && wanted.equals(c.title.trim())) return c;
         }
-        return null;
+        String w = squash(wanted);
+        if (w.isEmpty()) return null;
+        for (CaseItem c : all) {
+            if (c.title != null && w.equals(squash(c.title))) return c;
+        }
+        CaseItem best = null;
+        int bestLen = Integer.MAX_VALUE;
+        for (CaseItem c : all) {
+            if (c.title == null) continue;
+            String t = squash(c.title);
+            if (t.isEmpty()) continue;
+            if ((t.contains(w) || w.contains(t)) && t.length() < bestLen) {
+                best = c;
+                bestLen = t.length();
+            }
+        }
+        return best;
+    }
+
+    private static String squash(String s) {
+        return DataManager.normalize(s).replaceAll("[\\s\\p{Punct}\u060C\u061B\u061F\u0640\u064B-\u065F]+", "");
     }
 
     private void openCase(CaseItem c) {

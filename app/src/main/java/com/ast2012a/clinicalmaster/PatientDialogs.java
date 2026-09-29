@@ -1,6 +1,17 @@
 package com.ast2012a.clinicalmaster;
 
 import android.app.Activity;
+import android.app.Dialog;
+import android.content.res.ColorStateList;
+import android.text.Editable;
+import android.text.TextWatcher;
+import android.util.TypedValue;
+import android.view.Gravity;
+import android.view.ViewGroup;
+import android.view.inputmethod.InputMethodManager;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.app.DatePickerDialog;
 import android.app.TimePickerDialog;
 import android.view.LayoutInflater;
@@ -12,7 +23,7 @@ import android.widget.Toast;
 import androidx.appcompat.app.AlertDialog;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
-import com.google.android.material.textfield.MaterialAutoCompleteTextView;
+import com.google.android.material.textfield.TextInputLayout;
 import com.google.android.material.textfield.TextInputEditText;
 
 import java.util.ArrayList;
@@ -152,13 +163,13 @@ public final class PatientDialogs {
             dateView.setText("" + Fmt.dateTime(millis));
         }));
 
-        final MaterialAutoCompleteTextView protocolField = view.findViewById(R.id.dlg_protocol);
-        List<String> titles = new ArrayList<>();
-        for (CaseItem c : DataManager.allCases(activity)) titles.add(c.title);
-        ArrayAdapter<String> protocolAdapter =
-                new ArrayAdapter<String>(activity, R.layout.item_dropdown_line, titles);
-        protocolField.setAdapter(protocolAdapter);
-        protocolField.setText(session.protocol, false);
+        final TextInputLayout protocolLayout = view.findViewById(R.id.dlg_protocol_layout);
+        final TextInputEditText protocolField = view.findViewById(R.id.dlg_protocol);
+        protocolField.setText(session.protocol);
+        View.OnClickListener openPicker = v -> showProtocolPicker(activity, textOf(protocolField),
+                text -> protocolField.setText(text));
+        protocolField.setOnClickListener(openPicker);
+        protocolLayout.setEndIconOnClickListener(openPicker);
 
         final TextInputEditText durationField = view.findViewById(R.id.dlg_duration);
         final TextInputEditText feeField = view.findViewById(R.id.dlg_fee);
@@ -193,6 +204,164 @@ public final class PatientDialogs {
             if (onSaved != null) onSaved.run();
         });
         dialog.show();
+    }
+
+    // =====================================================================
+    // اختيار البروتوكول (نافذة بحث)
+    // =====================================================================
+
+    /**
+     * نافذة اختيار بروتوكول/حالة: حقل بحث في الأعلى وقائمة تتصفّى فورًا أثناء
+     * الكتابة. الضغط على أي عنصر يختاره مباشرة، ويمكن أيضًا كتابة اسم غير موجود
+     * في القاعدة واعتماده كنص حر. (بديل عن AutoCompleteTextView الذي كان لا يعرض
+     * أي شيء عند الضغط عليه).
+     */
+    private static void showProtocolPicker(final Activity activity, final String current,
+                                           final TextResult result) {
+        final List<String> titles = new ArrayList<>();
+        final List<String> normalized = new ArrayList<>();
+        try {
+            for (CaseItem c : DataManager.allCases(activity)) {
+                if (c == null || c.title == null) continue;
+                String t = c.title.trim();
+                if (t.isEmpty() || titles.contains(t)) continue;
+                titles.add(t);
+                normalized.add(DataManager.normalize(t));
+            }
+        } catch (Throwable ignored) {
+        }
+
+        final float density = activity.getResources().getDisplayMetrics().density;
+        LinearLayout root = new LinearLayout(activity);
+        root.setOrientation(LinearLayout.VERTICAL);
+
+        final EditText search = new EditText(activity);
+        search.setBackgroundResource(R.drawable.bg_input_field);
+        search.setHint("ابحث أو اكتب اسم بروتوكول...");
+        search.setHintTextColor(activity.getColor(R.color.text_tertiary));
+        search.setTextColor(activity.getColor(R.color.text_primary));
+        search.setTextSize(15f);
+        search.setSingleLine(true);
+        search.setTextDirection(View.TEXT_DIRECTION_RTL);
+        search.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+        search.setCompoundDrawablePadding(Math.round(10 * density));
+        search.setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_search, 0, 0, 0);
+        int padH = Math.round(14 * density);
+        int padV = Math.round(12 * density);
+        search.setPadding(padH, padV, padH, padV);
+        if (current != null && !current.trim().isEmpty()) {
+            search.setText(current.trim());
+            search.selectAll();
+        }
+        root.addView(search, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        final LinearLayout list = new LinearLayout(activity);
+        list.setOrientation(LinearLayout.VERTICAL);
+        ScrollView scroll = new ScrollView(activity);
+        scroll.setVerticalScrollBarEnabled(false);
+        scroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+        scroll.addView(list, new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        LinearLayout.LayoutParams scrollLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, Math.round(280 * density));
+        scrollLp.topMargin = Math.round(10 * density);
+        root.addView(scroll, scrollLp);
+
+        final Dialog[] ref = new Dialog[1];
+        final String currentTrim = current == null ? "" : current.trim();
+
+        final Runnable render = new Runnable() {
+            @Override
+            public void run() {
+                list.removeAllViews();
+                String q = DataManager.normalize(search.getText().toString().trim());
+                int shown = 0;
+                for (int i = 0; i < titles.size(); i++) {
+                    if (!q.isEmpty() && !normalized.get(i).contains(q)) continue;
+                    list.addView(buildPickerRow(activity, list, titles.get(i),
+                            titles.get(i).equals(currentTrim), ref, result));
+                    if (++shown >= 100) break;
+                }
+                if (shown == 0) {
+                    TextView empty = new TextView(activity);
+                    empty.setText(q.isEmpty()
+                            ? "لا توجد حالات محفوظة بعد."
+                            : "لا توجد نتائج مطابقة. اضغط «اعتماد النص» لاستخدام ما كتبته كما هو.");
+                    empty.setTextColor(activity.getColor(R.color.text_secondary));
+                    empty.setTextSize(14f);
+                    empty.setLineSpacing(0f, 1.25f);
+                    empty.setTextDirection(View.TEXT_DIRECTION_RTL);
+                    empty.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+                    empty.setGravity(Gravity.CENTER_VERTICAL);
+                    empty.setPadding(Math.round(6 * density), Math.round(18 * density),
+                            Math.round(6 * density), Math.round(18 * density));
+                    list.addView(empty);
+                }
+            }
+        };
+        search.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                render.run();
+            }
+        });
+        render.run();
+
+        ClaudeDialog builder = new ClaudeDialog(activity)
+                .setTitle("اختيار البروتوكول")
+                .setView(root)
+                .setPositiveButton("اعتماد النص", (d, w) -> {
+                    String typed = search.getText() == null ? "" : search.getText().toString().trim();
+                    if (!typed.isEmpty()) result.onText(typed);
+                })
+                .setNegativeButton("إلغاء", null);
+        if (!currentTrim.isEmpty()) {
+            builder.setNeutralButton("إزالة الاختيار", (d, w) -> result.onText(""));
+        }
+        ref[0] = builder.show();
+
+        search.postDelayed(() -> {
+            try {
+                search.requestFocus();
+                InputMethodManager imm =
+                        (InputMethodManager) activity.getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
+                if (imm != null) imm.showSoftInput(search, InputMethodManager.SHOW_IMPLICIT);
+            } catch (Throwable ignored) {
+            }
+        }, 220);
+    }
+
+    private static View buildPickerRow(final Activity activity, ViewGroup parent, final String title,
+                                       boolean selected, final Dialog[] ref, final TextResult result) {
+        TextView row = (TextView) LayoutInflater.from(activity)
+                .inflate(R.layout.item_dropdown_line, parent, false);
+        row.setText(BidiText.fix(title));
+        row.setClickable(true);
+        row.setFocusable(true);
+        TypedValue tv = new TypedValue();
+        if (activity.getTheme().resolveAttribute(android.R.attr.selectableItemBackground, tv, true)) {
+            row.setBackgroundResource(tv.resourceId);
+        }
+        if (selected) {
+            row.setTextColor(activity.getColor(R.color.primary_cyan_dark));
+            row.setCompoundDrawablePadding(Math.round(8 * activity.getResources().getDisplayMetrics().density));
+            row.setCompoundDrawablesRelativeWithIntrinsicBounds(0, 0, R.drawable.ic_check, 0);
+            row.setCompoundDrawableTintList(ColorStateList.valueOf(activity.getColor(R.color.primary_cyan)));
+        }
+        row.setOnClickListener(v -> {
+            result.onText(title);
+            if (ref[0] != null) ref[0].dismiss();
+        });
+        return row;
     }
 
     private static Patient.Session copyOf(Patient.Session s) {

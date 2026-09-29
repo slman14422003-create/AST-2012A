@@ -1,6 +1,19 @@
 package com.ast2012a.clinicalmaster;
 
 import android.app.Dialog;
+import android.content.SharedPreferences;
+import android.view.GestureDetector;
+import android.view.KeyEvent;
+import android.view.animation.DecelerateInterpolator;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
+import android.widget.SeekBar;
+import androidx.activity.OnBackPressedCallback;
+import java.util.TreeSet;
+import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.res.Configuration;
@@ -105,8 +118,37 @@ public class PdfViewerActivity extends AppCompatActivity {
     private ImageButton zoomOutBtn;
     private ImageButton zoomInBtn;
 
+    // ---- الشريط العلوي/السفلي، البحث، الإشارات المرجعية، حفظ موضع القراءة
+    private View topChrome;
+    private View searchBar;
+    private EditText searchInput;
+    private TextView searchCount;
+    private View navBar;
+    private SeekBar navSeek;
+    private TextView navLabel;
+    private boolean seekDragging = false;
+    private boolean chromeVisible = true;
+    private OnBackPressedCallback backCallback;
+    private SharedPreferences prefs;
+    private String docKey = "";
+    private final TreeSet<Integer> bookmarks = new TreeSet<>();
+    private final AtomicInteger searchToken = new AtomicInteger();
+    private final List<PdfSearchEngine.Hit> hits = new ArrayList<>();
+    private int hitIndex = -1;
+    private GestureDetector tapDetector;
+    private boolean gestureTracking = false;
+    private boolean tapWasScrolling = false;
+    private final Runnable savePositionRunnable = this::saveReadingPosition;
+
     private final ExecutorService loadExecutor = Executors.newSingleThreadExecutor();
-    private final ExecutorService renderExecutor = Executors.newSingleThreadExecutor();
+    /** طابور LIFO: آخر صفحة ظهرت على الشاشة تُرسم أولًا (بدل انتظار الصفحات التي تجاوزها المستخدم). */
+    private final ExecutorService renderExecutor = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
+            new LinkedBlockingDeque<Runnable>() {
+                @Override
+                public boolean offer(Runnable r) {
+                    return offerFirst(r);
+                }
+            });
     /** استخراج نص الصفحة (PdfBox) قبل إرسالها لخدمة الترجمة - منفصل عن renderExecutor
      *  حتى لا تنتظر الترجمة دورها خلف رسم الصفحات. */
     private final ExecutorService textExecutor = Executors.newSingleThreadExecutor();
@@ -126,7 +168,10 @@ public class PdfViewerActivity extends AppCompatActivity {
     private float renderedZoomPercent = 100f;
     private ScaleGestureDetector pinchDetector;
     /** الوضع الليلي لصفحات الـ PDF: يُفعَّل تلقائياً حسب مظهر النظام، ويمكن للمستخدم تبديله يدوياً من القائمة. */
-    private boolean nightPagesEnabled;
+    private static final int MODE_LIGHT = 0;
+    private static final int MODE_NIGHT = 1;
+    private static final int MODE_SEPIA = 2;
+    private int pageMode = MODE_LIGHT;
     private boolean nightPagesUserOverride = false;
     /** يزيد مع كل تغيير للتكبير؛ أي رسم قديم بجيل مختلف يُتجاهل. */
     private volatile int generation = 0;
@@ -165,7 +210,14 @@ public class PdfViewerActivity extends AppCompatActivity {
         setContentView(R.layout.activity_pdf_viewer);
 
         // تفعيل الوضع الليلي للصفحات تلقائياً إذا كان النظام/التطبيق بالوضع الداكن.
-        nightPagesEnabled = isSystemNightMode();
+        prefs = getSharedPreferences("pdf_reader", MODE_PRIVATE);
+        int savedMode = prefs.getInt("page_mode", -1);
+        if (savedMode >= MODE_LIGHT && savedMode <= MODE_SEPIA) {
+            pageMode = savedMode;
+            nightPagesUserOverride = true;
+        } else {
+            pageMode = isSystemNightMode() ? MODE_NIGHT : MODE_LIGHT;
+        }
 
         MaterialToolbar toolbar = findViewById(R.id.toolbar);
         toolbar.setNavigationOnClickListener(v -> finish());
@@ -196,6 +248,7 @@ public class PdfViewerActivity extends AppCompatActivity {
         emptyBox = findViewById(R.id.pdf_empty);
         pageIndicator = findViewById(R.id.pdf_page_indicator);
         bindTtsBar();
+        bindChrome();
 
         // ذاكرة مؤقتة للصفحات المرسومة: سدس الذاكرة المتاحة للتطبيق (حد أدنى 24 ميجا)
         int maxKb = (int) (Runtime.getRuntime().maxMemory() / 1024);
@@ -208,6 +261,8 @@ public class PdfViewerActivity extends AppCompatActivity {
 
         layoutManager = new LinearLayoutManager(this);
         pages.setLayoutManager(layoutManager);
+        pages.setItemAnimator(null);
+        pages.setItemViewCacheSize(4);
         adapter = new PageAdapter();
         pages.setAdapter(adapter);
         setupPinchZoom();
@@ -274,9 +329,9 @@ public class PdfViewerActivity extends AppCompatActivity {
         if (ratios.length > 0) hScroll.post(this::applyZoom);
         // إذا لم يتدخّل المستخدم يدوياً، نتابع تلقائياً أي تغيير بمظهر النظام (فاتح/داكن).
         if (!nightPagesUserOverride) {
-            boolean night = isSystemNightMode();
-            if (night != nightPagesEnabled) {
-                nightPagesEnabled = night;
+            int want = isSystemNightMode() ? MODE_NIGHT : MODE_LIGHT;
+            if (want != pageMode) {
+                pageMode = want;
                 refreshRenderedPages();
             }
         }
@@ -302,8 +357,15 @@ public class PdfViewerActivity extends AppCompatActivity {
     }
 
     @Override
+    protected void onPause() {
+        super.onPause();
+        saveReadingPosition();
+    }
+
+    @Override
     protected void onDestroy() {
         super.onDestroy();
+        searchToken.incrementAndGet();
         uiHandler.removeCallbacksAndMessages(null);
         loadExecutor.shutdownNow();
         renderExecutor.shutdownNow();
@@ -384,13 +446,53 @@ public class PdfViewerActivity extends AppCompatActivity {
                 setZoomPercent(finalPercent);
             }
         });
-        hScroll.setOnTouchListener((v, event) -> {
-            pinchDetector.onTouchEvent(event);
-            // إصبعان (Pinch) بيتعامل معاهم الكاشف فقط ولا بيوقف تمرير
-            // HorizontalScrollView العادي بإصبع واحد - false يسيب الحدث
-            // يكمل مساره الطبيعي للتمرير.
-            return false;
+        tapDetector = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
+            @Override
+            public boolean onSingleTapConfirmed(@NonNull MotionEvent e) {
+                if (!tapWasScrolling) toggleChrome();
+                return true;
+            }
+
+            @Override
+            public boolean onDoubleTap(@NonNull MotionEvent e) {
+                if (ratios.length == 0) return false;
+                setZoomPercent(zoomPercent >= 150f ? 100f : 200f);
+                return true;
+            }
         });
+    }
+
+    /**
+     * كان كاشف الـ Pinch مربوطًا بـ hScroll.setOnTouchListener، لكن RecyclerView (الابن) يستهلك
+     * اللمسات فلا تصل للأب - فكان التكبير بإصبعين لا يعمل بثبات. الحل: نغذّي الكاشفين من
+     * dispatchTouchEvent للنشاط نفسه (يرى كل اللمسات) مع استثناء الأشرطة العائمة.
+     */
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        if (pinchDetector != null && tapDetector != null && hScroll != null) {
+            int a = ev.getActionMasked();
+            if (a == MotionEvent.ACTION_DOWN) {
+                gestureTracking = hScroll.getVisibility() == View.VISIBLE && ratios.length > 0
+                        && hitView(hScroll, ev) && !hitView(topChrome, ev) && !hitView(navBar, ev)
+                        && !hitView(ttsBar, ev) && !hitView(pageIndicator, ev);
+                tapWasScrolling = pages.getScrollState() != RecyclerView.SCROLL_STATE_IDLE;
+            }
+            if (gestureTracking) {
+                pinchDetector.onTouchEvent(ev);
+                tapDetector.onTouchEvent(ev);
+            }
+            if (a == MotionEvent.ACTION_UP || a == MotionEvent.ACTION_CANCEL) gestureTracking = false;
+        }
+        return super.dispatchTouchEvent(ev);
+    }
+
+    private static boolean hitView(View v, MotionEvent ev) {
+        if (v == null || v.getVisibility() != View.VISIBLE) return false;
+        int[] loc = new int[2];
+        v.getLocationOnScreen(loc);
+        float x = ev.getRawX();
+        float y = ev.getRawY();
+        return x >= loc[0] && x < loc[0] + v.getWidth() && y >= loc[1] && y < loc[1] + v.getHeight();
     }
 
     /** يعرض قائمة "المزيد" كـ PopupWindow مخصّص (popup_pdf_more_menu) بنفس
@@ -399,36 +501,63 @@ public class PdfViewerActivity extends AppCompatActivity {
     private void showMoreMenu(View anchor) {
         View content = LayoutInflater.from(this).inflate(R.layout.popup_pdf_more_menu, null);
 
-        TextView nightLabel = content.findViewById(R.id.txt_pdf_night_pages);
-        if (nightLabel != null) {
-            nightLabel.setText(nightPagesEnabled ? "إيقاف الوضع الليلي للصفحات" : "تفعيل الوضع الليلي للصفحات");
+        TextView modeLabel = content.findViewById(R.id.txt_pdf_night_pages);
+        if (modeLabel != null) modeLabel.setText("وضع الصفحة: " + modeName(pageMode) + " (اضغط للتغيير)");
+        TextView bmLabel = content.findViewById(R.id.txt_pdf_bookmark);
+        if (bmLabel != null && ratios.length > 0) {
+            bmLabel.setText(bookmarks.contains(currentPageIndex())
+                    ? "إزالة الإشارة المرجعية من هذه الصفحة" : "إضافة إشارة مرجعية لهذه الصفحة");
         }
 
-        PopupWindow popup = new PopupWindow(content, ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT, true);
+        int widthPx = Ui.dp(this, 264);
+        content.measure(View.MeasureSpec.makeMeasureSpec(widthPx, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+        int maxH = Math.round(getResources().getDisplayMetrics().heightPixels * 0.70f);
+        int height = Math.min(content.getMeasuredHeight(), maxH);
+
+        PopupWindow popup = new PopupWindow(content, widthPx, height, true);
         popup.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         popup.setOutsideTouchable(true);
         popup.setElevation(Ui.dp(this, 8));
 
         bindMoreMenuRow(content, popup, R.id.row_pdf_ask_ai, this::askAiAboutThisFile);
         bindMoreMenuRow(content, popup, R.id.row_pdf_read_aloud, this::startReadAloud);
+        bindMoreMenuRow(content, popup, R.id.row_pdf_search, this::showSearchBar);
+        bindMoreMenuRow(content, popup, R.id.row_pdf_bookmark, this::toggleBookmark);
+        bindMoreMenuRow(content, popup, R.id.row_pdf_bookmarks, this::showBookmarksDialog);
         bindMoreMenuRow(content, popup, R.id.row_pdf_translate_page, this::showTranslateLanguageDialog);
         bindMoreMenuRow(content, popup, R.id.row_pdf_translate_full, this::showFullTranslateLanguageDialog);
         bindMoreMenuRow(content, popup, R.id.row_pdf_save_copy, this::saveCurrentFileCopy);
-        bindMoreMenuRow(content, popup, R.id.row_pdf_night_pages, () -> {
-            nightPagesUserOverride = true;
-            nightPagesEnabled = !nightPagesEnabled;
-            refreshRenderedPages();
-            Toast.makeText(this, nightPagesEnabled ? "تم تفعيل الوضع الليلي للصفحات" : "تم إيقاف الوضع الليلي للصفحات",
-                    Toast.LENGTH_SHORT).show();
-        });
+        bindMoreMenuRow(content, popup, R.id.row_pdf_night_pages, this::cyclePageMode);
         bindMoreMenuRow(content, popup, R.id.row_pdf_goto, this::showGoToPageDialog);
         bindMoreMenuRow(content, popup, R.id.row_pdf_open_external, this::openExternally);
         bindMoreMenuRow(content, popup, R.id.row_pdf_pick_another, this::launchPicker);
 
-        content.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
-        int xOff = anchor.getWidth() - content.getMeasuredWidth();
+        int xOff = anchor.getWidth() - widthPx;
         popup.showAsDropDown(anchor, xOff, Ui.dp(this, 4));
+        // دخول ناعم للقائمة
+        content.setAlpha(0f);
+        content.setScaleX(0.94f);
+        content.setScaleY(0.94f);
+        content.setPivotX(0f);
+        content.setPivotY(0f);
+        content.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(160)
+                .setInterpolator(new DecelerateInterpolator()).start();
+    }
+
+    private static String modeName(int mode) {
+        if (mode == MODE_NIGHT) return "ليلي";
+        if (mode == MODE_SEPIA) return "دافئ";
+        return "عادي";
+    }
+
+    /** عادي ← ليلي ← دافئ (لون ورق مريح للعين) ثم يعود، ويُحفظ اختيار المستخدم. */
+    private void cyclePageMode() {
+        pageMode = (pageMode + 1) % 3;
+        nightPagesUserOverride = true;
+        prefs.edit().putInt("page_mode", pageMode).apply();
+        refreshRenderedPages();
+        Toast.makeText(this, "وضع الصفحة: " + modeName(pageMode), Toast.LENGTH_SHORT).show();
     }
 
     private void bindMoreMenuRow(View root, PopupWindow popup, int rowId, Runnable action) {
@@ -575,6 +704,9 @@ public class PdfViewerActivity extends AppCompatActivity {
             descriptor = pfd;
         }
         currentFile = file;
+        resetSearchState();
+        docKey = String.valueOf(titleView.getText()) + "|" + file.length();
+        loadBookmarks();
         ratios = rt;
         zoomPercent = 100f;
         renderedZoomPercent = 100f;
@@ -588,8 +720,18 @@ public class PdfViewerActivity extends AppCompatActivity {
         hScroll.setVisibility(View.VISIBLE);
         hScroll.scrollTo(0, 0);
         layoutManager.scrollToPositionWithOffset(0, 0);
-        // ننتظر اكتمال قياس الواجهة قبل حساب عرض الصفحات
+        // ننتظر اكتمال قياس الواجهة قبل حساب عرض الصفحات، ثم نكمل من آخر صفحة قُرئت
+        final int resume = prefs.getInt("pg_" + docKey, 0);
         hScroll.post(this::applyZoom);
+        hScroll.post(() -> {
+            if (resume > 0 && resume < ratios.length) {
+                layoutManager.scrollToPositionWithOffset(resume, 0);
+                updateIndicator();
+                Toast.makeText(this, "تم الاستئناف من الصفحة " + (resume + 1), Toast.LENGTH_SHORT).show();
+            }
+        });
+        chromeVisible = true;
+        applyChrome();
     }
 
     // ------------------------------------------------------------------ التكبير والرسم
@@ -609,7 +751,6 @@ public class PdfViewerActivity extends AppCompatActivity {
 
         renderedZoomPercent = zoomPercent;
         generation++;
-        cache.evictAll();
         adapter.notifyDataSetChanged();
         if (first > 0) layoutManager.scrollToPositionWithOffset(first, 0);
         updateIndicator();
@@ -629,15 +770,16 @@ public class PdfViewerActivity extends AppCompatActivity {
      * البتمَاب المرسوم أوسع من عرض الصورة المعروضة الحقيقي، فيتمدّد/يتشوّه ارتفاع
      * كل صفحة (scaleType="fitXY") بدل ما تناسق حجم الشاشة بشكل سليم.
      */
-    private static final int PAGE_CARD_HORIZONTAL_CHROME_DP = 48;
+    private static final int PAGE_CARD_HORIZONTAL_CHROME_DP = 26;
 
     private int pageWidthPx() {
         int w = Math.round(hScroll.getWidth() * zoomPercent / 100f) - Ui.dp(this, PAGE_CARD_HORIZONTAL_CHROME_DP);
         return Math.max(1, w);
     }
 
-    private static long cacheKey(int page, int zoom) {
-        return ((long) page << 8) | zoom;
+    /** المفتاح يعتمد على عرض الرسم الفعلي (لا على درجة التكبير) فيبقى صحيحًا بعد تدوير الشاشة. */
+    private static long cacheKey(int page, int widthPx) {
+        return ((long) page << 32) | (widthPx & 0xFFFFFFFFL);
     }
 
     /** عرض التصدير الأقصى بالبكسل لخلفية كل صفحة في ملف الترجمة الناتج - أعلى
@@ -708,7 +850,7 @@ public class PdfViewerActivity extends AppCompatActivity {
                 Bitmap bmp = Bitmap.createBitmap(bw, bh, Bitmap.Config.ARGB_8888);
                 bmp.eraseColor(Color.WHITE); // صفحات PDF شفافة افتراضيًا
                 p.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
-                return enhancePage(bmp, nightPagesEnabled);
+                return enhancePage(bmp, pageMode);
             } catch (OutOfMemoryError oom) {
                 cache.evictAll();
                 return null;
@@ -724,17 +866,17 @@ public class PdfViewerActivity extends AppCompatActivity {
      * تحسين تلقائي لجودة النص (تباين أوضح للحروف الرفيعة عند التصغير)، مع قلب الألوان
      * اختيارياً لعرض الصفحة بالوضع الليلي (خلفية داكنة ونص فاتح) بدل الورقة البيضاء الأصلية.
      */
-    private static Bitmap enhancePage(Bitmap src, boolean night) {
+    private static Bitmap enhancePage(Bitmap src, int mode) {
         Bitmap out = Bitmap.createBitmap(src.getWidth(), src.getHeight(), Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(out);
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
-        paint.setColorFilter(new ColorMatrixColorFilter(buildEnhanceMatrix(night)));
+        paint.setColorFilter(new ColorMatrixColorFilter(buildEnhanceMatrix(mode)));
         canvas.drawBitmap(src, 0, 0, paint);
         src.recycle();
         return out;
     }
 
-    private static ColorMatrix buildEnhanceMatrix(boolean night) {
+    private static ColorMatrix buildEnhanceMatrix(int mode) {
         // تباين أعلى قليلاً وتغميق نقطة الأسود: يبرز حروف النص الرفيعة بعد تصغير الصفحة لعرض الشاشة.
         float c = 1.12f;
         float t = -18f * c;
@@ -744,7 +886,16 @@ public class PdfViewerActivity extends AppCompatActivity {
                 0, 0, c, 0, t,
                 0, 0, 0, 1, 0
         });
-        if (night) {
+        if (mode == MODE_SEPIA) {
+            // ورق دافئ: تخفيف الأزرق والأخضر قليلًا فيصير الأبيض بلون كريمي مريح للعين
+            matrix.postConcat(new ColorMatrix(new float[]{
+                    0.97f, 0, 0, 0, 0,
+                    0, 0.92f, 0, 0, 0,
+                    0, 0, 0.78f, 0, 0,
+                    0, 0, 0, 1, 0
+            }));
+        }
+        if (mode == MODE_NIGHT) {
             ColorMatrix invert = new ColorMatrix(new float[]{
                     -1, 0, 0, 0, 255,
                     0, -1, 0, 0, 255,
@@ -773,12 +924,34 @@ public class PdfViewerActivity extends AppCompatActivity {
         speaker.seekToPage(target);
     }
 
+    private int currentPageIndex() {
+        if (layoutManager == null) return 0;
+        int pos = layoutManager.findFirstCompletelyVisibleItemPosition();
+        if (pos < 0) pos = layoutManager.findFirstVisibleItemPosition();
+        return Math.max(0, pos);
+    }
+
     private void updateIndicator() {
         if (ratios.length == 0) return;
         int pos = layoutManager.findFirstCompletelyVisibleItemPosition();
         if (pos < 0) pos = layoutManager.findFirstVisibleItemPosition();
         if (pos < 0) return;
-        pageIndicator.setText(BidiText.fix((pos + 1) + " / " + ratios.length));
+        String label = (pos + 1) + " / " + ratios.length;
+        if (navLabel != null) navLabel.setText(BidiText.fix(label));
+        if (navSeek != null && !seekDragging) {
+            navSeek.setMax(Math.max(1, ratios.length - 1));
+            navSeek.setProgress(pos);
+        }
+        uiHandler.removeCallbacks(savePositionRunnable);
+        uiHandler.postDelayed(savePositionRunnable, 900);
+        if (navBar != null && navBar.getVisibility() == View.VISIBLE) {
+            // شريط التنقل يعرض الرقم، فلا داعي للكبسولة العائمة
+            pageIndicator.animate().cancel();
+            pageIndicator.setVisibility(View.GONE);
+            uiHandler.removeCallbacks(hideIndicatorRunnable);
+            return;
+        }
+        pageIndicator.setText(BidiText.fix(label));
         if (pageIndicator.getVisibility() != View.VISIBLE) {
             pageIndicator.setAlpha(0f);
             pageIndicator.setVisibility(View.VISIBLE);
@@ -1253,6 +1426,7 @@ public class PdfViewerActivity extends AppCompatActivity {
             ttsBar.setTranslationY(0f);
         }
         applyTtsInsets(show);
+        applyChrome();
         if (show) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
@@ -1266,7 +1440,7 @@ public class PdfViewerActivity extends AppCompatActivity {
             barH = (h > 0 ? h : Ui.dp(this, 148)) + Ui.dp(this, 14);
         }
         pages.setPadding(pages.getPaddingLeft(), pages.getPaddingTop(), pages.getPaddingRight(),
-                Ui.dp(this, 28) + barH);
+                Ui.dp(this, show ? 28 : 92) + barH);
         pageIndicator.setTranslationY(show ? -(barH + Ui.dp(this, 4)) : 0f);
     }
 
@@ -1740,6 +1914,7 @@ public class PdfViewerActivity extends AppCompatActivity {
         emptyBox.setVisibility(View.GONE);
         hScroll.setVisibility(View.GONE);
         pageIndicator.setVisibility(View.GONE);
+        applyChrome();
     }
 
     private void showError(String title, String body) {
@@ -1754,6 +1929,7 @@ public class PdfViewerActivity extends AppCompatActivity {
         TextView action = emptyBox.findViewById(R.id.empty_action);
         action.setText("اختيار ملف آخر");
         action.setOnClickListener(v -> launchPicker());
+        applyChrome();
     }
 
     // ------------------------------------------------------------------ أدوات
@@ -1803,6 +1979,336 @@ public class PdfViewerActivity extends AppCompatActivity {
 
     // ------------------------------------------------------------------ المحوّل
 
+    // ------------------------------------------------------------------ الشريط العلوي/السفلي + البحث + الإشارات
+
+    private int paperColor() {
+        if (pageMode == MODE_NIGHT) return 0xFF161616;
+        if (pageMode == MODE_SEPIA) return 0xFFF4ECD8;
+        return Color.WHITE;
+    }
+
+    private void bindChrome() {
+        topChrome = findViewById(R.id.top_chrome);
+        searchBar = findViewById(R.id.pdf_search_bar);
+        searchInput = findViewById(R.id.search_input);
+        searchCount = findViewById(R.id.search_count);
+        navBar = findViewById(R.id.pdf_nav_bar);
+        navSeek = findViewById(R.id.nav_seek);
+        navLabel = findViewById(R.id.nav_label);
+
+        findViewById(R.id.search_close).setOnClickListener(v -> hideSearchBar());
+        findViewById(R.id.search_prev).setOnClickListener(v -> stepHit(-1));
+        findViewById(R.id.search_next).setOnClickListener(v -> stepHit(+1));
+        searchInput.setOnEditorActionListener((tv, actionId, event) -> {
+            boolean enter = event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER
+                    && event.getAction() == KeyEvent.ACTION_DOWN;
+            if (actionId == EditorInfo.IME_ACTION_SEARCH || actionId == EditorInfo.IME_ACTION_DONE || enter) {
+                startSearch(tv.getText() == null ? "" : tv.getText().toString());
+                return true;
+            }
+            return false;
+        });
+
+        navSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar sb, int progress, boolean fromUser) {
+                if (!fromUser || ratios.length == 0) return;
+                int p = Math.max(0, Math.min(ratios.length - 1, progress));
+                layoutManager.scrollToPositionWithOffset(p, 0);
+                navLabel.setText(BidiText.fix((p + 1) + " / " + ratios.length));
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar sb) {
+                seekDragging = true;
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar sb) {
+                seekDragging = false;
+                if (speaker != null && speaker.isActive() && ratios.length > 0) speaker.seekToPage(sb.getProgress());
+                updateIndicator();
+            }
+        });
+
+        backCallback = new OnBackPressedCallback(false) {
+            @Override
+            public void handleOnBackPressed() {
+                hideSearchBar();
+            }
+        };
+        getOnBackPressedDispatcher().addCallback(this, backCallback);
+    }
+
+    private void toggleChrome() {
+        chromeVisible = !chromeVisible;
+        if (searchBar.getVisibility() == View.VISIBLE) chromeVisible = true;
+        applyChrome();
+    }
+
+    /** يحسب ظهور الشريط العلوي والسفلي حسب الحالة (وضع القراءة الهادئ، البحث، القراءة الصوتية). */
+    private void applyChrome() {
+        if (topChrome == null || navBar == null) return;
+        boolean docShown = hScroll.getVisibility() == View.VISIBLE && ratios.length > 0;
+        boolean searchOn = searchBar.getVisibility() == View.VISIBLE;
+        boolean topShow = chromeVisible || searchOn || !docShown;
+        boolean navShow = docShown && chromeVisible && !searchOn
+                && (ttsBar == null || ttsBar.getVisibility() != View.VISIBLE);
+        fadeSlide(topChrome, topShow, -Ui.dp(this, 22));
+        fadeSlide(navBar, navShow, Ui.dp(this, 22));
+    }
+
+    private void fadeSlide(final View v, boolean show, float dy) {
+        v.animate().cancel();
+        if (show) {
+            if (v.getVisibility() != View.VISIBLE) {
+                v.setAlpha(0f);
+                v.setTranslationY(dy);
+                v.setVisibility(View.VISIBLE);
+            }
+            v.animate().alpha(1f).translationY(0f).setDuration(200)
+                    .setInterpolator(new DecelerateInterpolator()).start();
+        } else {
+            if (v.getVisibility() != View.VISIBLE) return;
+            v.animate().alpha(0f).translationY(dy).setDuration(170).withEndAction(() -> {
+                if (v.getAlpha() <= 0.01f) v.setVisibility(View.GONE);
+            }).start();
+        }
+    }
+
+    // ---- موضع القراءة + الإشارات المرجعية
+
+    private void saveReadingPosition() {
+        if (prefs == null || docKey.isEmpty() || ratios.length == 0 || layoutManager == null) return;
+        int pos = currentPageIndex();
+        prefs.edit().putInt("pg_" + docKey, pos >= ratios.length - 1 ? 0 : pos).apply();
+    }
+
+    private void loadBookmarks() {
+        bookmarks.clear();
+        String raw = prefs.getString("bm_" + docKey, "");
+        if (raw == null) return;
+        for (String part : raw.split(",")) {
+            try {
+                if (!part.trim().isEmpty()) bookmarks.add(Integer.parseInt(part.trim()));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+    }
+
+    private void saveBookmarks() {
+        StringBuilder sb = new StringBuilder();
+        for (int p : bookmarks) {
+            if (sb.length() > 0) sb.append(',');
+            sb.append(p);
+        }
+        prefs.edit().putString("bm_" + docKey, sb.toString()).apply();
+    }
+
+    private void toggleBookmark() {
+        if (ratios.length == 0) {
+            Toast.makeText(this, "افتح ملف PDF أولًا.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        int page = currentPageIndex();
+        if (bookmarks.contains(page)) {
+            bookmarks.remove(page);
+            Toast.makeText(this, "أُزيلت الإشارة المرجعية من الصفحة " + (page + 1), Toast.LENGTH_SHORT).show();
+        } else {
+            bookmarks.add(page);
+            Toast.makeText(this, "تمت إضافة إشارة مرجعية للصفحة " + (page + 1), Toast.LENGTH_SHORT).show();
+        }
+        saveBookmarks();
+        adapter.notifyItemChanged(page);
+    }
+
+    private void showBookmarksDialog() {
+        if (ratios.length == 0) {
+            Toast.makeText(this, "افتح ملف PDF أولًا.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (bookmarks.isEmpty()) {
+            Toast.makeText(this, "لا توجد إشارات مرجعية في هذا الملف بعد.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        final List<Integer> pagesList = new ArrayList<>(bookmarks);
+        String[] labels = new String[pagesList.size()];
+        for (int i = 0; i < labels.length; i++) labels[i] = "الصفحة " + (pagesList.get(i) + 1);
+        new ClaudeDialog(this)
+                .setTitle("الإشارات المرجعية")
+                .setItems(labels, (d, which) -> {
+                    int p = pagesList.get(which);
+                    layoutManager.scrollToPositionWithOffset(p, 0);
+                    updateIndicator();
+                    if (speaker != null && speaker.isActive()) speaker.seekToPage(p);
+                })
+                .setNegativeButton("إغلاق", null)
+                .show();
+    }
+
+    // ---- البحث داخل الملف
+
+    private void showSearchBar() {
+        if (ratios.length == 0 || currentFile == null) {
+            Toast.makeText(this, "افتح ملف PDF أولًا.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        chromeVisible = true;
+        searchBar.setVisibility(View.VISIBLE);
+        backCallback.setEnabled(true);
+        applyChrome();
+        searchInput.requestFocus();
+        searchInput.postDelayed(() -> {
+            InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+            if (imm != null) imm.showSoftInput(searchInput, InputMethodManager.SHOW_IMPLICIT);
+        }, 150);
+    }
+
+    private void hideSearchBar() {
+        searchBar.setVisibility(View.GONE);
+        backCallback.setEnabled(false);
+        resetSearchState();
+        hideKeyboard();
+        applyChrome();
+    }
+
+    private void hideKeyboard() {
+        InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+        if (imm != null && searchInput != null) imm.hideSoftInputFromWindow(searchInput.getWindowToken(), 0);
+    }
+
+    private void resetSearchState() {
+        searchToken.incrementAndGet();
+        hits.clear();
+        hitIndex = -1;
+        if (searchCount != null) searchCount.setText("");
+        refreshSearchHighlights();
+    }
+
+    private void startSearch(String raw) {
+        final String q = raw == null ? "" : raw.trim();
+        if (q.length() < 2) {
+            Toast.makeText(this, "اكتب كلمتين أو حرفين على الأقل للبحث.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (currentFile == null) return;
+        hideKeyboard();
+        resetSearchState();
+        final int my = searchToken.get();
+        final File file = currentFile;
+        searchCount.setText("...");
+        textExecutor.execute(() -> PdfSearchEngine.run(getApplicationContext(), file, q, searchToken, my,
+                new PdfSearchEngine.Listener() {
+                    @Override
+                    public void onHit(PdfSearchEngine.Hit hit) {
+                        runOnUiThread(() -> {
+                            if (my != searchToken.get() || isFinishing() || isDestroyed()) return;
+                            hits.add(hit);
+                            if (hitIndex < 0) goToHit(0);
+                            else {
+                                updateSearchCount(false);
+                                refreshSearchHighlights();
+                            }
+                        });
+                    }
+
+                    @Override
+                    public void onProgress(int done, int total) {
+                        runOnUiThread(() -> {
+                            if (my != searchToken.get() || isFinishing() || isDestroyed()) return;
+                            if (hits.isEmpty()) searchCount.setText(BidiText.fix(done + "/" + total));
+                        });
+                    }
+
+                    @Override
+                    public void onDone(int totalHits, boolean truncated) {
+                        runOnUiThread(() -> {
+                            if (my != searchToken.get() || isFinishing() || isDestroyed()) return;
+                            if (hits.isEmpty()) {
+                                searchCount.setText("لا نتائج");
+                                Toast.makeText(PdfViewerActivity.this,
+                                        "لم يُعثر على «" + q + "». الملفات الممسوحة ضوئيًا (صور) لا يمكن البحث فيها.",
+                                        Toast.LENGTH_LONG).show();
+                            } else {
+                                updateSearchCount(true);
+                            }
+                        });
+                    }
+
+                    @Override
+                    public void onError(String message) {
+                        runOnUiThread(() -> {
+                            if (my != searchToken.get() || isFinishing() || isDestroyed()) return;
+                            searchCount.setText("");
+                            Toast.makeText(PdfViewerActivity.this, "تعذّر البحث: " + message, Toast.LENGTH_LONG).show();
+                        });
+                    }
+                }));
+    }
+
+    private void updateSearchCount(boolean finished) {
+        if (hits.isEmpty()) return;
+        String suffix = (!finished && hits.size() >= PdfSearchEngine.MAX_HITS) ? "+" : "";
+        searchCount.setText(BidiText.fix((hitIndex + 1) + " / " + hits.size() + suffix));
+    }
+
+    private void stepHit(int dir) {
+        if (hits.isEmpty()) {
+            String q = searchInput.getText() == null ? "" : searchInput.getText().toString();
+            if (!q.trim().isEmpty()) startSearch(q);
+            return;
+        }
+        int n = hits.size();
+        goToHit(((hitIndex + dir) % n + n) % n);
+    }
+
+    /** ينتقل للنتيجة رقم i: يمرّر الصفحة بحيث يظهر التطابق في أعلى ثلث الشاشة ويلوّنه بالبرتقالي. */
+    private void goToHit(int i) {
+        if (i < 0 || i >= hits.size()) return;
+        hitIndex = i;
+        PdfSearchEngine.Hit h = hits.get(i);
+        RectF r = h.rects.get(0);
+        int viewH = Math.max(1, pages.getHeight());
+        float pageH = pageWidthPx() * ratios[h.page];
+        float yIn = r.centerY() * pageH;
+        int offset = Math.round(Math.min(Ui.dp(this, 8), viewH * 0.32f - yIn - pages.getPaddingTop()));
+        layoutManager.scrollToPositionWithOffset(h.page, offset);
+        if (zoomPercent > 105f) {
+            int px = Math.round(r.centerX() * pages.getWidth()) - hScroll.getWidth() / 2;
+            hScroll.smoothScrollTo(Math.max(0, px), 0);
+        }
+        updateSearchCount(false);
+        refreshSearchHighlights();
+        updateIndicator();
+    }
+
+    private void applySearchHighlight(PageAdapter.PageHolder holder, int page) {
+        if (hits.isEmpty()) {
+            holder.highlight.setSearchHits(null, null);
+            return;
+        }
+        List<RectF> others = new ArrayList<>();
+        List<RectF> current = new ArrayList<>();
+        for (int i = 0; i < hits.size(); i++) {
+            PdfSearchEngine.Hit h = hits.get(i);
+            if (h.page != page) continue;
+            if (i == hitIndex) current.addAll(h.rects);
+            else others.addAll(h.rects);
+        }
+        holder.highlight.setSearchHits(others, current);
+    }
+
+    private void refreshSearchHighlights() {
+        if (pages == null) return;
+        for (int i = 0; i < pages.getChildCount(); i++) {
+            RecyclerView.ViewHolder vh = pages.getChildViewHolder(pages.getChildAt(i));
+            if (vh instanceof PageAdapter.PageHolder) {
+                PageAdapter.PageHolder ph = (PageAdapter.PageHolder) vh;
+                applySearchHighlight(ph, ph.page);
+            }
+        }
+    }
+
     private final class PageAdapter extends RecyclerView.Adapter<PageAdapter.PageHolder> {
 
         @NonNull
@@ -1814,6 +2320,9 @@ public class PdfViewerActivity extends AppCompatActivity {
 
         @Override
         public void onBindViewHolder(@NonNull PageHolder holder, int position) {
+            // لو نفس البطاقة كانت تعرض نفس الصفحة نُبقي صورتها القديمة (حتى وإن كانت بدقة أخرى)
+            // كعنصر نائب إلى أن تجهز الصورة الحادّة - بدل وميض أبيض عند كل تكبير/تغيير وضع.
+            boolean samePage = holder.page == position;
             holder.page = position;
             int w = pageWidthPx();
             int h = Math.max(1, Math.round(w * ratios[position]));
@@ -1822,26 +2331,30 @@ public class PdfViewerActivity extends AppCompatActivity {
                 lp.height = h;
                 holder.image.setLayoutParams(lp);
             }
+            holder.image.setBackgroundColor(paperColor());
+            boolean marked = bookmarks.contains(position);
+            holder.number.setText(marked ? "\u2605  " + (position + 1) : String.valueOf(position + 1));
+            holder.number.setTextColor(getColor(marked ? R.color.primary_cyan : R.color.text_tertiary));
             if (position == speakingPage) holder.highlight.setHighlight(speakingSentence, speakingWord);
             else holder.highlight.clearHighlight();
-            Bitmap cached = cache.get(cacheKey(position, zoomBucket()));
+            applySearchHighlight(holder, position);
+            Bitmap cached = cache.get(cacheKey(position, w));
             if (cached != null) {
                 holder.image.setImageBitmap(cached);
             } else {
-                holder.image.setImageDrawable(null);
+                if (!samePage) holder.image.setImageDrawable(null);
                 requestRender(holder, position, w, h);
             }
         }
 
         private void requestRender(PageHolder holder, int page, int w, int h) {
             final int gen = generation;
-            final int zoom = zoomBucket();
             renderExecutor.execute(() -> {
                 // الصفحة خرجت من الشاشة أو تغيّر التكبير قبل دورها: نتجاهلها
                 if (gen != generation || holder.page != page) return;
                 Bitmap bmp = renderPage(page, w, h);
                 if (bmp == null) return;
-                if (gen == generation) cache.put(cacheKey(page, zoom), bmp);
+                if (gen == generation) cache.put(cacheKey(page, w), bmp);
                 runOnUiThread(() -> {
                     if (gen == generation && holder.page == page) holder.image.setImageBitmap(bmp);
                 });
@@ -1856,12 +2369,14 @@ public class PdfViewerActivity extends AppCompatActivity {
         final class PageHolder extends RecyclerView.ViewHolder {
             final ImageView image;
             final PdfHighlightView highlight;
+            final TextView number;
             volatile int page = -1;
 
             PageHolder(@NonNull View itemView) {
                 super(itemView);
                 image = itemView.findViewById(R.id.pdf_page_image);
                 highlight = itemView.findViewById(R.id.pdf_page_highlight);
+                number = itemView.findViewById(R.id.pdf_page_number);
             }
         }
     }
