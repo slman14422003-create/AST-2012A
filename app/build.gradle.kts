@@ -45,7 +45,14 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8: تصغير الكود + إزالة الموارد غير المستخدمة لتقليل حجم الحزمة
+            isMinifyEnabled = true
+            isShrinkResources = true
+            // إبقاء معماريات الهواتف الحقيقية فقط (يحذف مكتبات x86 الأصلية الثقيلة).
+            // عند النشر بصيغة AAB يوزّع Play المعمارية المناسبة لكل جهاز تلقائيًا.
+            ndk {
+                abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+            }
             signingConfig = signingConfigs.findByName("release")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
