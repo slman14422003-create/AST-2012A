@@ -183,11 +183,25 @@ jobs:
     permissions:
       contents: write
     steps:
+      # السجل الكامل (fetch-depth: 0) لازم لمعرفة ما تغيّر منذ الإصدار السابق.
+      # يجب أن تسبق هذه الخطوة تنزيل الملفات لأن checkout ينظّف مجلد العمل.
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
       - name: تنزيل ملفات APK
         uses: actions/download-artifact@v7
         with:
           name: apk-${{ github.run_number }}
           path: dist
+
+      # يفهم التغييرات منذ آخر إصدار ويكتب قسم «ما الجديد» الذي يعرضه التطبيق.
+      # يستخدم Claude لو أضفت السر ANTHROPIC_API_KEY، وإلا يبنيه من رسائل الـ commits والملفات المتغيّرة.
+      - name: توليد ملاحظات الإصدار (ما الجديد)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: python3 tools/generate_release_notes.py --output release-notes.md
 
       - name: إنشاء إصدار (Release) على GitHub
         uses: softprops/action-gh-release@v3
@@ -198,14 +212,7 @@ jobs:
           generate_release_notes: true
           make_latest: true
           fail_on_unmatched_files: true
-          body: |
-            تطبيق أندرويد أصلي مكتوب بلغة Java (Gradle / Android SDK قياسي).
-
-            نزّل ملف الـ APK من الأسفل وثبّته على جهاز أندرويد (فعّل "السماح بمصادر غير معروفة" أول مرة).
-
-            - ملف `*-release.apk`: نسخة موقّعة بمفتاح الإصدار (تظهر فقط إذا أضفت أسرار التوقيع).
-            - ملف `*-debug.apk`: نسخة تجريبية موقّعة بمفتاح Debug تلقائي، تكفي للتثبيت المباشر.
-            - `SHA256SUMS.txt`: بصمات الملفات للتحقق من سلامتها.
+          body_path: release-notes.md
           files: |
             dist/*.apk
             dist/SHA256SUMS.txt
