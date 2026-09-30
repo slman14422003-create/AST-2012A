@@ -204,7 +204,7 @@ jobs:
           fetch-depth: 0
 
       - name: تنزيل ملفات APK
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: apk-${{ github.run_number }}
           path: dist
