@@ -269,22 +269,43 @@ final class UpdateManager {
         }
     }
 
-    /** يستخرج بنود "What's Changed" من ملاحظات الإصدار المولّدة تلقائيًا. */
+    /**
+     * يستخرج بنود «ما الجديد» من ملاحظات الإصدار. يقرأ قسم «## ما الجديد» فقط (الذي يكتبه
+     * tools/generate_release_notes.py في GitHub Actions)، فلا تظهر شروحات release/debug/SHA256.
+     * للإصدارات القديمة بلا هذا القسم: يأخذ البنود العامة مع تجاهل أسطر ملفات التحميل.
+     */
     private static String parseNotes(String body) {
         if (body == null || body.isEmpty()) return "";
+        String[] lines = body.split("\\r?\\n");
+        boolean hasSection = false;
+        for (String l : lines) {
+            if (l.trim().startsWith("#") && l.contains("ما الجديد")) {
+                hasSection = true;
+                break;
+            }
+        }
         StringBuilder sb = new StringBuilder();
         int count = 0;
-        for (String raw : body.split("\\r?\\n")) {
+        boolean inSection = !hasSection;
+        for (String raw : lines) {
             String line = raw.trim();
+            if (hasSection && line.startsWith("#")) {
+                if (inSection) break;                       // بداية القسم التالي
+                inSection = line.contains("ما الجديد");
+                continue;
+            }
+            if (!inSection) continue;
             if (!(line.startsWith("* ") || line.startsWith("- "))) continue;
             line = line.substring(2).trim();
             int by = line.indexOf(" by @");
             if (by > 0) line = line.substring(0, by).trim();
             line = line.replace("**", "").replace("`", "");
             if (line.isEmpty()) continue;
-            if (line.length() > 90) line = line.substring(0, 88) + "…";
+            String low = line.toLowerCase(Locale.ROOT);
+            if (low.contains(".apk") || low.contains("sha256")) continue; // شرح ملفات التحميل
+            if (line.length() > 110) line = line.substring(0, 108) + "…";
             sb.append("• ").append(line).append('\n');
-            if (++count >= 5) break;
+            if (++count >= 6) break;
         }
         return sb.toString().trim();
     }
