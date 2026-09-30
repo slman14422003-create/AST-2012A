@@ -21,7 +21,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.ast2012a.clinicalmaster"
+        applicationId = "com.salman.ast2012a"
         minSdk = 24
         // targetSdk تُركت على 34 عمدًا: رفعها إلى 35+ يفرض وضع Edge-to-Edge على كل الشاشات
         // ويغيّر شكل التصميم الحالي. compileSdk = 36 يعطيك أحدث المكتبات بدون هذا التأثير.
