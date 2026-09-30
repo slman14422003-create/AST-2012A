@@ -92,9 +92,24 @@ final class SpeechPrep {
         LATIN.set(latinLang);
         try {
             return prepareImpl(src, lang, latinLang, mixed, continues);
+        } catch (RuntimeException e) {
+            // استقرار: أي خطأ غير متوقع في التجهيز لا يوقف القراءة - ننطق النص كما هو بخريطة مطابقة
+            return fallbackSpoken(src);
         } finally {
             LATIN.set(null);
         }
+    }
+
+    /** نص بلا أي تحويل (خريطة مطابقة) - يُستعمل فقط لو فشل التجهيز. */
+    private static Spoken fallbackSpoken(String src) {
+        if (src == null || src.isEmpty()) return new Spoken("", new int[0]);
+        char[] a = src.toCharArray();
+        int[] map = new int[a.length];
+        for (int i = 0; i < a.length; i++) {
+            if (Character.isISOControl(a[i]) || Character.isSurrogate(a[i])) a[i] = ' ';
+            map[i] = i;
+        }
+        return new Spoken(new String(a), map);
     }
 
     private static Spoken prepareImpl(String src, String lang, String latinLang, boolean mixed, boolean continues) {
@@ -116,6 +131,8 @@ final class SpeechPrep {
         }
         // 1-ب) فواصل ملتصقة/مقلوبة وعلامات تشكيل منفصلة (تخرج هكذا من بعض ملفات الـ PDF)
         repairPunctuation(starts, toks);
+        // 1-ج) تدقيق: كاف/"ال" منفصلة عن كلمتها (ذل ك / ـك / ال ك تاب) تُوصل قبل النطق فلا تضيع
+        if (ar) SpeechAuditor.mergeDetached(starts, toks);
 
         // 2) دمج الكلمات العربية المتقطّعة في الـ PDF: "ال" منفصلة عن كلمتها، أو حروف متباعدة
         //    (كانت تُنطق "ألف لام" أو تُقطَّع الكلمة). التظليل يبقى على أول جزء.
@@ -166,6 +183,16 @@ final class SpeechPrep {
                     }
                 } catch (RuntimeException e) {
                     sp = tok; // أي خطأ غير متوقع: ننطق الكلمة كما هي
+                }
+                // تدقيق: لا يجوز أن يضيع حرف عربي (ك وغيرها) بين الأصل والمنطوق؛ والكاف المنفردة تُنطق باسمها
+                if (ar && !sp.isEmpty()) {
+                    String ctk = clean(tok);
+                    if (SpeechAuditor.lostLetters(ctk, sp) && !userLex.containsKey(lexKey(bareOf(ctk)))) {
+                        String safe = SpeechAuditor.safeForm(ctk);
+                        if (!safe.isEmpty()) sp = safe;
+                    }
+                    String lk = SpeechAuditor.loneKaf(ctk, sp);
+                    if (lk != null) sp = lk;
                 }
                 // بند مرقّم في وسط المقطع (بعد نهاية جملة/فقرة): "2-" "3)" -> رقم ووقفة لا رقمًا ملصوقًا بالجملة
                 if (!fst && t > 0 && endsWithStop(toks.get(t - 1)) && t + 1 < toks.size()) {
@@ -1835,6 +1862,6 @@ final class SpeechPrep {
             else if (c == 0x066C) c = ',';
             sb.append(c);
         }
-        return ArabicPhonetics.normalize(sb.toString());
+        return ArabicPhonetics.normalize(SpeechAuditor.unifyLetters(sb.toString()));
     }
 }
