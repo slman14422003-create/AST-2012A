@@ -21,19 +21,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: تنزيل مدوّنة Tashkeela (حوالي 180 ميغا)
+      - name: تنزيل مدوّنة Tashkeela من Hugging Face (حوالي 420 ميغا)
         run: |
-          curl -L --retry 5 --retry-delay 10 -A "Mozilla/5.0" \
-            -o tashkeela.zip "https://sourceforge.net/projects/tashkeela/files/latest/download"
-          ls -la tashkeela.zip
-          unzip -tq tashkeela.zip
-          sha256sum tashkeela.zip
+          mkdir -p parquet
+          BASE="https://huggingface.co/datasets/community-datasets/tashkeela/resolve/main/plain_text"
+          for i in 00000 00001 00002; do
+            curl -fL --retry 5 --retry-delay 10 -o "parquet/train-${i}-of-00003.parquet" \
+              "${BASE}/train-${i}-of-00003.parquet"
+          done
+          ls -la parquet
 
-      - name: فكّ الضغط
+      - name: تحويل parquet إلى نصوص
         run: |
-          mkdir corpus
-          unzip -q tashkeela.zip -d corpus
-          find corpus -type f | wc -l
+          pip install pyarrow
+          python3 tools/parquet_to_txt.py parquet corpus
+          ls corpus | wc -l
 
       - name: بناء القاموس
         run: |
