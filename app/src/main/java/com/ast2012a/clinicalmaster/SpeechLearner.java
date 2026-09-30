@@ -325,6 +325,26 @@ final class SpeechLearner {
         return sp;
     }
 
+    /**
+     * تشكيل متعلَّم لكلمة عربية مجرّدة (بصيغة الوقف: بلا حركة إعراب الآخر)، أو null.
+     * للقراءة فقط: يستعمله WordVerifier ليستفيد من تشكيل الملف نفسه عند تركيب السوابق واللواحق
+     * (تعلّمنا "عَضَلَة" من الملف فنشكّل "عضلتها" و"بالعضلة" و"للعضلة" دون أن ترد في أي قاموس).
+     * الكلمة المُتَّهمة (رجع المستخدم عندها مرتين) لا تُعاد.
+     */
+    static String learnedForm(String plain) {
+        if (plain == null || plain.length() < 3) return null;
+        String k = key(plain);
+        if (k.isEmpty()) return null;
+        synchronized (LOCK) {
+            if (!loaded) return null;
+            Float b = blame.get(k);
+            if (b != null && b >= BLAME_LIMIT) return null;
+            String[] v = voweled.get(k);
+            if (v != null && parseInt(v[1]) >= 1) return v[0];
+        }
+        return null;
+    }
+
     private static String punctOf(String post) {
         for (int i = post.length() - 1; i >= 0; i--) {
             char c = post.charAt(i);

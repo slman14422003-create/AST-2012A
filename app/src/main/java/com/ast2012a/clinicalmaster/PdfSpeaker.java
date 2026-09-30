@@ -287,6 +287,12 @@ final class PdfSpeaker {
             SpeechLearner.init(app.getFilesDir()); // ذاكرة النطق المتعلَّمة
         } catch (Throwable ignored) {
         }
+        // قاموس التشكيل: يبدأ تحميله الآن (مرة واحدة وفي الخلفية) كي يكون جاهزًا قبل أول جملة تُنطق؛
+        // لو كان التطبيق بدأه من ClinicalMasterApp فهذا الاستدعاء ينتظر انتهاءه ولا يكرّر العمل.
+        if (!TashkeelDict.isReady()) {
+            final Context appCtx = app;
+            new Thread(() -> TashkeelDict.load(appCtx), "tashkeel-dict-load").start();
+        }
         initTts();
     }
 
@@ -669,7 +675,14 @@ final class PdfSpeaker {
     }
 
     String learnerStats() {
-        return SpeechLearner.stats();
+        return SpeechLearner.stats() + "\n" + WordVerifier.stats();
+    }
+
+    /** تقرير تغطية القاموس لنص الصفحة الحالية (كم كلمة وُجدت، وما أكثر الكلمات غير الموجودة) - للتشخيص. */
+    String dictionaryReport() {
+        PdfSpeechText.PageText t = currentText;
+        if (t == null || t.text == null || t.text.isEmpty()) return "";
+        return WordVerifier.analyze(t.text).toString();
     }
 
     void resetLearner() {
