@@ -67,6 +67,7 @@ public class MyCasesActivity extends AppCompatActivity implements CaseRowAdapter
 
         adapter = new CaseRowAdapter(this);
         list.setLayoutManager(new LinearLayoutManager(this));
+        list.setItemViewCacheSize(8);
         list.setAdapter(adapter);
         list.setLayoutAnimation(
                 android.view.animation.AnimationUtils.loadLayoutAnimation(this, R.anim.layout_fall_stagger));

@@ -48,6 +48,7 @@ public class FavoritesActivity extends AppCompatActivity {
             if (!nowFavorite) reload(); // إزالة العنصر فورًا من القائمة عند إلغاء التفضيل من هنا
         });
         list.setLayoutManager(new LinearLayoutManager(this));
+        list.setItemViewCacheSize(8);
         list.setAdapter(adapter);
         list.setLayoutAnimation(
                 android.view.animation.AnimationUtils.loadLayoutAnimation(this, R.anim.layout_fall_stagger));

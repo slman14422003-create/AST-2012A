@@ -166,6 +166,7 @@ public class CloudStorageActivity extends AppCompatActivity implements CloudFile
 
         adapter = new CloudFileAdapter(this);
         list.setLayoutManager(new LinearLayoutManager(this));
+        list.setItemViewCacheSize(8);
         list.setAdapter(adapter);
 
         fab.setOnClickListener(v -> {

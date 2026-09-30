@@ -21,7 +21,7 @@ import androidx.appcompat.app.AppCompatActivity;
  */
 public class SplashActivity extends AppCompatActivity {
 
-    private static final long AUTO_NAVIGATE_DELAY_MS = 1800;
+    private static final long AUTO_NAVIGATE_DELAY_MS = 1200;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private Runnable navigateRunnable;

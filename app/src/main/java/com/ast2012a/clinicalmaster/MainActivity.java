@@ -113,6 +113,7 @@ public class MainActivity extends AppCompatActivity {
 
         adapter = new CaseAdapter(this::openDetail);
         resultsList.setLayoutManager(new LinearLayoutManager(this));
+        resultsList.setItemViewCacheSize(8);
         resultsList.setAdapter(adapter);
         listAnimation = AnimationUtils.loadLayoutAnimation(this, R.anim.layout_fall_stagger);
 
