@@ -1,0 +1,52 @@
+name: Build Tashkeel Dictionary
+
+# يبني قاموس التشكيل (app/src/main/assets/tashkeel_dict.txt) من مدوّنة Tashkeela
+# على سيرفر GitHub، بدون الحاجة لكمبيوتر. شغّله يدويًا: Actions -> Build Tashkeel Dictionary -> Run workflow
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_words:
+        description: "أقصى عدد كلمات في القاموس"
+        required: false
+        default: "60000"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: تنزيل مدوّنة Tashkeela (حوالي 180 ميغا)
+        run: |
+          curl -L --retry 5 --retry-delay 10 -A "Mozilla/5.0" \
+            -o tashkeela.zip "https://sourceforge.net/projects/tashkeela/files/latest/download"
+          ls -la tashkeela.zip
+          unzip -tq tashkeela.zip
+          sha256sum tashkeela.zip
+
+      - name: فكّ الضغط
+        run: |
+          mkdir corpus
+          unzip -q tashkeela.zip -d corpus
+          find corpus -type f | wc -l
+
+      - name: بناء القاموس
+        run: |
+          python3 tools/build_tashkeel_dict.py corpus \
+            -o app/src/main/assets/tashkeel_dict.txt \
+            --max-words "${{ github.event.inputs.max_words || '60000' }}"
+          wc -l app/src/main/assets/tashkeel_dict.txt
+          head -n 15 app/src/main/assets/tashkeel_dict.txt
+
+      - name: حفظ القاموس في المستودع
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/assets/tashkeel_dict.txt
+          git commit -m "Add Tashkeel dictionary (built from Tashkeela corpus)" || echo "لا تغييرات"
+          git push
