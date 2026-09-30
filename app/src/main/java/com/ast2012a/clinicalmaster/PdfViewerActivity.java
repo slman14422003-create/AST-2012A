@@ -1756,8 +1756,26 @@ public class PdfViewerActivity extends AppCompatActivity {
                     speaker.setDeviceOfflineOnly(!speaker.isDeviceOfflineOnly());
                     refresh.run();
                 });
-        addVoiceRow(gLocal, "سرعة صوت الجهاز", "معايرة نسبةً للسرعة العامة (للمحرك المحلي فقط)",
+        addVoiceRow(gLocal, "سرعة صوت الجهاز", "تلقائي: يطابق إيقاع العصبي بعد أن يتعلّمه. أو معايرة ثابتة",
                 speaker.getDeviceSpeedLabel(), false, () -> { speaker.cycleDeviceSpeed(); refresh.run(); });
+        addVoiceSwitch(gLocal, "التعلّم الذاتي للنموذج المحلي", "يتعلّم إيقاع العصبي وصحة أصوات الجهاز ويحسّن اختيارها",
+                speaker.isVoiceLearning(), () -> {
+                    speaker.setVoiceLearning(!speaker.isVoiceLearning());
+                    refresh.run();
+                });
+        addVoiceRow(gLocal, "ما تعلّمه النموذج", "إحصاءات التعلّم وإعادة التصفير", null, true, () -> {
+            if (voiceDialog != null) voiceDialog.dismiss();
+            voiceDialog = new ClaudeDialog(this)
+                    .setTitle("النموذج الصوتي المحلي")
+                    .setMessage(speaker.voiceModelStats()
+                            + "\n\nيتحسّن النموذج تلقائيًا كلما قرأت: يقيس سرعة الصوت العصبي وصوت الجهاز فيطابق إيقاعهما عند الرجوع بينهما، ويقدّم الأصوات الأوثق.")
+                    .setPositiveButton("تم", null)
+                    .setNegativeButton("إعادة التعلّم من الصفر", (d, w) -> {
+                        speaker.resetVoiceModel();
+                        Toast.makeText(this, "تم تصفير النموذج.", Toast.LENGTH_SHORT).show();
+                    })
+                    .show();
+        });
         addVoiceSwitch(gLocal, "الرجوع التلقائي لصوت الجهاز", "عند انقطاع الإنترنت أو تعطل الصوت العصبي",
                 speaker.isDeviceFallback(), () -> {
                     speaker.setDeviceFallback(!speaker.isDeviceFallback());

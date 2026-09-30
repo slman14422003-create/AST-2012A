@@ -104,8 +104,10 @@ final class PdfSpeaker {
     private static final String KEY_DEV_OFFLINE = "dev_offline_only"; // أصوات الجهاز التي لا تحتاج إنترنت فقط
     private static final String KEY_DEV_FALLBACK = "dev_fallback";    // الرجوع التلقائي لصوت الجهاز عند تعطل العصبي
     private static final String KEY_DEV_SPEED = "dev_speed_idx";      // معايرة سرعة صوت الجهاز عن العصبي
-    private static final String[] DEV_SPEED_LABELS = {"مطابقة للعصبي", "أبطأ 10%", "أبطأ 20%", "أسرع 10%", "أسرع 20%"};
-    private static final float[] DEV_SPEED_MUL = {1f, 0.9f, 0.8f, 1.1f, 1.2f};
+    private static final String KEY_LEARN = "voice_self_learn";       // التعلّم الذاتي للنموذج الصوتي المحلي
+    /** الفهرس 0 = تلقائي: النموذج المحلي يتعلّم إيقاع العصبي ويطابقه؛ الباقي معايرة يدوية ثابتة. */
+    private static final String[] DEV_SPEED_LABELS = {"تلقائي (يتعلّم من العصبي)", "بدون معايرة", "أبطأ 10%", "أبطأ 20%", "أسرع 10%", "أسرع 20%"};
+    private static final float[] DEV_SPEED_MUL = {1f, 1f, 0.9f, 0.8f, 1.1f, 1.2f};
     private static final String[] EQ_LABELS = {"طبيعي", "صافٍ (يُبرز الحروف)", "دافئ", "عميق"};
     private static final String[] GAIN_LABELS = {"عادي", "+3 ديسيبل", "+6 ديسيبل"};
     private static final int[] GAIN_MB = {0, 300, 600};
@@ -293,6 +295,10 @@ final class PdfSpeaker {
             SpeechLearner.init(app.getFilesDir()); // ذاكرة النطق المتعلَّمة
         } catch (Throwable ignored) {
         }
+        try {
+            LocalVoiceModel.init(app.getFilesDir()); // النموذج الصوتي المحلي (إيقاع/صحة الأصوات)
+        } catch (Throwable ignored) {
+        }
         // قاموس التشكيل: يبدأ تحميله الآن (مرة واحدة وفي الخلفية) كي يكون جاهزًا قبل أول جملة تُنطق؛
         // لو كان التطبيق بدأه من ClinicalMasterApp فهذا الاستدعاء ينتظر انتهاءه ولا يكرّر العمل.
         if (!TashkeelDict.isReady()) {
@@ -423,6 +429,7 @@ final class PdfSpeaker {
         if (id[2] < 0 || id[2] >= currentText.chunks.size()) return;
         deviceErrStreak = 0;
         lastWordAt = SystemClock.uptimeMillis();
+        if (devMeasToken == id[0] && id[3] == 0) devMeasAt = lastWordAt; // نقيس المقاطع الكاملة فقط (لا المستأنفة)
         PdfSpeechText.Chunk c = currentText.chunks.get(id[2]);
         currentChunk = id[2];
         currentWord = Math.max(c.firstWord, Math.min(c.lastWord, currentText.wordAtOffset(c.start + id[3])));
@@ -450,6 +457,15 @@ final class PdfSpeaker {
     private void handleDone(int[] id) {
         if (stale(id)) return;
         if (id[2] != currentChunk) return;
+        if (isVoiceLearning() && devMeasToken == id[0] && devMeasAt > 0L && devMeasLang != null) {
+            try {
+                LocalVoiceModel.learnDevice(enginePkg(), devMeasVoice, devMeasLang, devMeasChars,
+                        SystemClock.uptimeMillis() - devMeasAt, devMeasRate);
+                LocalVoiceModel.noteVoice(enginePkg(), devMeasVoice, true);
+            } catch (Throwable ignored) {
+            }
+            devMeasAt = 0L;
+        }
         advance();
     }
 
@@ -459,6 +475,7 @@ final class PdfSpeaker {
         String lang = id[2] >= 0 && id[2] < currentText.chunks.size()
                 ? currentText.chunks.get(id[2]).lang : null;
         Voice v = lang != null ? usedVoice.get(lang) : null;
+        if (v != null && isVoiceLearning()) LocalVoiceModel.noteVoice(enginePkg(), v.getName(), false);
         if (v != null && v.isNetworkConnectionRequired() && !badVoices.contains(v.getName())) {
             badVoices.add(v.getName());
             usedVoice.remove(lang);
@@ -713,7 +730,7 @@ final class PdfSpeaker {
     }
 
     String learnerStats() {
-        return SpeechLearner.stats() + "\n" + WordVerifier.stats();
+        return SpeechLearner.stats() + "\n" + WordVerifier.stats() + "\n" + LocalVoiceModel.stats();
     }
 
     /** تقرير تغطية القاموس لنص الصفحة الحالية (كم كلمة وُجدت، وما أكثر الكلمات غير الموجودة) - للتشخيص. */
@@ -1330,6 +1347,62 @@ final class PdfSpeaker {
         return Math.max(0.3f, Math.min(3.0f, rate * DEV_SPEED_MUL[getDeviceSpeedIndex()]));
     }
 
+    /** اسم حزمة محرك الجهاز الفعلي (المختار أو الافتراضي) - مفتاح للتعلّم. */
+    private String enginePkg() {
+        String p = getDeviceEnginePackage();
+        if (p != null) return p;
+        String d = getEngineName();
+        return d == null ? "default" : d;
+    }
+
+    private String usedVoiceName(String lang) {
+        Voice v = usedVoice.get(lang);
+        return v == null ? null : v.getName();
+    }
+
+    /** سرعة صوت الجهاز لهذا المقطع: في الوضع التلقائي يضبطها النموذج المحلي لتطابق إيقاع العصبي. */
+    private float deviceRateFor(String lang) {
+        float r = deviceRate();
+        if (getDeviceSpeedIndex() == 0 && isVoiceLearning()) {
+            try {
+                int pct = "ar".equals(lang) ? cloudStyle().arRatePct : 0;
+                r *= LocalVoiceModel.deviceRateMultiplier(enginePkg(), usedVoiceName(lang), lang, pct);
+            } catch (Throwable ignored) {
+            }
+        }
+        return Math.max(0.3f, Math.min(3.0f, r));
+    }
+
+    boolean isVoiceLearning() {
+        return prefs.getBoolean(KEY_LEARN, true);
+    }
+
+    void setVoiceLearning(boolean v) {
+        prefs.edit().putBoolean(KEY_LEARN, v).apply();
+    }
+
+    String voiceModelStats() {
+        return LocalVoiceModel.stats();
+    }
+
+    void resetVoiceModel() {
+        LocalVoiceModel.reset();
+        if (ttsReady) {
+            try {
+                tts.setSpeechRate(deviceRate());
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
+    // قياس نطق الجهاز الجاري (للتعلّم): يُملأ في handleStart ويُستهلك في handleDone
+    private int devMeasToken = -1;
+    private long devMeasAt = 0L;
+    private int devMeasChars = 0;
+    private String devMeasLang = null;
+    private String devMeasVoice = null;
+    private float devMeasRate = 1f;
+
     int getDeviceSpeedIndex() {
         return Math.max(0, Math.min(DEV_SPEED_MUL.length - 1, prefs.getInt(KEY_DEV_SPEED, 0)));
     }
@@ -1499,6 +1572,7 @@ final class PdfSpeaker {
         if (c != null && c.equalsIgnoreCase(deviceCountry)) s += 3;
         if ("en".equals(v.getLocale().getLanguage()) && "US".equalsIgnoreCase(c)) s += 1;
         s -= Math.min(4, v.getLatency() / 100);
+        if (isVoiceLearning()) s += LocalVoiceModel.voiceScoreBonus(enginePkg(), v.getName()); // الأوثق بحسب التجربة
         return s;
     }
 
@@ -1743,6 +1817,14 @@ final class PdfSpeaker {
                     applyEffects();
                 }
             }
+            final float devRate = deviceRateFor(c.lang);
+            tts.setSpeechRate(devRate);
+            devMeasToken = tok;
+            devMeasAt = 0L;
+            devMeasChars = text.length();
+            devMeasLang = c.lang;
+            devMeasVoice = usedVoiceName(c.lang);
+            devMeasRate = devRate;
             r = tts.speak(text, TextToSpeech.QUEUE_FLUSH, speakParams, makeId(tok, currentPage, idx, shift));
         } catch (Throwable t) {
             r = TextToSpeech.ERROR;
@@ -1784,6 +1866,7 @@ final class PdfSpeaker {
     private void finishAll() {
         try {
             SpeechLearner.flush();
+            LocalVoiceModel.flush();
         } catch (Throwable ignored) {
         }
         session++;
@@ -1861,6 +1944,12 @@ final class PdfSpeaker {
                 }
                 final EdgeTtsClient.Result rr = r;
                 final Throwable ee = err;
+                // تعلّم إيقاع الصوت العصبي الحقيقي (للأصوات أحادية اللغة فقط؛ المختلطة تتداخل فيها الأصوات)
+                if (runs == null && rr != null && rr.audio != null && rr.audio.length >= 200 && rr.durationMs > 0
+                        && isVoiceLearning()) {
+                    LocalVoiceModel.learnNeural(c.lang, sent.length(), rr.durationMs,
+                            voice.startsWith("ar-") ? style.arRatePct : 0);
+                }
                 main.post(() -> onCloudResult(key, rr == null ? null : new CloudAudio(rr, spoken), gen, ee));
             });
         } catch (RejectedExecutionException e) {
@@ -2352,6 +2441,7 @@ final class PdfSpeaker {
     void shutdown() {
         try {
             SpeechLearner.flush();
+            LocalVoiceModel.flush();
         } catch (Throwable ignored) {
         }
         session++;
