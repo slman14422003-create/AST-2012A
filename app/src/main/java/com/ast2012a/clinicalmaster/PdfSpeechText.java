@@ -960,6 +960,9 @@ final class PdfSpeechText {
      * Word.sent فلا يتأثر بحجم المقطع. مقطع قصير بلغة مختلفة (عنوان/مصطلح لاتيني) يُدمج بالمجاور.
      */
     private static final int MERGE_MAX_CHARS = 1400;
+    /** أول مقطع قصير كي يبدأ الصوت بسرعة (تجهيزه من الخادم أسرع)، ثم متوسط، ثم الحجم الكامل لبقية الصفحة. */
+    private static final int MERGE_FIRST_CHARS = 300;
+    private static final int MERGE_SECOND_CHARS = 800;
     private static final int SHORT_LANG_SWITCH_CHARS = 40;
 
     private static List<Chunk> mergeChunks(List<Chunk> in, String text) {
@@ -971,7 +974,8 @@ final class PdfSpeechText {
             int curLen = cur.end - cur.start;
             int nxLen = nx.end - nx.start;
             boolean sameLang = cur.lang.equals(nx.lang);
-            boolean fits = nx.end - cur.start <= MERGE_MAX_CHARS;
+            int limit = out.isEmpty() ? MERGE_FIRST_CHARS : out.size() == 1 ? MERGE_SECOND_CHARS : MERGE_MAX_CHARS;
+            boolean fits = nx.end - cur.start <= limit;
             boolean shortSwitch = !sameLang && Math.min(curLen, nxLen) < SHORT_LANG_SWITCH_CHARS;
             if (fits && (sameLang || shortSwitch)) {
                 String lang = sameLang || curLen >= nxLen ? cur.lang : nx.lang;

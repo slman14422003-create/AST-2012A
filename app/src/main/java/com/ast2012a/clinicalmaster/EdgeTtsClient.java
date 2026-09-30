@@ -19,12 +19,20 @@ import java.util.List;
 import java.util.Locale;
 import java.util.TimeZone;
 import java.util.UUID;
+import java.util.Collections;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
+import okhttp3.Dispatcher;
 import okhttp3.OkHttpClient;
+import okhttp3.Protocol;
 import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.WebSocket;
@@ -58,11 +66,67 @@ final class EdgeTtsClient {
     private static final long WIN_EPOCH_SECONDS = 11644473600L;
     private static final int TIMEOUT_SECONDS = 16;
 
+    /** الافتراضي 5 طلبات لكل مضيف: التجهيز المسبق + أجزاء الطلب الطويل المتوازية قد تتجاوزه فتنتظر بلا داعٍ. */
+    private static final Dispatcher DISPATCHER = new Dispatcher();
+
+    static {
+        DISPATCHER.setMaxRequests(32);
+        DISPATCHER.setMaxRequestsPerHost(16);
+    }
+
     private static final OkHttpClient HTTP = new OkHttpClient.Builder()
-            .connectTimeout(8, TimeUnit.SECONDS)
+            .dispatcher(DISPATCHER)
+            .connectTimeout(6, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
             .writeTimeout(10, TimeUnit.SECONDS)
             .build();
+
+    // ------------------------------------------------------------------ تسخين الاتصال + خيوط متوازية
+
+    /** نفس عميل الويب سوكت (HTTP/1.1 فقط) ويشارك نفس مجمّع الاتصالات: اتصال دافئ يُعاد استعماله في الترقية إلى WebSocket. */
+    private static final OkHttpClient WARM = HTTP.newBuilder()
+            .protocols(Collections.singletonList(Protocol.HTTP_1_1))
+            .callTimeout(6, TimeUnit.SECONDS)
+            .build();
+    private static volatile long warmAt = 0L;
+    private static volatile boolean warming = false;
+
+    /**
+     * يفتح اتصال TLS مسبقًا مع الخادم (DNS + المصافحة ~ 0.3-1.5 ثانية على الجوال) قبل أول طلب صوت. آمن للاستدعاء
+     * كثيرًا: لا يفعل شيئًا لو سُخّن الاتصال قبل أقل من 4 دقائق. أي فشل يُتجاهل (لا يؤثر على الطلب الحقيقي).
+     */
+    static void warmUp() {
+        long now = System.currentTimeMillis();
+        if (warming || now - warmAt < 240_000L) return;
+        warming = true;
+        Thread th = new Thread(() -> {
+            try {
+                Request r = new Request.Builder()
+                        .url("https://speech.platform.bing.com/")
+                        .head()
+                        .header("User-Agent", USER_AGENT)
+                        .build();
+                try (Response resp = WARM.newCall(r).execute()) {
+                    warmAt = System.currentTimeMillis();
+                }
+            } catch (Throwable ignored) {
+            } finally {
+                warming = false;
+            }
+        }, "edge-warmup");
+        th.setDaemon(true);
+        th.start();
+    }
+
+    /** خيوط لتجهيز نصفي الطلب الطويل بالتوازي (بدل الانتظار: النصف الأول ثم الثاني). */
+    private static final ExecutorService SPLIT_POOL = Executors.newCachedThreadPool(new ThreadFactory() {
+        @Override
+        public Thread newThread(Runnable r) {
+            Thread t = new Thread(r, "edge-split");
+            t.setDaemon(true);
+            return t;
+        }
+    });
 
     /** نتيجة جملة واحدة: صوت MP3 + توقيت الكلمات (بالميلي ثانية) وموضع كل كلمة داخل النص المُرسَل. */
     static final class Result {
@@ -161,8 +225,28 @@ final class EdgeTtsClient {
         int sp = splitPoint(text);
         String p1 = text.substring(0, sp);
         String p2 = text.substring(sp);
-        Result r1 = synthPart(p1, runs, 0, sp, voice, style, depth + 1);
-        Result r2 = synthPart(p2, runs, sp, text.length(), voice, style, depth + 1);
+        // النصفان بالتوازي: زمن التجهيز = الأبطأ منهما لا مجموعهما
+        final int spF = sp;
+        Future<Result> f2 = SPLIT_POOL.submit(() -> synthPart(p2, runs, spF, text.length(), voice, style, depth + 1));
+        Result r1;
+        try {
+            r1 = synthPart(p1, runs, 0, sp, voice, style, depth + 1);
+        } catch (IOException | RuntimeException e) {
+            f2.cancel(true);
+            throw e;
+        }
+        Result r2;
+        try {
+            r2 = f2.get();
+        } catch (InterruptedException ie) {
+            f2.cancel(true);
+            Thread.currentThread().interrupt();
+            throw new IOException("interrupted");
+        } catch (ExecutionException ee) {
+            Throwable c = ee.getCause();
+            if (c instanceof IOException) throw (IOException) c;
+            throw new IOException(c != null ? c.getMessage() : "split failed", c);
+        }
         return concat(r1, r2, sp);
     }
 
@@ -308,6 +392,7 @@ final class EdgeTtsClient {
     }
 
     static Result synthesize(String text, String voice, Style style) throws IOException {
+        warmUp();
         return synthesizeSplit(text, null, voice, style, 0);
     }
 
@@ -318,6 +403,7 @@ final class EdgeTtsClient {
     static Result synthesizeRuns(String text, List<Run> runs, String baseVoice, Style style) throws IOException {
         if (mixedFails >= 2 && System.currentTimeMillis() - mixedFailAt > 120_000L) mixedFails = 0; // نعيد المحاولة لاحقًا
         if (runs == null || runs.size() < 2 || mixedFails >= 2) return synthesize(text, baseVoice, style);
+        warmUp();
         try {
             Result r = synthesizeSplit(text, runs, baseVoice, style, 0);
             mixedFails = 0;
@@ -385,7 +471,7 @@ final class EdgeTtsClient {
                     break; // لا إنترنت أصلًا - لا فائدة من التكرار
                 }
                 try {
-                    Thread.sleep(250L * (attempt + 1));
+                    Thread.sleep(150L * (attempt + 1));
                 } catch (InterruptedException ie) {
                     Thread.currentThread().interrupt();
                     break;

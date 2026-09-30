@@ -332,6 +332,34 @@ final class SpeechPrep {
                     toks.set(t, "\u062F\u0643\u062A\u0648\u0631 " + ct.substring(2));
                     continue;
                 }
+                // ---- ألف مقصورة كُتبت ياءً (شائع في ملفات PDF والكتابة اللهجية): الي/علي/حتي/متي
+                //      (الياء تجعل المحرك ينطقها "إلي/علي" بلا تشكيل؛ نردّها إلى ى فيأخذ تشكيل إِلَى/عَلَى)
+                {
+                    String bareTok = bareOf(ct);
+                    boolean nextAl = nextCt.startsWith("\u0627\u0644") && nextCt.length() > 3;
+                    String fixedY = null;
+                    String cj = "";
+                    if (bareTok.length() == 4 && (bareTok.charAt(0) == '\u0648' || bareTok.charAt(0) == '\u0641')
+                            && (bareTok.endsWith("\u0639\u0644\u064A") || bareTok.endsWith("\u0627\u0644\u064A"))) {
+                        cj = bareTok.substring(0, 1);
+                        bareTok = bareTok.substring(1);
+                    }
+                    if (bareTok.equals("\u062D\u062A\u064A") || bareTok.equals("\u0645\u062A\u064A")) {
+                        fixedY = bareTok.substring(0, 2) + "\u0649";
+                    } else if (bareTok.equals("\u0627\u0644\u064A") && nextAl) {
+                        fixedY = "\u0625\u0644\u0649";
+                    } else if (bareTok.equals("\u0639\u0644\u064A") && nextAl && !isPersonTitle(prevCt)) {
+                        fixedY = "\u0639\u0644\u0649";
+                    }
+                    if (fixedY != null) {
+                        fixedY = cj + fixedY;
+                        int a2 = 0, b2 = tok.length();
+                        while (a2 < b2 && LEAD_TRAIL.indexOf(tok.charAt(a2)) >= 0) a2++;
+                        while (b2 > a2 && LEAD_TRAIL.indexOf(tok.charAt(b2 - 1)) >= 0) b2--;
+                        toks.set(t, tok.substring(0, a2) + fixedY + tok.substring(b2));
+                        continue;
+                    }
+                }
                 // ---- تاء مربوطة كُتبت هاءً بعد رقم
                 if (taaFix && !prevCt.isEmpty()) {
                     String pb = bareOf(prevCt);
@@ -389,6 +417,16 @@ final class SpeechPrep {
                 }
             }
         }
+    }
+
+    /** كلمة قبل "علي" تدل أنه اسم شخص (قال علي، السيد علي، الإمام علي...) فلا نحوّله إلى "على". */
+    private static boolean isPersonTitle(String prev) {
+        String b = bareOf(prev);
+        return b.equals("\u0642\u0627\u0644") || b.equals("\u0627\u0644\u0633\u064A\u062F") || b.equals("\u0627\u0644\u0625\u0645\u0627\u0645")
+                || b.equals("\u0627\u0644\u0627\u0645\u0627\u0645") || b.equals("\u0627\u0628\u0646") || b.equals("\u0628\u0646")
+                || b.equals("\u0623\u0628\u0648") || b.equals("\u0627\u0628\u0648") || b.equals("\u062F\u0643\u062A\u0648\u0631")
+                || b.equals("\u0627\u0644\u062F\u0643\u062A\u0648\u0631") || b.equals("\u0627\u0644\u0623\u0633\u062A\u0627\u0630")
+                || b.equals("\u0623\u0633\u062A\u0627\u0630") || b.equals("\u0627\u0644\u0634\u064A\u062E") || b.equals("\u0648\u0642\u0627\u0644");
     }
 
     private static boolean startsUpper(String s) {

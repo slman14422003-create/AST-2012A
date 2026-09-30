@@ -174,7 +174,7 @@ final class PdfSpeaker {
     private final Listener listener;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService io = Executors.newSingleThreadExecutor();
-    private final ExecutorService synthPool = Executors.newFixedThreadPool(2);
+    private final ExecutorService synthPool = Executors.newFixedThreadPool(3);
     private final ExecutorService envPool = Executors.newSingleThreadExecutor();
     // مؤثرات الصوت: جلسة صوت واحدة ثابتة نربطها بكل مشغّل (عصبي/جهاز/تجربة) فيسري عليها المعادل والتعزيز
     private int fxSession = 0;
@@ -264,6 +264,10 @@ final class PdfSpeaker {
         this.listener = listener;
         this.prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         this.audio = (AudioManager) app.getSystemService(Context.AUDIO_SERVICE);
+        try {
+            if ("cloud".equals(prefs.getString(KEY_ENGINE, "cloud"))) EdgeTtsClient.warmUp(); // اتصال دافئ قبل أول جملة
+        } catch (Throwable ignored) {
+        }
         this.rate = Math.max(0.5f, Math.min(2.5f, prefs.getFloat(KEY_RATE, 1.0f)));
         this.cacheDir = new File(app.getCacheDir(), "tts_cloud");
         cleanCacheDir();
