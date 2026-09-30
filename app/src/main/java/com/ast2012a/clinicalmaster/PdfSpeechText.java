@@ -25,7 +25,7 @@ import java.util.Locale;
  *
  * ترتيب القراءة = ترتيب بصري من مواضع الأحرف الفعلية (أسطر كاملة من اليمين لليسار للعربي، ثم السطر
  * التالي، مع دعم الأعمدة والعناوين العريضة والجداول) - لا يعتمد على ترتيب تخزين النص داخل الملف.
- * الصفحات الممسوحة ضوئيًا (صور بدون طبقة نص) ما فيها نص لتُقرأ - تُرجَع صفحة فاضية.
+ * الصفحات الممسوحة ضوئيًا (صور بدون طبقة نص) تُقرأ بالتعرّف الضوئي على الحروف (PdfOcr).
  */
 final class PdfSpeechText {
 
@@ -111,15 +111,19 @@ final class PdfSpeechText {
     /** يفتح المستند مرة واحدة ويستخرج صفحاته عند الطلب. غير آمن للاستخدام من أكثر من خيط. */
     static final class Source implements Closeable {
         private final PDDocument doc;
+        private final Context ctx;
+        private final File file;
         private String latinHint = null;
 
-        private Source(PDDocument doc) {
+        private Source(Context ctx, File file, PDDocument doc) {
+            this.ctx = ctx.getApplicationContext();
+            this.file = file;
             this.doc = doc;
         }
 
         static Source open(Context ctx, File file) throws IOException {
             PDFBoxResourceLoader.init(ctx.getApplicationContext());
-            return new Source(PDDocument.load(file));
+            return new Source(ctx, file, PDDocument.load(file));
         }
 
         int pageCount() {
@@ -127,14 +131,48 @@ final class PdfSpeechText {
         }
 
         PageText page(int pageIndex) {
+            return page(pageIndex, false);
+        }
+
+        /**
+         * @param background true = تجهيز مسبق للصفحة التالية أثناء القراءة (لا نُظهر رسائل حالة التعرّف الضوئي).
+         *
+         * الصفحة ذات طبقة النص السليمة تُقرأ منها مباشرة. الصفحة الممسوحة ضوئيًا (صورة بلا نص، أو
+         * بطبقة نص تالفة/شبه فارغة فوق صورة كبيرة) تُقرأ بالتعرّف الضوئي PdfOcr، ويمكن للمستخدم
+         * فرضه على كل الصفحات أو إيقافه من إعدادات القراءة الصوتية.
+         */
+        PageText page(int pageIndex, boolean background) {
             try {
                 if (pageIndex < 0 || pageIndex >= doc.getNumberOfPages()) return emptyPage(pageIndex);
-                GlyphCollector stripper = new GlyphCollector();
-                stripper.setStartPage(pageIndex + 1);
-                stripper.setEndPage(pageIndex + 1);
-                stripper.setSortByPosition(false);
-                stripper.getText(doc);
-                List<Word> words = dropRunningHeadersFooters(assemble(stripper.glyphs, stripper.pw, stripper.ph));
+                final int mode = PdfOcr.getMode(ctx);
+                List<Word> words = new ArrayList<>();
+                if (mode != PdfOcr.MODE_ALWAYS) {
+                    GlyphCollector stripper = new GlyphCollector();
+                    stripper.setStartPage(pageIndex + 1);
+                    stripper.setEndPage(pageIndex + 1);
+                    stripper.setSortByPosition(false);
+                    stripper.getText(doc);
+                    words = dropRunningHeadersFooters(assemble(stripper.glyphs, stripper.pw, stripper.ph));
+                }
+                if (mode != PdfOcr.MODE_OFF) {
+                    final boolean garbled = looksGarbled(words);
+                    final boolean need;
+                    if (mode == PdfOcr.MODE_ALWAYS || garbled) need = true;
+                    else if (words.isEmpty()) need = PdfOcr.pageLooksScanned(doc, pageIndex);
+                    else need = words.size() < MIN_BODY_WORDS_FOR_TEXT_LAYER && PdfOcr.pageLooksScanned(doc, pageIndex);
+                    if (need) {
+                        List<Word> ocr = PdfOcr.recognizePage(ctx, file, pageIndex, !background);
+                        if (ocr != null && !ocr.isEmpty()) {
+                            List<Word> filtered = dropRunningHeadersFooters(ocr);
+                            if (words.isEmpty() || garbled || mode == PdfOcr.MODE_ALWAYS
+                                    || letterCount(filtered) > letterCount(words) * 3 / 2) {
+                                words = filtered;
+                            }
+                            // الصفحات المجاورة لصفحة ممسوحة غالبًا ممسوحة أيضًا: نجهّز التالية في الخلفية
+                            PdfOcr.warmAhead(ctx, file, pageIndex + 1, 2, doc.getNumberOfPages());
+                        }
+                    }
+                }
                 if (words.isEmpty()) return emptyPage(pageIndex);
                 return build(pageIndex, words, this);
             } catch (Throwable t) {
@@ -144,11 +182,39 @@ final class PdfSpeechText {
 
         @Override
         public void close() {
+            PdfOcr.release();
             try {
                 doc.close();
             } catch (Throwable ignored) {
             }
         }
+    }
+
+    /** أقل عدد كلمات في طبقة النص لاعتبارها كافية (أقل منها فوق صورة كبيرة = غالبًا صفحة ممسوحة بنص ناقص). */
+    private static final int MIN_BODY_WORDS_FOR_TEXT_LAYER = 8;
+
+    /** طبقة نص تالفة: رموز استبدال/مناطق استخدام خاص/أحرف تحكم/(cid:..) بنسبة عالية (خطوط بلا ترميز Unicode). */
+    private static boolean looksGarbled(List<Word> words) {
+        int total = 0;
+        int bad = 0;
+        for (Word w : words) {
+            String t = w.text;
+            if (t.contains("(cid:")) bad += 5;
+            for (int i = 0; i < t.length(); i++) {
+                char c = t.charAt(i);
+                total++;
+                if (c == '\uFFFD' || (c >= '\uE000' && c <= '\uF8FF') || (c < 32 && c != '\t')) bad++;
+            }
+        }
+        return total > 0 && bad * 100 / total >= 8;
+    }
+
+    private static int letterCount(List<Word> words) {
+        int n = 0;
+        for (Word w : words) {
+            for (int i = 0; i < w.text.length(); i++) if (Character.isLetter(w.text.charAt(i))) n++;
+        }
+        return n;
     }
 
     /** حدود هامش رأس/تذييل الصفحة (نسبة من ارتفاع الصفحة). */

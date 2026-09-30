@@ -669,7 +669,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void openDetail(CaseItem item) {
-        if (Ui.isDoubleClick()) return;
+        // ملحوظة إصلاح: حماية الضغط المزدوج تتم أصلًا داخل CaseAdapter؛ استدعاؤها
+        // هنا مرة ثانية كان يرجّع true دائمًا (لأن الاستدعاء الأول سجّل الوقت للتو)
+        // فيتجاهل التطبيق كل ضغطة على نتيجة البحث ولا يفتح البروتوكول.
         Intent i = new Intent(this, CaseDetailActivity.class);
         i.putExtra("case_id", item.id);
         i.putExtra("is_custom", item.custom);

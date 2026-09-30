@@ -1525,6 +1525,12 @@ public class PdfViewerActivity extends AppCompatActivity {
         }
 
         @Override
+        public void onStatus(String message) {
+            if (isFinishing() || isDestroyed() || ttsStatus == null) return;
+            ttsStatus.setText(BidiText.fix(message));
+        }
+
+        @Override
         public void onError(String message) {
             if (isFinishing() || isDestroyed()) return;
             if (message != null && message.length() > 110) {
@@ -1699,91 +1705,217 @@ public class PdfViewerActivity extends AppCompatActivity {
 
     private void showVoiceSettings() {
         if (speaker == null) return;
-        final boolean cloud = speaker.isCloudEngine();
-        final int nl = TTS_LANG_LABELS.length;
-        // 0 المحرك | 1..nl أصوات اللغات | ثم صفاء الصوت والنطق العربي والخيارات | آخرها إعدادات النظام
-        int k = nl + 1;
-        final int iEq = k++, iGain = k++, iTaa = k++, iTaaFix = k++, iNoIrab = k++, iPreview = k++,
-                iProfile = k++, iPitch = k++, iAssist = k++, iMixed = k++, iAcro = k++, iLex = k++,
-                iLetters = k++, iLetterSpell = k++, iSleep = k++, iSystem = k++;
-        String[] items = new String[k];
-        items[0] = cloud
-                ? "المحرك: صوت عصبي أونلاين (مجاني) ✓ - اضغط للتحويل لصوت الجهاز"
-                : "المحرك: صوت الجهاز (يعمل بدون إنترنت) - اضغط للتحويل للصوت العصبي";
-        for (int i = 0; i < nl; i++) items[i + 1] = "صوت " + TTS_LANG_LABELS[i];
-        items[iEq] = "صفاء الصوت: " + speaker.getEqLabel() + " - اضغط للتبديل";
-        items[iGain] = "تعزيز مستوى الصوت: " + speaker.getGainLabel() + " - اضغط للتبديل";
-        items[iTaa] = "نطق التاء المربوطة (ة): " + speaker.getTaaLabel() + " - اضغط للتبديل";
-        items[iTaaFix] = "تصحيح إملاء ة/ه تلقائيًا (الحركه ← الحركة): " + (speaker.isTaaFix() ? "مفعّل ✓" : "معطّل");
-        items[iNoIrab] = "قراءة بلا إعراب (تسكين أواخر الكلمات - تجريبي): " + (speaker.isNoIrab() ? "مفعّل ✓" : "معطّل");
-        items[iPreview] = "تجربة النطق (جملة فيها ة وه)";
-        items[iProfile] = "أسلوب النطق: " + speaker.getProfileLabel() + " - اضغط للتبديل";
-        items[iPitch] = "طبقة الصوت: " + speaker.getPitchLabel() + " - اضغط للتبديل";
-        items[iAssist] = "تشكيل ذكي للعربي (شدّة/حركات/تنوين/مصطلحات): " + (speaker.isArabicAssist() ? "مفعّل ✓" : "معطّل");
-        items[iMixed] = "تبديل الصوت للكلمات الأجنبية داخل الجملة: " + (speaker.isMixedVoices() ? "مفعّل ✓" : "معطّل");
-        items[iAcro] = "نطق الاختصارات حرفًا حرفًا (EMG, MRI...): " + (speaker.isSpellAcronyms() ? "مفعّل ✓" : "معطّل");
-        items[iLex] = "قاموس النطق الخاص (تصحيح كلمات بعينها)";
-        items[iLetters] = "قاموس الحروف ونطقها من الألف إلى الياء (المخارج والصفات والحركات)";
-        items[iLetterSpell] = "نطق الحروف المنفردة باسمها (أ) ب) ع.م النقطة س): " + (speaker.isLetterNames() ? "مفعّل ✓" : "معطّل");
-        items[iSleep] = "مؤقت النوم: " + sleepLabel() + " - اضغط للتبديل";
-        items[iSystem] = "إعدادات محرك النطق في النظام";
+        if (voiceDialog != null && voiceDialog.isShowing()) voiceDialog.dismiss();
+
+        final LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        final Runnable[] rebuild = new Runnable[1];
+        rebuild[0] = () -> buildVoiceSettingsContent(root, rebuild[0]);
+        rebuild[0].run();
+
         voiceDialog = new ClaudeDialog(this)
                 .setTitle("إعدادات القراءة الصوتية")
-                .setItems(items, (d, which) -> {
-                    if (which == 0) {
-                        speaker.setCloudEngine(!cloud);
-                        Toast.makeText(this, cloud ? "تم التحويل لصوت الجهاز." : "تم التحويل للصوت العصبي الأونلاين.",
-                                Toast.LENGTH_SHORT).show();
-                    } else if (which == iSystem) {
-                        openSystemTtsSettings();
-                    } else if (which == iEq) {
-                        speaker.cycleEq();
-                        showVoiceSettings();
-                    } else if (which == iGain) {
-                        speaker.cycleGain();
-                        showVoiceSettings();
-                    } else if (which == iTaa) {
-                        speaker.cycleTaaMode();
-                        showVoiceSettings();
-                    } else if (which == iTaaFix) {
-                        speaker.setTaaFix(!speaker.isTaaFix());
-                        showVoiceSettings();
-                    } else if (which == iNoIrab) {
-                        speaker.setNoIrab(!speaker.isNoIrab());
-                        showVoiceSettings();
-                    } else if (which == iPreview) {
-                        previewVoice();
-                    } else if (which == iProfile) {
-                        speaker.cycleProfile();
-                        showVoiceSettings();
-                    } else if (which == iPitch) {
-                        speaker.cyclePitch();
-                        showVoiceSettings();
-                    } else if (which == iAssist) {
-                        speaker.setArabicAssist(!speaker.isArabicAssist());
-                        showVoiceSettings();
-                    } else if (which == iMixed) {
-                        speaker.setMixedVoices(!speaker.isMixedVoices());
-                        showVoiceSettings();
-                    } else if (which == iAcro) {
-                        speaker.setSpellAcronyms(!speaker.isSpellAcronyms());
-                        showVoiceSettings();
-                    } else if (which == iLex) {
-                        showLexiconEditor();
-                    } else if (which == iLetters) {
-                        if (letterDialog != null) letterDialog.dismiss();
-                        letterDialog = LetterDictionaryDialog.show(this, speaker);
-                    } else if (which == iLetterSpell) {
-                        speaker.setLetterNames(!speaker.isLetterNames());
-                        showVoiceSettings();
-                    } else if (which == iSleep) {
-                        cycleSleepTimer();
-                        showVoiceSettings();
-                    } else {
-                        showVoicePicker(which - 1);
-                    }
-                })
+                .setView(root)
+                .setPositiveButton("تم", null)
                 .show();
+    }
+
+    /** يبني محتوى مربع إعدادات الصوت: أقسام مرتبة بنفس أسلوب صفوف الإعدادات
+     *  (عنوان + وصف + قيمة/مفتاح) بدل قائمة نصية طويلة، ويُحدَّث في مكانه بدون إغلاق. */
+    private void buildVoiceSettingsContent(LinearLayout root, Runnable refresh) {
+        root.removeAllViews();
+        final boolean cloud = speaker.isCloudEngine();
+
+        // ---- المحرك والأصوات
+        LinearLayout g1 = voiceGroup(root, "المحرك والأصوات");
+        addVoiceRow(g1, "محرك القراءة",
+                cloud ? "صوت عصبي أونلاين مجاني" : "صوت الجهاز يعمل بدون إنترنت",
+                cloud ? "عصبي" : "الجهاز", false, () -> {
+                    speaker.setCloudEngine(!cloud);
+                    Toast.makeText(this, cloud ? "تم التحويل لصوت الجهاز." : "تم التحويل للصوت العصبي الأونلاين.",
+                            Toast.LENGTH_SHORT).show();
+                    refresh.run();
+                });
+        for (int i = 0; i < TTS_LANG_LABELS.length; i++) {
+            final int idx = i;
+            addVoiceRow(g1, "صوت " + TTS_LANG_LABELS[i], null, null, true, () -> {
+                if (voiceDialog != null) voiceDialog.dismiss();
+                showVoicePicker(idx);
+            });
+        }
+
+        // ---- جودة الصوت
+        LinearLayout g2 = voiceGroup(root, "جودة الصوت");
+        addVoiceRow(g2, "صفاء الصوت", null, speaker.getEqLabel(), false, () -> { speaker.cycleEq(); refresh.run(); });
+        addVoiceRow(g2, "تعزيز مستوى الصوت", null, speaker.getGainLabel(), false, () -> { speaker.cycleGain(); refresh.run(); });
+        addVoiceRow(g2, "طبقة الصوت", null, speaker.getPitchLabel(), false, () -> { speaker.cyclePitch(); refresh.run(); });
+        addVoiceRow(g2, "أسلوب النطق", null, speaker.getProfileLabel(), false, () -> { speaker.cycleProfile(); refresh.run(); });
+
+        // ---- النطق العربي
+        LinearLayout g3 = voiceGroup(root, "النطق العربي");
+        addVoiceRow(g3, "نطق التاء المربوطة (ة)", null, speaker.getTaaLabel(), false, () -> { speaker.cycleTaaMode(); refresh.run(); });
+        addVoiceSwitch(g3, "تصحيح إملاء ة/ه تلقائيًا", "الحركه ← الحركة", speaker.isTaaFix(),
+                () -> { speaker.setTaaFix(!speaker.isTaaFix()); refresh.run(); });
+        addVoiceSwitch(g3, "تشكيل ذكي للعربي", "شدّة وحركات وتنوين ومصطلحات", speaker.isArabicAssist(),
+                () -> { speaker.setArabicAssist(!speaker.isArabicAssist()); refresh.run(); });
+        addVoiceSwitch(g3, "قراءة بلا إعراب", "تسكين أواخر الكلمات (تجريبي)", speaker.isNoIrab(),
+                () -> { speaker.setNoIrab(!speaker.isNoIrab()); refresh.run(); });
+        addVoiceSwitch(g3, "نطق الحروف المنفردة باسمها", null, speaker.isLetterNames(),
+                () -> { speaker.setLetterNames(!speaker.isLetterNames()); refresh.run(); });
+
+        // ---- الكلمات الأجنبية والاختصارات
+        LinearLayout g4 = voiceGroup(root, "الكلمات الأجنبية والاختصارات");
+        addVoiceSwitch(g4, "تبديل الصوت للكلمات الأجنبية", "داخل الجملة الواحدة", speaker.isMixedVoices(),
+                () -> { speaker.setMixedVoices(!speaker.isMixedVoices()); refresh.run(); });
+        addVoiceSwitch(g4, "نطق الاختصارات حرفًا حرفًا", "EMG ، MRI ...", speaker.isSpellAcronyms(),
+                () -> { speaker.setSpellAcronyms(!speaker.isSpellAcronyms()); refresh.run(); });
+
+        // ---- الملفات الممسوحة ضوئيًا
+        LinearLayout gOcr = voiceGroup(root, "الملفات الممسوحة ضوئيًا");
+        addVoiceRow(gOcr, "التعرّف على النص (OCR)",
+                "تلقائي: للصفحات الصور. دائمًا: يتجاهل النص المدمج. يُنزَّل النموذج مرة واحدة",
+                PdfOcr.modeLabel(this), false, () -> { PdfOcr.cycleMode(this); refresh.run(); });
+
+        // ---- أدوات
+        LinearLayout g5 = voiceGroup(root, "أدوات");
+        addVoiceRow(g5, "تجربة النطق", "جملة فيها ة وه", null, true, () -> {
+            if (voiceDialog != null) voiceDialog.dismiss();
+            previewVoice();
+        });
+        addVoiceRow(g5, "قاموس النطق الخاص", "تصحيح كلمات بعينها", null, true, () -> {
+            if (voiceDialog != null) voiceDialog.dismiss();
+            showLexiconEditor();
+        });
+        addVoiceRow(g5, "قاموس الحروف ونطقها", "المخارج والصفات والحركات", null, true, () -> {
+            if (voiceDialog != null) voiceDialog.dismiss();
+            if (letterDialog != null) letterDialog.dismiss();
+            letterDialog = LetterDictionaryDialog.show(this, speaker);
+        });
+        addVoiceRow(g5, "مؤقت النوم", null, sleepLabel(), false, () -> { cycleSleepTimer(); refresh.run(); });
+        addVoiceRow(g5, "إعدادات محرك النطق في النظام", null, null, true, () -> {
+            if (voiceDialog != null) voiceDialog.dismiss();
+            openSystemTtsSettings();
+        });
+    }
+
+    /** يضيف عنوان قسم صغير + بطاقة مجموعة (Settings.Group) ويُرجع البطاقة لإضافة الصفوف فيها. */
+    private LinearLayout voiceGroup(LinearLayout root, String label) {
+        TextView tv = new TextView(this);
+        tv.setText(label);
+        tv.setTextColor(getColor(R.color.text_tertiary));
+        tv.setTextSize(13f);
+        tv.setTextDirection(View.TEXT_DIRECTION_RTL);
+        tv.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+        tv.setTypeface(null, android.graphics.Typeface.BOLD);
+        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        tlp.setMargins(Ui.dp(this, 4), root.getChildCount() == 0 ? 0 : Ui.dp(this, 6), Ui.dp(this, 4), Ui.dp(this, 8));
+        root.addView(tv, tlp);
+
+        LinearLayout group = new LinearLayout(this);
+        group.setOrientation(LinearLayout.VERTICAL);
+        group.setBackgroundResource(R.drawable.bg_settings_group);
+        group.setClipToOutline(true);
+        LinearLayout.LayoutParams glp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        glp.bottomMargin = Ui.dp(this, 12);
+        root.addView(group, glp);
+        return group;
+    }
+
+    private LinearLayout voiceRowShell(LinearLayout group, String title, String subtitle) {
+        if (group.getChildCount() > 0) {
+            View divider = new View(this);
+            divider.setBackgroundColor(getColor(R.color.glass_border_soft));
+            LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, Ui.dp(this, 1));
+            dlp.setMarginStart(Ui.dp(this, 16));
+            group.addView(divider, dlp);
+        }
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setMinimumHeight(Ui.dp(this, 56));
+        row.setPadding(Ui.dp(this, 16), Ui.dp(this, 10), Ui.dp(this, 14), Ui.dp(this, 10));
+        row.setClickable(true);
+        row.setFocusable(true);
+        android.util.TypedValue tv = new android.util.TypedValue();
+        if (getTheme().resolveAttribute(android.R.attr.selectableItemBackground, tv, true)) {
+            row.setForeground(getDrawable(tv.resourceId));
+        }
+
+        LinearLayout texts = new LinearLayout(this);
+        texts.setOrientation(LinearLayout.VERTICAL);
+        TextView t = new TextView(this);
+        t.setText(title);
+        t.setTextColor(getColor(R.color.text_primary));
+        t.setTextSize(15f);
+        t.setTextDirection(View.TEXT_DIRECTION_RTL);
+        t.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+        texts.addView(t);
+        if (subtitle != null && !subtitle.isEmpty()) {
+            TextView st = new TextView(this);
+            st.setText(subtitle);
+            st.setTextColor(getColor(R.color.text_secondary));
+            st.setTextSize(12.5f);
+            st.setTextDirection(View.TEXT_DIRECTION_RTL);
+            st.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+            LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            slp.topMargin = Ui.dp(this, 2);
+            texts.addView(st, slp);
+        }
+        row.addView(texts, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        group.addView(row, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        return row;
+    }
+
+    /** صف بقيمة (شريحة كبسولة) أو سهم للانتقال. */
+    private void addVoiceRow(LinearLayout group, String title, String subtitle, String value,
+                             boolean chevron, Runnable onClick) {
+        LinearLayout row = voiceRowShell(group, title, subtitle);
+        if (value != null && !value.isEmpty()) {
+            TextView chip = new TextView(this);
+            chip.setText(value);
+            chip.setTextColor(getColor(R.color.primary_cyan));
+            chip.setTextSize(12.5f);
+            chip.setTypeface(null, android.graphics.Typeface.BOLD);
+            chip.setSingleLine(true);
+            chip.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            chip.setMaxWidth(Ui.dp(this, 150));
+            chip.setGravity(Gravity.CENTER);
+            chip.setBackgroundResource(R.drawable.bg_glass_chip);
+            chip.setPadding(Ui.dp(this, 12), Ui.dp(this, 6), Ui.dp(this, 12), Ui.dp(this, 6));
+            LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            clp.setMarginStart(Ui.dp(this, 10));
+            row.addView(chip, clp);
+        }
+        if (chevron) {
+            ImageView arrow = new ImageView(this);
+            arrow.setImageResource(R.drawable.ic_chevron_end);
+            arrow.setImageTintList(android.content.res.ColorStateList.valueOf(getColor(R.color.text_tertiary)));
+            LinearLayout.LayoutParams alp = new LinearLayout.LayoutParams(Ui.dp(this, 20), Ui.dp(this, 20));
+            alp.setMarginStart(Ui.dp(this, 8));
+            row.addView(arrow, alp);
+        }
+        row.setOnClickListener(v -> onClick.run());
+    }
+
+    /** صف بمفتاح تشغيل/إيقاف؛ الضغط على الصف كله يبدّل الحالة. */
+    private void addVoiceSwitch(LinearLayout group, String title, String subtitle, boolean checked, Runnable onToggle) {
+        LinearLayout row = voiceRowShell(group, title, subtitle);
+        com.google.android.material.materialswitch.MaterialSwitch sw =
+                new com.google.android.material.materialswitch.MaterialSwitch(this);
+        sw.setChecked(checked);
+        sw.setClickable(false);
+        sw.setFocusable(false);
+        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        slp.setMarginStart(Ui.dp(this, 8));
+        row.addView(sw, slp);
+        row.setOnClickListener(v -> onToggle.run());
     }
 
     /** قاموس نطق خاص: سطر لكل كلمة بصيغة  كلمة=نطقها  (مثال: Piriformis=بيريفورميس). */

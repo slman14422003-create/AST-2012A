@@ -69,6 +69,10 @@ final class PdfSpeaker {
 
         /** محرك النطق نفسه غير متاح/غير مثبّت. */
         void onEngineUnavailable();
+
+        /** رسالة حالة أثناء التجهيز (تنزيل نموذج التعرّف الضوئي / التعرّف على صفحة ممسوحة). */
+        default void onStatus(String message) {
+        }
     }
 
     static final class VoiceOption {
@@ -543,6 +547,9 @@ final class PdfSpeaker {
             currentWord = -1;
             setState(State.LOADING);
             final int sess = session;
+            PdfOcr.setStatusSink(msg -> main.post(() -> {
+                if (sess == session) listener.onStatus(msg);
+            }));
             io.execute(() -> {
                 try {
                     if (source == null || sourceFile == null || !sourceFile.equals(file)) {
@@ -626,6 +633,7 @@ final class PdfSpeaker {
     void stop() {
         session++;
         pendingAfterInit = null;
+        PdfOcr.cancelWarm();
         hardStopOutputs();
         resetCloud();
         abandonFocus();
@@ -1422,9 +1430,17 @@ final class PdfSpeaker {
         currentPage = page;
         if (pt == null || pt.isEmpty()) {
             emptyStreak++;
+            String ocrError = PdfOcr.takeFatalError();
+            if (ocrError != null) {
+                stop();
+                listener.onError(ocrError);
+                return;
+            }
             if (!anyText && emptyStreak >= 4) {
                 stop();
-                listener.onError("لا يوجد نص قابل للقراءة في هذه الصفحات - الملف على الأغلب صور ممسوحة ضوئيًا بدون طبقة نص.");
+                listener.onError(PdfOcr.getMode(app) == PdfOcr.MODE_OFF
+                        ? "لا يوجد نص قابل للقراءة في هذه الصفحات - الملف صور ممسوحة ضوئيًا. فعّل التعرّف على النص الممسوح (OCR) من إعدادات القراءة الصوتية."
+                        : "لم يُعثر على نص قابل للقراءة في هذه الصفحات (حتى بالتعرّف الضوئي).");
                 return;
             }
             goToPage(page + 1);
@@ -1443,7 +1459,7 @@ final class PdfSpeaker {
         final int next = page + 1;
         io.execute(() -> {
             if (source != null && next < pageCount) {
-                final PdfSpeechText.PageText p = source.page(next);
+                final PdfSpeechText.PageText p = source.page(next, true);
                 if (sess == session) {
                     prefetched = p;
                     if (p != null && !p.isEmpty()) {
@@ -2141,6 +2157,8 @@ final class PdfSpeaker {
         session++;
         pendingAfterInit = null;
         speakToken++;
+        PdfOcr.setStatusSink(null);
+        PdfOcr.cancelWarm();
         releasePlayer();
         resetCloud();
         abandonFocus();
