@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- هالة ناعمة خلف نجمة الترحيب: دائرة بتدرّج شعاعي من لون العلامة الفاتح إلى الشفاف -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="oval">
+            <gradient
+                android:endColor="#00000000"
+                android:gradientRadius="56dp"
+                android:startColor="@color/primary_soft"
+                android:type="radial" />
+        </shape>
+    </item>
+    <item
+        android:bottom="18dp"
+        android:left="18dp"
+        android:right="18dp"
+        android:top="18dp">
+        <shape android:shape="oval">
+            <solid android:color="@color/primary_soft" />
+            <stroke
+                android:width="1dp"
+                android:color="@color/glass_border_soft" />
+        </shape>
+    </item>
+</layer-list>
