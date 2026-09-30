@@ -411,6 +411,51 @@
                         android:layout_width="20dp"
                         android:layout_height="20dp" />
                 </LinearLayout>
+
+                <View
+                    style="@style/Settings.Divider"
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp" />
+
+                <!-- مكتبات الكلمات العربية (قاموس النطق): تفعيل/إيقاف كل مكتبة، واستيراد مكتبة من ملف أو رابط،
+                     وتفعيل تنبؤ الذكاء المحلي بالكلمات غير الموجودة. -->
+                <LinearLayout
+                    android:id="@+id/btn_dict_packs"
+                    style="@style/Settings.Row"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                    <ImageView
+                        style="@style/Settings.RowIcon"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_book" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/Settings.RowTitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="مكتبات الكلمات (قاموس النطق)" />
+
+                        <TextView
+                            android:id="@+id/dict_packs_status"
+                            style="@style/Settings.RowSubtitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="القاموس الأساسي" />
+                    </LinearLayout>
+
+                    <ImageView
+                        style="@style/Settings.RowChevron"
+                        android:layout_width="20dp"
+                        android:layout_height="20dp" />
+                </LinearLayout>
             </LinearLayout>
 
             <!-- ============== النسخ السحابي (Firebase Firestore) ============== -->
