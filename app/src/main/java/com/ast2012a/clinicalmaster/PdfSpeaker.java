@@ -279,6 +279,10 @@ final class PdfSpeaker {
         SpeechPrep.setTaaMode(getTaaMode());
         SpeechPrep.setTaaTypoFix(isTaaFix());
         SpeechPrep.setNoIrab(isNoIrab());
+        try {
+            SpeechLearner.init(app.getFilesDir()); // ذاكرة النطق المتعلَّمة
+        } catch (Throwable ignored) {
+        }
         initTts();
     }
 
@@ -639,8 +643,38 @@ final class PdfSpeaker {
         jumpToPage(currentPage + 1, wasPaused);
     }
 
+    /** نص المقطع الجاري (الأصلي) - للتعلّم من سلوك الاستماع. */
+    private String currentChunkRaw() {
+        try {
+            if (currentText == null || currentChunk < 0 || currentChunk >= currentText.chunks.size()) return null;
+            PdfSpeechText.Chunk c = currentText.chunks.get(currentChunk);
+            return currentText.text.substring(c.start, c.end);
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    /** المستخدم يعلّم نطق كلمة (تُحفظ وتُطبَّق تلقائيًا في كل قراءة لاحقة). */
+    void teachWord(String word, String spoken) {
+        SpeechLearner.teach(word, spoken);
+        onSpeechSettingChanged();
+    }
+
+    String learnerStats() {
+        return SpeechLearner.stats();
+    }
+
+    void resetLearner() {
+        SpeechLearner.resetAll();
+        onSpeechSettingChanged();
+    }
+
     void previousPage() {
         if (sourceFile == null || state == State.IDLE) return;
+        try {
+            SpeechLearner.noteRewind(currentChunkRaw()); // رجوع = إشارة أن المقطع لم يكن واضحًا
+        } catch (Throwable ignored) {
+        }
         boolean wasPaused = state == State.PAUSED;
         // لو تجاوزنا بداية الصفحة نعيدها من أولها، وإلا الصفحة السابقة
         int target = ((currentChunk > 0 || currentWord > 15) && currentPage >= 0) ? currentPage : Math.max(0, currentPage - 1);
@@ -1070,14 +1104,23 @@ final class PdfSpeaker {
         if (state != State.IDLE) restartFromCurrentPoint();
     }
 
+    /** السرعة الأساسية + تكيّف تلقائي من سلوك الاستماع (كثرة الرجوع تُبطّئ القراءة قليلًا، حدّه الأدنى -30%). */
+    private static int learnedRate(int base) {
+        try {
+            return Math.max(-30, base + SpeechLearner.rateAdjustPct());
+        } catch (Throwable t) {
+            return base;
+        }
+    }
+
     private EdgeTtsClient.Style cloudStyle() {
         switch (getProfile()) {
             case 0:
-                return new EdgeTtsClient.Style(0, PITCH_HZ[getPitchIndex()], 0, 0);
+                return new EdgeTtsClient.Style(learnedRate(0), PITCH_HZ[getPitchIndex()], 0, 0);
             case 2:
-                return new EdgeTtsClient.Style(-12, PITCH_HZ[getPitchIndex()], 350, 140);
+                return new EdgeTtsClient.Style(learnedRate(-12), PITCH_HZ[getPitchIndex()], 350, 140);
             default:
-                return new EdgeTtsClient.Style(-5, PITCH_HZ[getPitchIndex()], 150, 60);
+                return new EdgeTtsClient.Style(learnedRate(-5), PITCH_HZ[getPitchIndex()], 150, 60);
         }
     }
 
@@ -1505,6 +1548,10 @@ final class PdfSpeaker {
 
     private void advance() {
         if (currentText == null) return;
+        try {
+            SpeechLearner.noteHeard(currentChunkRaw()); // سُمع المقطع كاملًا
+        } catch (Throwable ignored) {
+        }
         int next = currentChunk + 1;
         if (next < currentText.chunks.size()) speakChunk(next, 0);
         else goToPage(currentPage + 1);
@@ -1527,6 +1574,10 @@ final class PdfSpeaker {
     }
 
     private void finishAll() {
+        try {
+            SpeechLearner.flush();
+        } catch (Throwable ignored) {
+        }
         session++;
         hardStopOutputs();
         resetCloud();
@@ -2083,6 +2134,10 @@ final class PdfSpeaker {
     // ------------------------------------------------------------------ الإغلاق
 
     void shutdown() {
+        try {
+            SpeechLearner.flush();
+        } catch (Throwable ignored) {
+        }
         session++;
         pendingAfterInit = null;
         speakToken++;

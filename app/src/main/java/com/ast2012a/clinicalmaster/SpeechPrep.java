@@ -116,6 +116,12 @@ final class SpeechPrep {
         if (src == null || src.isEmpty()) return new Spoken("", new int[0]);
         final boolean ar = "ar".equals(lang);
         int n = src.length();
+        if (ar) {
+            try {
+                SpeechLearner.learnFromText(src); // كلمات مشكولة في هذا المقطع تُحفظ لتطبيقها لاحقًا
+            } catch (RuntimeException ignored) {
+            }
+        }
 
         // 1) تقطيع إلى كلمات مع موضع بداية كل واحدة في النص الأصلي
         List<Integer> starts = new ArrayList<>();
@@ -193,6 +199,14 @@ final class SpeechPrep {
                     }
                     String lk = SpeechAuditor.loneKaf(ctk, sp);
                     if (lk != null) sp = lk;
+                    // تعلّم ذاتي: تصحيحات المستخدم، وتشكيل تعلّمناه من الملف، والرجوع للأصل لو اتُّهم تدخّلنا
+                    if (!userLex.containsKey(lexKey(bareOf(ctk)))) {
+                        try {
+                            sp = SpeechLearner.apply(ctk, sp);
+                            SpeechLearner.noteChanged(ctk, sp);
+                        } catch (RuntimeException ignored) {
+                        }
+                    }
                 }
                 // بند مرقّم في وسط المقطع (بعد نهاية جملة/فقرة): "2-" "3)" -> رقم ووقفة لا رقمًا ملصوقًا بالجملة
                 if (!fst && t > 0 && endsWithStop(toks.get(t - 1)) && t + 1 < toks.size()) {
