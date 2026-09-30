@@ -89,6 +89,7 @@ final class PdfSpeaker {
     private static final String KEY_MIXED = "mixed_voices";
     private static final String KEY_ASSIST = "arabic_assist";
     private static final String KEY_ACRO = "spell_acronyms";
+    private static final String KEY_LETTERS = "letter_names";   // نطق الحروف المنفردة باسمها
     private static final String KEY_LEXICON = "user_lexicon";
     private static final String KEY_EQ = "voice_eq";          // صفاء الصوت (مؤثر Equalizer)
     private static final String KEY_GAIN = "voice_gain";      // تعزيز مستوى الصوت (LoudnessEnhancer)
@@ -273,6 +274,7 @@ final class PdfSpeaker {
         cleanCacheDir();
         SpeechPrep.setArabicAssist(isArabicAssist());
         SpeechPrep.setSpellAcronyms(isSpellAcronyms());
+        SpeechPrep.setLetterNames(isLetterNames());
         SpeechPrep.setUserLexicon(getUserLexicon());
         SpeechPrep.setTaaMode(getTaaMode());
         SpeechPrep.setTaaTypoFix(isTaaFix());
@@ -776,6 +778,17 @@ final class PdfSpeaker {
         onSpeechSettingChanged();
     }
 
+    /** نطق الحروف المنفردة (أ) ب) ع.م النقطة س) باسم الحرف من قاموس الحروف. */
+    boolean isLetterNames() {
+        return prefs.getBoolean(KEY_LETTERS, true);
+    }
+
+    void setLetterNames(boolean v) {
+        prefs.edit().putBoolean(KEY_LETTERS, v).apply();
+        SpeechPrep.setLetterNames(v);
+        onSpeechSettingChanged();
+    }
+
     String getUserLexicon() {
         return prefs.getString(KEY_LEXICON, "");
     }
@@ -990,6 +1003,12 @@ final class PdfSpeaker {
         } catch (RejectedExecutionException e) {
             cb.onFailed("تعذّر بدء التجربة.");
         }
+    }
+
+    /** إيقاف أي تجربة/درس صوتي جارٍ (قاموس الحروف) وإلغاء ما لم يصل بعد. */
+    void stopPreview() {
+        previewGen++;
+        releasePreview();
     }
 
     private boolean startPreview(byte[] data) {

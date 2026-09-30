@@ -375,6 +375,7 @@ final class SpeechPrep {
      */
     private static void normalizeTokens(List<String> toks, String lang) {
         final boolean ar = "ar".equals(lang);
+        int lastLetterItem = -100; // آخر رمز تعداد حرفي (أ) ب) ...) حُوِّل لاسم الحرف
         final boolean enCtx = englishContext(lang);
         final int n = toks.size();
         for (int t = 0; t < n; t++) {
@@ -398,7 +399,7 @@ final class SpeechPrep {
                     // \"د.\" قبل اسم (كلمة عربية طويلة) وليست بند تعداد (أ. ب. ج. د.)
                     boolean nameNext = nextCt.length() >= 3 && ArabicPhonetics.hasArabic(nextCt)
                             && ArabicPhonetics.isArabicLetter(nextCt.charAt(0));
-                    boolean listItem = false; // أ. ب. ج. د. : بند تعداد وليس لقبًا
+                    boolean listItem = t - lastLetterItem <= 10; // أ. ب. ج. د. : بند تعداد وليس لقبًا
                     for (int k = Math.max(0, t - 10); k < t && !listItem; k++) {
                         String pk = clean(toks.get(k));
                         listItem = pk.length() == 2 && pk.charAt(1) == '.' && ArabicPhonetics.isArabicLetter(pk.charAt(0));
@@ -449,6 +450,15 @@ final class SpeechPrep {
                             toks.set(t, fixed);
                             continue;
                         }
+                    }
+                }
+                // ---- حروف منفردة وأسماء الحروف: أ) ب- ج. / ع.م / نقطة س  (قاموس الحروف)
+                if (letterNames) {
+                    String lt = letterToken(ct, prevCt, nextCt);
+                    if (lt != null) {
+                        if (bareOf(ct).length() == 1) lastLetterItem = t;
+                        toks.set(t, lt);
+                        continue;
                     }
                 }
             }
@@ -740,6 +750,130 @@ final class SpeechPrep {
 
     static void setNoIrab(boolean v) {
         noIrab = v;
+    }
+
+    /** نطق الحروف المنفردة (أ) ب) ج) / ع.م / النقطة س) باسم الحرف من قاموس الحروف بدل صوت مبتور. */
+    private static volatile boolean letterNames = true;
+
+    static void setLetterNames(boolean v) {
+        letterNames = v;
+    }
+
+    /** كلمات قبل الحرف تدل أنه رمز/حرف يُذكر بذاته (النقطة س، الزاوية ع، حرف ب). */
+    private static final Set<String> LETTER_CONTEXT = new HashSet<>(Arrays.asList(
+            "\u062D\u0631\u0641", "\u0627\u0644\u062D\u0631\u0641", "\u0628\u062D\u0631\u0641", "\u0644\u062D\u0631\u0641",
+            "\u062D\u0631\u0641\u064A", "\u062D\u0631\u0641\u0627", "\u062D\u0631\u0648\u0641", "\u0627\u0644\u062D\u0631\u0648\u0641",
+            "\u0627\u0644\u0631\u0645\u0632", "\u0631\u0645\u0632", "\u0628\u0627\u0644\u0631\u0645\u0632",
+            "\u0627\u0644\u0645\u062A\u063A\u064A\u0631", "\u0645\u062A\u063A\u064A\u0631",
+            "\u0627\u0644\u0646\u0642\u0637\u0629", "\u0646\u0642\u0637\u0629", "\u0628\u0627\u0644\u0646\u0642\u0637\u0629",
+            "\u0627\u0644\u0632\u0627\u0648\u064A\u0629", "\u0632\u0627\u0648\u064A\u0629", "\u0628\u0627\u0644\u0632\u0627\u0648\u064A\u0629",
+            "\u0627\u0644\u0645\u062D\u0648\u0631", "\u0645\u062D\u0648\u0631"));
+
+    /** حروف تصلح متغيرًا منفردًا (س ص ع ن ...)؛ نستثني حروف العطف والجر (و ف ب ك ل) وحروف المدّ. */
+    private static final String VARIABLE_LETTERS = "\u062A\u062B\u062C\u062D\u062E\u062F\u0630\u0631\u0632\u0633\u0634"
+            + "\u0635\u0636\u0637\u0638\u0639\u063A\u0642\u0645\u0646";
+
+    private static boolean isArabicBase(char c) {
+        return c >= 0x0621 && c <= 0x064A;
+    }
+
+    /** الرمز التالي/السابق معامل رياضي (= + - × ÷ ...) فالحرف المنفرد متغيّر: س = 5 . (الأرقام وحدها لا تكفي: ج 2 = جزء 2). */
+    private static boolean mathy(String s) {
+        if (s == null || s.isEmpty()) return false;
+        return "=+\u2212\u00D7\u00F7/^<>\u2264\u2265\u2248".indexOf(s.charAt(0)) >= 0;
+    }
+
+    /**
+     * يحوّل الحرف المنفرد أو الاختصار المنقّط إلى أسماء الحروف (بَاء، جِيمْ، عَيْنْ مِيمْ):
+     *  - بند تعداد: "أ)" "(ب)" "ج-" "هـ." -> أَلِفْ، بَاء، جِيمْ، هَاء
+     *  - اختصار منقّط: "ع.م" "ج.م.ع" -> عَيْنْ مِيمْ (ما عدا المعروف: ق.م / أ.د)
+     *  - حرف يُذكر بذاته: "النقطة س" "الزاوية ع" "س = 5" -> سِينْ
+     *  - بعد رقم: "2020 م" -> ميلادي ، "1445 هـ" -> هجري ، "ص 45" -> صفحة 45
+     * يُعيد null لو لا ينطبق شيء (فيبقى الحال كما كان).
+     */
+    private static String letterToken(String ct, String prevCt, String nextCt) {
+        if (ct == null || ct.isEmpty()) return null;
+        final String edge = LEAD_TRAIL + "-\u2013\u2014";
+        int a = 0, b = ct.length();
+        while (a < b && edge.indexOf(ct.charAt(a)) >= 0) a++;
+        while (b > a && edge.indexOf(ct.charAt(b - 1)) >= 0) b--;
+        if (a >= b) return null;
+        String core = ct.substring(a, b);
+        String lead = ct.substring(0, a);
+        String trail = ct.substring(b).replace('-', '\u060C').replace('\u2013', '\u060C').replace('\u2014', '\u060C');
+        final String pb = bareOf(prevCt);
+        final boolean prevNum = !pb.isEmpty() && NUMBER.matcher(pb).matches();
+
+        // ---- اختصار منقّط من حرفين فأكثر: ع.م / ج.م.ع
+        if (core.length() >= 3 && core.length() <= 11 && (core.length() % 2) == 1) {
+            boolean dotted = true;
+            for (int i = 0; i < core.length(); i++) {
+                char c = core.charAt(i);
+                if ((i % 2) == 0 ? !isArabicBase(c) : c != '.') {
+                    dotted = false;
+                    break;
+                }
+            }
+            if (dotted && !AR_ABBR.containsKey(core) && !core.equals("\u0623.\u062F")) {
+                StringBuilder letters = new StringBuilder();
+                for (int i = 0; i < core.length(); i += 2) letters.append(core.charAt(i));
+                String sp = ArabicLetters.spell(letters.toString());
+                if (!sp.isEmpty()) return lead + sp + trail;
+            }
+            return null;
+        }
+        if (core.length() != 1 || !isArabicBase(core.charAt(0))) return null;
+        final char c = core.charAt(0);
+        final String nb = bareOf(nextCt);
+        final boolean nextNum = !nb.isEmpty() && NUMBER.matcher(nb).matches();
+
+        // ---- بعد رقم: تاريخ ميلادي/هجري، ورقم صفحة
+        if (prevNum) {
+            if (c == '\u0645' && pb.length() == 4 && pb.charAt(0) >= '1' && pb.charAt(0) <= '2') {
+                return lead + "\u0645\u064A\u0644\u0627\u062F\u064A" + trail;
+            }
+            if (c == '\u0647' && pb.length() >= 3 && pb.length() <= 4) {
+                return lead + "\u0647\u062C\u0631\u064A" + trail;
+            }
+            return null; // د بعد رقم = دقيقة ... إلخ: لا نتدخل
+        }
+        if (c == '\u0635' && nextNum) {
+            String pkey0 = pb.replace("\u0629", "").replace("\u0647", "");
+            if (pkey0.equals("\u0635\u0641\u062D") || pkey0.equals("\u0627\u0644\u0635\u0641\u062D")
+                    || pkey0.equals("\u0635\u0641\u062D\u0627\u062A")) {
+                return null; // الكلمة مكتوبة قبلها: "صفحة ص 12" -> نتركها
+            }
+            return "\u0635\u0641\u062D\u0629";
+        }
+
+        // ---- س: ... ج: ...  (سؤال وجواب) - فقط عند ظهور السؤال قبله، وإلا فهي بنود تعداد
+        if (trail.startsWith(":")) {
+            String pc = prevCt == null ? "" : prevCt;
+            boolean afterStop = pc.isEmpty() || ".!?\u061F\u061B".indexOf(pc.charAt(pc.length() - 1)) >= 0;
+            if (c == '\u0633' && afterStop) return "\u0633\u0624\u0627\u0644" + trail;
+            if (c == '\u062C' && !pc.isEmpty() && "?\u061F".indexOf(pc.charAt(pc.length() - 1)) >= 0) {
+                return "\u062C\u0648\u0627\u0628" + trail;
+            }
+        }
+        // ---- بند تعداد: علامة تعداد بعد الحرف (أ) ب. ج- د:) أو بين أقواس
+        boolean marker = !trail.isEmpty() && ")].:\u060C\u061B".indexOf(trail.charAt(0)) >= 0
+                || lead.indexOf('(') >= 0 || lead.indexOf('[') >= 0;
+        if (marker) {
+            if (c == '\u0629' || c == '\u0649') return null;
+            String n = ArabicLetters.spokenName(c);
+            return n == null ? null : lead + n + trail;
+        }
+        // ---- حرف يُذكر بذاته (متغير/رمز/نقطة)
+        if (VARIABLE_LETTERS.indexOf(c) < 0) return null;
+        String pkey = pb;
+        StringBuilder pk = new StringBuilder();
+        for (int i = 0; i < pkey.length(); i++) {
+            if (!ArabicPhonetics.isMark(pkey.charAt(i))) pk.append(pkey.charAt(i));
+        }
+        boolean ctx = LETTER_CONTEXT.contains(pk.toString()) || mathy(nextCt) || mathy(prevCt);
+        if (!ctx) return null;
+        String n = ArabicLetters.spokenName(c);
+        return n == null ? null : lead + n + trail;
     }
 
     /** أسطر بصيغة: كلمة=نطقها  (أو  كلمة=>نطقها). النطق يمكن أن يكون بحروف عربية لكلمة أجنبية. */

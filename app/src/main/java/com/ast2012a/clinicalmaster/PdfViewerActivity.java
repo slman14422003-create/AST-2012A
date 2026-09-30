@@ -371,6 +371,7 @@ public class PdfViewerActivity extends AppCompatActivity {
         renderExecutor.shutdownNow();
         textExecutor.shutdownNow();
         if (voiceDialog != null) voiceDialog.dismiss();
+        if (letterDialog != null) letterDialog.dismiss();
         if (speaker != null) {
             speaker.shutdown();
             speaker = null;
@@ -1361,6 +1362,7 @@ public class PdfViewerActivity extends AppCompatActivity {
     private List<RectF> speakingSentence = new ArrayList<>();
     private RectF speakingWord;
     private Dialog voiceDialog;
+    private LetterDictionaryDialog letterDialog;
 
     private void bindTtsBar() {
         ttsBar = findViewById(R.id.tts_bar);
@@ -1670,7 +1672,7 @@ public class PdfViewerActivity extends AppCompatActivity {
 
     /** جملة تجريبية فيها ة/ه في مواضع مختلفة (داخل الجملة، عند الوقف، ضمير متصل) لسماع الفرق. */
     private static final String VOICE_SAMPLE =
-            "العضلة القوية تحمي المفصل، وله وظيفة مهمة. هذه رقبة الطفل ورقبته سليمة.";
+            "العضلة القوية تحمي المفصل، وله وظيفة مهمة. هذه رقبة الطفل ورقبته سليمة. أ) الإحماء ب) التمرين ج) الإطالة.";
 
     private void previewVoice() {
         Toast.makeText(this, "جارٍ تجهيز التجربة...", Toast.LENGTH_SHORT).show();
@@ -1703,7 +1705,7 @@ public class PdfViewerActivity extends AppCompatActivity {
         int k = nl + 1;
         final int iEq = k++, iGain = k++, iTaa = k++, iTaaFix = k++, iNoIrab = k++, iPreview = k++,
                 iProfile = k++, iPitch = k++, iAssist = k++, iMixed = k++, iAcro = k++, iLex = k++,
-                iSleep = k++, iSystem = k++;
+                iLetters = k++, iLetterSpell = k++, iSleep = k++, iSystem = k++;
         String[] items = new String[k];
         items[0] = cloud
                 ? "المحرك: صوت عصبي أونلاين (مجاني) ✓ - اضغط للتحويل لصوت الجهاز"
@@ -1721,6 +1723,8 @@ public class PdfViewerActivity extends AppCompatActivity {
         items[iMixed] = "تبديل الصوت للكلمات الأجنبية داخل الجملة: " + (speaker.isMixedVoices() ? "مفعّل ✓" : "معطّل");
         items[iAcro] = "نطق الاختصارات حرفًا حرفًا (EMG, MRI...): " + (speaker.isSpellAcronyms() ? "مفعّل ✓" : "معطّل");
         items[iLex] = "قاموس النطق الخاص (تصحيح كلمات بعينها)";
+        items[iLetters] = "قاموس الحروف ونطقها من الألف إلى الياء (المخارج والصفات والحركات)";
+        items[iLetterSpell] = "نطق الحروف المنفردة باسمها (أ) ب) ع.م النقطة س): " + (speaker.isLetterNames() ? "مفعّل ✓" : "معطّل");
         items[iSleep] = "مؤقت النوم: " + sleepLabel() + " - اضغط للتبديل";
         items[iSystem] = "إعدادات محرك النطق في النظام";
         voiceDialog = new ClaudeDialog(this)
@@ -1766,6 +1770,12 @@ public class PdfViewerActivity extends AppCompatActivity {
                         showVoiceSettings();
                     } else if (which == iLex) {
                         showLexiconEditor();
+                    } else if (which == iLetters) {
+                        if (letterDialog != null) letterDialog.dismiss();
+                        letterDialog = LetterDictionaryDialog.show(this, speaker);
+                    } else if (which == iLetterSpell) {
+                        speaker.setLetterNames(!speaker.isLetterNames());
+                        showVoiceSettings();
                     } else if (which == iSleep) {
                         cycleSleepTimer();
                         showVoiceSettings();

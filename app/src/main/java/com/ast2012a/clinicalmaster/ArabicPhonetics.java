@@ -84,6 +84,12 @@ final class ArabicPhonetics {
                 default:
                     break;
             }
+            // حروف فارسية/أردية/أعجمية (پ چ ڤ گ ژ ٹ ...): تُردّ إلى أقرب حرف عربي من قاموس الحروف
+            String fr = ArabicLetters.foreign(c);
+            if (fr != null) {
+                sb.append(fr);
+                continue;
+            }
             // علامات القراءة القرآنية الصغيرة وأرقام الآيات: لا تُنطق
             if ((c >= 0x06D6 && c <= 0x06DE) || c == 0x06DF || c == 0x06E0 || (c >= 0x06E2 && c <= 0x06E8)
                     || (c >= 0x06EA && c <= 0x06ED) || c == 0x08F0) {
@@ -317,6 +323,7 @@ final class ArabicPhonetics {
     /** كلمة مشكولة قبل علامة وقف: تُحذف حركة الإعراب الأخيرة والتنوين كما في القراءة الفصيحة. */
     static String pausal(String w) {
         if (w == null || w.length() < 2 || !hasArabic(w)) return w;
+        if (stripMarks(w).length() < 2) return w; // مقطع من حرف واحد (بَ، بِ، بُ): حركته مقصودة فلا تُسكَّن
         int idx = w.length() - 1;
         while (idx >= 0 && isMark(w.charAt(idx))) idx--;
         if (idx < 0) return w;
