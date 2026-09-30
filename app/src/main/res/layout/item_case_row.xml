@@ -12,7 +12,8 @@
     android:paddingStart="16dp"
     android:paddingTop="14dp"
     android:paddingEnd="8dp"
-    android:paddingBottom="4dp">
+    android:paddingBottom="4dp"
+    android:stateListAnimator="@animator/press_scale_xy">
 
     <LinearLayout
         android:layout_width="match_parent"

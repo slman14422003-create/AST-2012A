@@ -93,13 +93,19 @@
                 android:paddingEnd="22dp"
                 android:paddingBottom="24dp">
 
-                <ImageView
-                    android:layout_width="44dp"
-                    android:layout_height="44dp"
-                    android:layout_marginTop="8dp"
-                    android:importantForAccessibility="no"
-                    android:src="@drawable/ic_sparkle"
-                    android:tint="@color/claude_orange" />
+                <FrameLayout
+                    android:layout_width="96dp"
+                    android:layout_height="96dp"
+                    android:background="@drawable/bg_hero_halo">
+
+                    <ImageView
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:layout_gravity="center"
+                        android:importantForAccessibility="no"
+                        android:src="@drawable/ic_sparkle"
+                        android:tint="@color/claude_orange" />
+                </FrameLayout>
 
                 <!-- عبارة الترحيب المتغيّرة (يعبّئها MainActivity من GreetingProvider) -->
                 <TextView
@@ -139,7 +145,8 @@
                     android:clickable="true"
                     android:focusable="true"
                     android:orientation="vertical"
-                    android:padding="16dp">
+                    android:padding="16dp"
+                    android:stateListAnimator="@animator/press_scale_xy">
 
                     <LinearLayout
                         android:layout_width="match_parent"
@@ -198,7 +205,8 @@
                         android:textAlignment="viewStart"
                         android:textColor="@color/text_tertiary"
                         android:textDirection="rtl"
-                        android:textSize="13sp" />
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
 
                     <HorizontalScrollView
                         android:layout_width="match_parent"
@@ -222,7 +230,8 @@
                     android:textAlignment="viewStart"
                     android:textColor="@color/text_tertiary"
                     android:textDirection="rtl"
-                    android:textSize="13sp" />
+                    android:textSize="13sp"
+                        android:textStyle="bold" />
 
                 <TextView
                     android:id="@+id/chip_suggestion_1"
@@ -459,6 +468,8 @@
             android:layout_height="wrap_content"
             android:layout_marginBottom="10dp"
             android:clipToPadding="false"
+            android:fadingEdgeLength="28dp"
+            android:requiresFadingEdge="horizontal"
             android:scrollbars="none">
 
             <LinearLayout
