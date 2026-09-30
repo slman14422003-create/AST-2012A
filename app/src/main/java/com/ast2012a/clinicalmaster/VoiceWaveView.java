@@ -3,9 +3,10 @@ package com.ast2012a.clinicalmaster;
 import android.content.Context;
 import android.content.res.Configuration;
 import android.graphics.Canvas;
+import android.graphics.LinearGradient;
 import android.graphics.Paint;
-import android.graphics.Path;
 import android.graphics.RectF;
+import android.graphics.Shader;
 import android.os.SystemClock;
 import android.util.AttributeSet;
 import android.view.View;
@@ -13,12 +14,13 @@ import android.view.View;
 import androidx.annotation.Nullable;
 
 /**
- * فقاعة (كبسولة) بداخلها موجة صوتية انسيابية تتحرك بحسب مستوى الصوت الفعلي أثناء القراءة.
+ * فقاعة (كبسولة) بداخلها موجة صوتية على شكل أعمدة مدوّرة متناظرة حول الخط الأوسط.
  *
- * الفكرة: نحتفظ بسجلّ قصير لمستوى الصوت الأخير، ونرسم الموجة بحيث يكون أحدث مستوى في
- * منتصف الفقاعة وتنتشر القيم الأقدم نحو الطرفين، فتبدو الموجة وكأنها تخرج من المنتصف مع
- * كل كلمة. ثلاث طبقات بألوان هوية التطبيق (برتقالي طوبي) وسرعات مختلفة تعطي عمقًا.
- * عند الإيقاف المؤقت أو الصمت تهدأ الموجة وتتنفس بلطف.
+ * الفكرة: نحتفظ بسجلّ قصير لمستوى الصوت الأخير، فيكون أحدث مستوى عند المنتصف وتنتشر القيم
+ * الأقدم نحو الطرفين، فتبدو الموجة وكأنها تخرج من المنتصف مع كل كلمة. كل عمود يتحرك بطور
+ * مختلف قليلًا فتبدو الحركة عضوية لا آلية، والأعمدة تتدرّج لونيًا (أغمق في المنتصف) مع توهّج
+ * ناعم خلفها يقوى مع علوّ الصوت. عند الصمت تتحول الأعمدة إلى نقاط صغيرة تتموّج بهدوء
+ * كأنها تتنفس، وعند الإيقاف المؤقت تخفت وتستقر.
  */
 public class VoiceWaveView extends View {
 
@@ -27,28 +29,24 @@ public class VoiceWaveView extends View {
         float getLevel();
     }
 
-    private static final int HIST = 44;              // عدد عيّنات السجلّ
-    private static final float HIST_STEP = 0.030f;   // ثانية بين عيّنتين
+    private static final int HIST = 40;              // عدد عيّنات السجلّ
+    private static final float HIST_STEP = 0.026f;   // ثانية بين عيّنتين
+    private static final float BAR_DP = 3.4f;        // عرض العمود
+    private static final float GAP_DP = 3.0f;        // المسافة بين عمودين
 
     private final Paint bgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint borderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint glowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint[] linePaints = new Paint[]{
-            new Paint(Paint.ANTI_ALIAS_FLAG), new Paint(Paint.ANTI_ALIAS_FLAG), new Paint(Paint.ANTI_ALIAS_FLAG)};
-    private final int[] lineColors = new int[3];
-    private final Path path = new Path();
+    private final Paint barPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF rect = new RectF();
+    private final RectF bar = new RectF();
+    private final RectF glowRect = new RectF();
 
-    // معاملات الطبقات: تردد (دورات على العرض) / سرعة الطور / سعة نسبية / سماكة (dp) / شفافية
-    private static final float[] FREQ = {2.1f, 3.0f, 1.5f};
-    private static final float[] SPEED = {1.0f, -1.35f, 0.65f};
-    private static final float[] AMP = {1.0f, 0.68f, 0.48f};
-    private static final float[] WIDTH_DP = {2.6f, 1.7f, 1.3f};
-    private static final int[] ALPHA = {255, 170, 120};
+    private int colorMain;
+    private int colorLight;
+    private int colorDark;
 
     private final float[] hist = new float[HIST];
-    private float[] xs = new float[0];
-    private float[] win = new float[0];
 
     @Nullable
     private LevelSource source;
@@ -72,16 +70,8 @@ public class VoiceWaveView extends View {
         bgPaint.setStyle(Paint.Style.FILL);
         borderPaint.setStyle(Paint.Style.STROKE);
         borderPaint.setStrokeWidth(density);
-        glowPaint.setStyle(Paint.Style.STROKE);
-        glowPaint.setStrokeCap(Paint.Cap.ROUND);
-        glowPaint.setStrokeJoin(Paint.Join.ROUND);
-        for (int i = 0; i < linePaints.length; i++) {
-            linePaints[i].setStyle(Paint.Style.STROKE);
-            linePaints[i].setStrokeCap(Paint.Cap.ROUND);
-            linePaints[i].setStrokeJoin(Paint.Join.ROUND);
-            linePaints[i].setStrokeWidth(WIDTH_DP[i] * density);
-        }
-        glowPaint.setStrokeWidth(7f * density);
+        glowPaint.setStyle(Paint.Style.FILL);
+        barPaint.setStyle(Paint.Style.FILL);
         refreshColors();
         setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
     }
@@ -97,13 +87,24 @@ public class VoiceWaveView extends View {
 
     private void refreshColors() {
         Context c = getContext();
+        colorMain = c.getColor(R.color.primary_cyan);
+        colorLight = c.getColor(R.color.primary_cyan_light);
+        colorDark = c.getColor(R.color.primary_cyan_dark);
         bgPaint.setColor(c.getColor(R.color.primary_soft));
-        int stroke = c.getColor(R.color.primary_cyan);
-        borderPaint.setColor((stroke & 0x00FFFFFF) | 0x38000000);
-        lineColors[0] = c.getColor(R.color.primary_cyan);
-        lineColors[1] = c.getColor(R.color.primary_cyan_light);
-        lineColors[2] = c.getColor(R.color.primary_cyan_dark);
-        glowPaint.setColor(lineColors[0]);
+        borderPaint.setColor((colorMain & 0x00FFFFFF) | 0x38000000);
+        rebuildShaders(getWidth());
+    }
+
+    private void rebuildShaders(int w) {
+        if (w <= 0) return;
+        // تدرّج أفقي متناظر: فاتح عند الطرفين وأغمق عند المنتصف
+        barPaint.setShader(new LinearGradient(0f, 0f, w, 0f,
+                new int[]{colorLight, colorMain, colorDark, colorMain, colorLight},
+                new float[]{0f, 0.25f, 0.5f, 0.75f, 1f}, Shader.TileMode.CLAMP));
+        int clear = colorMain & 0x00FFFFFF;
+        int soft = (colorMain & 0x00FFFFFF) | 0x55000000;
+        glowPaint.setShader(new LinearGradient(0f, 0f, w, 0f,
+                new int[]{clear, soft, clear}, new float[]{0f, 0.5f, 1f}, Shader.TileMode.CLAMP));
     }
 
     // ------------------------------------------------------------------ دورة الحياة
@@ -187,7 +188,7 @@ public class VoiceWaveView extends View {
         float dimTarget = paused ? 0.45f : 1f;
         dim += (dimTarget - dim) * (1f - (float) Math.exp(-dt * 8f));
 
-        phase += dt * (2.2f + 6.5f * cur);
+        phase += dt * (2.4f + 7f * cur);
 
         accum += dt;
         while (accum >= HIST_STEP) {
@@ -200,19 +201,11 @@ public class VoiceWaveView extends View {
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
-        int n = Math.max(32, Math.round(w / (3f * density)));
-        xs = new float[n + 1];
-        win = new float[n + 1];
-        for (int i = 0; i <= n; i++) {
-            float u = i / (float) n;
-            xs[i] = u;
-            // نافذة تُنهي الموجة بهدوء عند طرفي الكبسولة فلا تخرج عن حدودها
-            win[i] = (float) Math.pow(Math.sin(Math.PI * u), 1.3);
-        }
+        rebuildShaders(w);
     }
 
-    private float histAt(float u) {
-        float d = Math.abs(u - 0.5f) * 2f;          // 0 في المنتصف .. 1 عند الطرفين
+    /** مستوى السجلّ عند بُعد d عن المنتصف (0 = الأحدث في المنتصف .. 1 = الأقدم عند الطرفين). */
+    private float histAt(float d) {
         float f = d * (HIST - 1);
         int i0 = (int) f;
         int i1 = Math.min(HIST - 1, i0 + 1);
@@ -227,44 +220,52 @@ public class VoiceWaveView extends View {
         super.onDraw(canvas);
         final int w = getWidth();
         final int h = getHeight();
-        if (w <= 0 || h <= 0 || xs.length == 0) return;
+        if (w <= 0 || h <= 0) return;
 
         float half = borderPaint.getStrokeWidth() / 2f;
         rect.set(half, half, w - half, h - half);
-        float r = rect.height() / 2f;
+        final float r = rect.height() / 2f;
         canvas.drawRoundRect(rect, r, r, bgPaint);
-        canvas.drawRoundRect(rect, r, r, borderPaint);
 
+        // توهّج ناعم خلف الأعمدة يقوى مع علوّ الصوت
+        final float glowA = Math.min(1f, 0.25f + 1.1f * cur) * dim;
+        glowPaint.setAlpha((int) (255 * glowA));
+        glowRect.set(rect.left + r * 0.3f, rect.top + h * 0.12f, rect.right - r * 0.3f, rect.bottom - h * 0.12f);
+        canvas.drawRoundRect(glowRect, r, r, glowPaint);
+
+        final float barW = BAR_DP * density;
+        final float step = barW + GAP_DP * density;
+        final float padX = r * 0.75f;
+        final float span = Math.max(step, w - 2f * padX);
+        int n = (int) (span / step);
+        if (n % 2 == 0) n--;              // عدد فردي ليكون للمنتصف عمود
+        if (n < 3) n = 3;
+        final float used = n * step - (GAP_DP * density);
+        final float x0 = (w - used) / 2f;
         final float cy = h / 2f;
-        final float maxAmp = h / 2f - 7f * density;
-        final float idle = 0.07f + 0.035f * (float) Math.sin(clock * 2.0f); // تنفّس خفيف عند الهدوء
-        final float padX = r * 0.55f;                                          // هامش من كل طرف
-        final float span = Math.max(1f, w - 2f * padX);
-        final int n = xs.length - 1;
+        final float maxH = h - 2f * 7f * density;
+        final float minH = barW;           // أدنى ارتفاع: نقطة مدوّرة
+        final float mid = (n - 1) / 2f;
+        final float radius = barW / 2f;
 
-        for (int layer = 2; layer >= 0; layer--) {
-            final float freq = FREQ[layer];
-            final float ph = phase * SPEED[layer] + layer * 1.7f;
-            path.reset();
-            for (int i = 0; i <= n; i++) {
-                float u = xs[i];
-                float a = idle + (1f - idle) * histAt(u);
-                float y = cy + maxAmp * AMP[layer] * win[i] * a
-                        * (float) Math.sin(u * freq * 2f * (float) Math.PI + ph);
-                float x = padX + u * span;
-                if (i == 0) path.moveTo(x, y);
-                else path.lineTo(x, y);
-            }
-            if (layer == 0) {
-                // توهّج ناعم خلف الطبقة الرئيسية
-                glowPaint.setColor(lineColors[0]);
-                glowPaint.setAlpha((int) (46 * dim));
-                canvas.drawPath(path, glowPaint);
-            }
-            Paint p = linePaints[layer];
-            p.setColor(lineColors[layer]);
-            p.setAlpha((int) (ALPHA[layer] * dim));
-            canvas.drawPath(path, p);
+        for (int i = 0; i < n; i++) {
+            final float d = mid == 0f ? 0f : Math.abs(i - mid) / mid;      // 0 منتصف .. 1 طرف
+            final float env = histAt(d);
+            // تنفّس هادئ يسري عبر الأعمدة عند الصمت
+            final float idle = 0.06f + 0.05f * (float) Math.sin(clock * 2.6f - i * 0.5f);
+            // تغيّر عضوي بسيط لكل عمود حتى لا تتحرك الأعمدة بتطابق آلي
+            final float organic = 0.74f + 0.26f * (float) Math.sin(phase * 1.25f + i * 0.72f);
+            final float taper = 1f - 0.82f * (float) Math.pow(d, 2.2);       // تضييق عند الطرفين
+            float f = (idle + (1f - idle) * env * organic) * taper * (0.35f + 0.65f * dim);
+            f = Math.max(0f, Math.min(1f, f));
+            final float bh = minH + (maxH - minH) * f;
+
+            final float x = x0 + i * step;
+            bar.set(x, cy - bh / 2f, x + barW, cy + bh / 2f);
+            barPaint.setAlpha((int) (255 * (0.55f + 0.45f * dim)));
+            canvas.drawRoundRect(bar, radius, radius, barPaint);
         }
+
+        canvas.drawRoundRect(rect, r, r, borderPaint);
     }
 }

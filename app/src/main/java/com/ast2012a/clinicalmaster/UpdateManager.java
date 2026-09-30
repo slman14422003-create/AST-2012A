@@ -10,10 +10,13 @@ import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.Signature;
 import android.content.pm.SigningInfo;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.provider.Settings;
 import android.view.Gravity;
 import android.view.View;
@@ -29,10 +32,9 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.RandomAccessFile;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -44,7 +46,11 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -73,12 +79,19 @@ final class UpdateManager {
     private static final String KEY_LATEST_TAG = "latest_tag";
     private static final String KEY_LATEST_AVAILABLE = "latest_available";
     private static final String KEY_SKIPPED_TAG = "skipped_tag";
+    private static final String KEY_PENDING_TAG = "pending_tag";
+    private static final String KEY_PENDING_TIME = "pending_time";
     private static final long AUTO_INTERVAL_MS = 6L * 60 * 60 * 1000;
+    private static final long PENDING_GRACE_MS = 15L * 60 * 1000;
+    private static final int MAX_SEGMENTS = 4;
+    private static final long SEGMENT_MIN_BYTES = 2L * 1048576;
+    static final String STATUS_CHECKING = "جارٍ التحقق…";
 
     private static final ExecutorService IO = Executors.newSingleThreadExecutor();
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
     private static boolean promptedThisRun = false;
     private static boolean busy = false;
+    private static volatile boolean downloading = false;
 
     // ------------------------------------------------------------------ النتيجة
 
@@ -294,6 +307,7 @@ final class UpdateManager {
 
     /** فحص صامت (كل 6 ساعات) عند فتح التطبيق؛ يعرض نافذة التحديث فقط لو يوجد إصدار أحدث. */
     static void autoCheck(Activity activity) {
+        cleanupTemp(activity);
         if (promptedThisRun || busy) return;
         SharedPreferences sp = prefs(activity);
         long last = sp.getLong(KEY_LAST_CHECK, 0);
@@ -313,7 +327,8 @@ final class UpdateManager {
     static void checkInteractive(Activity activity, StatusSink sink) {
         if (busy) return;
         busy = true;
-        sink.onStatus("جارٍ التحقق…");
+        cleanupTemp(activity);
+        sink.onStatus(STATUS_CHECKING);
         check(activity, r -> {
             busy = false;
             sink.onStatus(statusText(activity));
@@ -336,22 +351,91 @@ final class UpdateManager {
         });
     }
 
-    // ------------------------------------------------------------ نافذة التحديث
+    // ------------------------------------------------------------ أدوات الواجهة
 
     private static String mb(long bytes) {
         return String.format(Locale.US, "%.1f MB", bytes / 1048576.0);
     }
 
-    static void showUpdateDialog(Activity activity, Result r, boolean fromAuto) {
-        StringBuilder msg = new StringBuilder();
-        msg.append("الإصدار ").append(r.versionName).append(" جاهز (الحالي ")
-                .append(r.currentVersion).append(")");
-        if (r.apkSize > 0) msg.append("\nالحجم: ").append(mb(r.apkSize));
-        if (!r.notes.isEmpty()) msg.append("\n\nما الجديد:\n").append(r.notes);
+    private static int dp(Context c, float v) {
+        return Math.round(v * c.getResources().getDisplayMetrics().density);
+    }
 
+    private static TextView label(Context c, CharSequence s, float sp, int color, boolean bold) {
+        TextView t = new TextView(c);
+        t.setText(s);
+        t.setTextSize(sp);
+        t.setTextColor(color);
+        if (bold) t.setTypeface(t.getTypeface(), Typeface.BOLD);
+        t.setTextDirection(View.TEXT_DIRECTION_RTL);
+        t.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+        return t;
+    }
+
+    private static GradientDrawable shape(int fill, int radiusPx) {
+        GradientDrawable g = new GradientDrawable();
+        g.setColor(fill);
+        g.setCornerRadius(radiusPx);
+        return g;
+    }
+
+    private static TextView chip(Context c, String s, boolean accent) {
+        TextView t = label(c, s, 13f, c.getColor(accent ? R.color.white : R.color.text_primary), true);
+        t.setGravity(Gravity.CENTER);
+        t.setPadding(dp(c, 12), dp(c, 6), dp(c, 12), dp(c, 6));
+        t.setBackground(shape(c.getColor(accent ? R.color.primary_cyan : R.color.m3_surface_container_high),
+                dp(c, 20)));
+        return t;
+    }
+
+    private static LinearLayout.LayoutParams lp(int w, int h, int topDp, Context c) {
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(w, h);
+        p.topMargin = dp(c, topDp);
+        return p;
+    }
+
+    // ------------------------------------------------------------ نافذة التحديث
+
+    /** محتوى نافذة «تحديث جديد»: شارتا الإصدار (الحالي ← الجديد) + الحجم + ما الجديد. */
+    private static View buildUpdateView(Context c, Result r) {
+        final int wrap = ViewGroup.LayoutParams.WRAP_CONTENT;
+        final int match = ViewGroup.LayoutParams.MATCH_PARENT;
+        LinearLayout box = new LinearLayout(c);
+        box.setOrientation(LinearLayout.VERTICAL);
+
+        LinearLayout row = new LinearLayout(c);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+        row.addView(chip(c, "الحالي " + r.currentVersion, false));
+        TextView arrow = label(c, "←", 18f, c.getColor(R.color.text_secondary), true);
+        arrow.setPadding(dp(c, 10), 0, dp(c, 10), 0);
+        row.addView(arrow);
+        row.addView(chip(c, "الجديد " + r.versionName, true));
+        box.addView(row, new LinearLayout.LayoutParams(wrap, wrap));
+
+        if (r.apkSize > 0) {
+            box.addView(label(c, "حجم التحديث: " + mb(r.apkSize), 14f, c.getColor(R.color.text_secondary), false),
+                    lp(match, wrap, 12, c));
+        }
+        if (!r.notes.isEmpty()) {
+            box.addView(label(c, "ما الجديد", 14f, c.getColor(R.color.text_primary), true),
+                    lp(match, wrap, 14, c));
+            TextView notes = label(c, r.notes, 13.5f, c.getColor(R.color.text_primary), false);
+            notes.setLineSpacing(0f, 1.2f);
+            notes.setPadding(dp(c, 12), dp(c, 10), dp(c, 12), dp(c, 10));
+            notes.setBackground(shape(c.getColor(R.color.m3_surface_container), dp(c, 14)));
+            box.addView(notes, lp(match, wrap, 6, c));
+        }
+        box.addView(label(c, "يُنزَّل الملف مباشرة ثم تُحذف الملفات المؤقتة تلقائيًا بعد التثبيت.",
+                12f, c.getColor(R.color.text_secondary), false), lp(match, wrap, 14, c));
+        return box;
+    }
+
+    static void showUpdateDialog(Activity activity, Result r, boolean fromAuto) {
         ClaudeDialog d = new ClaudeDialog(activity)
                 .setTitle("تحديث جديد متاح")
-                .setMessage(msg.toString())
+                .setView(buildUpdateView(activity, r))
                 .setPositiveButton("تحديث الآن", (dlg, w) -> startUpdate(activity, r))
                 .setNegativeButton("لاحقًا", null);
         if (fromAuto) {
@@ -364,6 +448,7 @@ final class UpdateManager {
     // ------------------------------------------------------------ التنزيل والتثبيت
 
     private static void startUpdate(Activity activity, Result r) {
+        if (downloading) return;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                 && !activity.getPackageManager().canRequestPackageInstalls()) {
             new ClaudeDialog(activity)
@@ -383,55 +468,128 @@ final class UpdateManager {
         downloadAndInstall(activity, r);
     }
 
+    /** واجهة تقدّم التنزيل: المرحلة + النسبة + شريط + الحجم + السرعة والوقت المتبقي. */
+    private static final class ProgressUi {
+        final LinearLayout root;
+        final TextView stage, percent, sizes, speed;
+        final LinearProgressIndicator bar;
+        private boolean indeterminate = true;
+        private long lastT = 0, lastDone = 0;
+        private float ema = 0f;
+
+        ProgressUi(Context c) {
+            final int wrap = ViewGroup.LayoutParams.WRAP_CONTENT;
+            final int match = ViewGroup.LayoutParams.MATCH_PARENT;
+            final int secondary = c.getColor(R.color.text_secondary);
+            root = new LinearLayout(c);
+            root.setOrientation(LinearLayout.VERTICAL);
+            root.setPadding(0, dp(c, 4), 0, dp(c, 4));
+
+            LinearLayout top = new LinearLayout(c);
+            top.setOrientation(LinearLayout.HORIZONTAL);
+            top.setGravity(Gravity.CENTER_VERTICAL);
+            top.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+            stage = label(c, "جارٍ تجهيز الملف…", 14f, secondary, true);
+            percent = label(c, "", 24f, c.getColor(R.color.primary_cyan), true);
+            top.addView(stage, new LinearLayout.LayoutParams(0, wrap, 1f));
+            top.addView(percent, new LinearLayout.LayoutParams(wrap, wrap));
+            root.addView(top, new LinearLayout.LayoutParams(match, wrap));
+
+            bar = new LinearProgressIndicator(c);
+            bar.setIndeterminate(true);
+            bar.setTrackThickness(dp(c, 8));
+            bar.setTrackCornerRadius(dp(c, 4));
+            bar.setIndicatorColor(c.getColor(R.color.primary_cyan));
+            bar.setTrackColor(c.getColor(R.color.primary_soft));
+            root.addView(bar, lp(match, wrap, 12, c));
+
+            LinearLayout bottom = new LinearLayout(c);
+            bottom.setOrientation(LinearLayout.HORIZONTAL);
+            bottom.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+            sizes = label(c, "", 12.5f, secondary, false);
+            speed = label(c, "", 12.5f, secondary, false);
+            speed.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_END);
+            bottom.addView(sizes, new LinearLayout.LayoutParams(0, wrap, 1f));
+            bottom.addView(speed, new LinearLayout.LayoutParams(wrap, wrap));
+            root.addView(bottom, lp(match, wrap, 10, c));
+        }
+
+        private void setIndeterminate(boolean on) {
+            if (indeterminate == on) return;
+            indeterminate = on;
+            bar.setIndeterminate(on);
+        }
+
+        void update(int st, long done, long total) {
+            if (st == STAGE_PREPARE) {
+                stage.setText("جارٍ تجهيز الملف…");
+                setIndeterminate(true);
+                return;
+            }
+            if (st == STAGE_VERIFY) {
+                stage.setText("جارٍ التحقق من سلامة الملف…");
+                percent.setText("100%");
+                speed.setText("");
+                setIndeterminate(true);
+                return;
+            }
+            int pct = total > 0 ? (int) Math.min(100, done * 100 / total) : 0;
+            stage.setText("جارٍ التنزيل");
+            percent.setText(pct + "%");
+            setIndeterminate(false);
+            bar.setProgressCompat(pct, true);
+            sizes.setText(mb(done) + (total > 0 ? " / " + mb(total) : ""));
+
+            long now = SystemClock.uptimeMillis();
+            if (lastT == 0) {
+                lastT = now;
+                lastDone = done;
+            } else if (now - lastT >= 500) {
+                float inst = (done - lastDone) * 1000f / (now - lastT);
+                ema = ema == 0f ? inst : ema * 0.7f + inst * 0.3f;
+                lastT = now;
+                lastDone = done;
+            }
+            if (ema > 1024f) {
+                StringBuilder s = new StringBuilder(String.format(Locale.US, "%.1f MB/s", ema / 1048576f));
+                if (total > done) {
+                    long eta = (long) ((total - done) / ema);
+                    s.append("  ·  متبقي ").append(eta / 60).append(':')
+                            .append(String.format(Locale.US, "%02d", eta % 60));
+                }
+                speed.setText(s.toString());
+            }
+        }
+    }
+
     private static void downloadAndInstall(Activity activity, Result r) {
         final Context app = activity.getApplicationContext();
         final AtomicBoolean cancelled = new AtomicBoolean(false);
-
-        // واجهة التقدم داخل ClaudeDialog
-        LinearLayout box = new LinearLayout(activity);
-        box.setOrientation(LinearLayout.VERTICAL);
-        int pad = Math.round(8 * activity.getResources().getDisplayMetrics().density);
-        box.setPadding(0, pad, 0, pad);
-        final TextView label = new TextView(activity);
-        label.setText("جارٍ التنزيل… 0%");
-        label.setTextColor(activity.getColor(R.color.text_secondary));
-        label.setTextSize(14f);
-        label.setTextDirection(View.TEXT_DIRECTION_RTL);
-        label.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
-        label.setGravity(Gravity.START);
-        final LinearProgressIndicator bar = new LinearProgressIndicator(activity);
-        bar.setMax(100);
-        bar.setProgress(0);
-        box.addView(label, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        LinearLayout.LayoutParams barLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        barLp.topMargin = pad * 2;
-        box.addView(bar, barLp);
+        final ProgressUi ui = new ProgressUi(activity);
 
         final Dialog progress = new ClaudeDialog(activity)
                 .setTitle("تنزيل التحديث " + r.versionName)
-                .setView(box)
+                .setView(ui.root)
                 .setNegativeButton("إلغاء", (dlg, w) -> cancelled.set(true))
                 .create();
         progress.setCancelable(false);
         progress.show();
+        downloading = true;
 
         IO.execute(() -> {
             try {
-                File apk = download(app, r, cancelled, (done, total) -> MAIN.post(() -> {
-                    int pct = total > 0 ? (int) (done * 100 / total) : 0;
-                    bar.setProgress(pct);
-                    label.setText("جارٍ التنزيل… " + pct + "%  (" + mb(done)
-                            + (total > 0 ? " / " + mb(total) : "") + ")");
-                }));
+                File apk = download(app, r, cancelled,
+                        (st, done, total) -> MAIN.post(() -> ui.update(st, done, total)));
                 MAIN.post(() -> {
+                    downloading = false;
                     dismissQuietly(progress);
                     if (apk != null) install(activity, app, apk, r);
                 });
             } catch (Exception e) {
+                clearDir(updatesDir(app));
                 final String reason = e.getMessage() == null ? "خطأ غير معروف" : e.getMessage();
                 MAIN.post(() -> {
+                    downloading = false;
                     dismissQuietly(progress);
                     if (cancelled.get() || activity.isFinishing() || activity.isDestroyed()) return;
                     new ClaudeDialog(activity)
@@ -451,69 +609,242 @@ final class UpdateManager {
         }
     }
 
-    private interface Progress {
-        void onProgress(long done, long total);
+    // ------------------------------------------------------------ الملفات المؤقتة
+
+    private static File updatesDir(Context ctx) {
+        return new File(ctx.getCacheDir(), "updates");
     }
 
-    /** ينزّل الـ APK إلى الكاش ويتحقق من الحجم والبصمة. يرجع null لو أُلغي. */
-    private static File download(Context ctx, Result r, AtomicBoolean cancelled, Progress p) throws Exception {
-        File dir = new File(ctx.getCacheDir(), "updates");
-        if (!dir.exists() && !dir.mkdirs()) throw new IOException("تعذّر إنشاء مجلد التنزيل.");
-        File[] old = dir.listFiles();
-        if (old != null) for (File f : old) //noinspection ResultOfMethodCallIgnored
+    private static void clearDir(File dir) {
+        File[] files = dir.listFiles();
+        if (files == null) return;
+        for (File f : files) //noinspection ResultOfMethodCallIgnored
             f.delete();
+    }
 
-        String expectedHash = fetchExpectedHash(r);
+    /**
+     * حذف ملفات التحديث المؤقتة (update.apk / .part). يُستدعى عند فتح التطبيق والإعدادات:
+     * بعد نجاح التثبيت تبدأ العملية من جديد فيُمسح الملف فورًا، ونترك الملف فقط لو كان
+     * التثبيت ما زال جاريًا (أقل من 15 دقيقة) حتى لا نحذف الملف من تحت مُثبّت النظام.
+     */
+    static void cleanupTemp(Context ctxIn) {
+        final Context ctx = ctxIn.getApplicationContext();
+        IO.execute(() -> {
+            try {
+                File dir = updatesDir(ctx);
+                File[] files = dir.listFiles();
+                SharedPreferences sp = prefs(ctx);
+                String pending = sp.getString(KEY_PENDING_TAG, "");
+                if (files == null || files.length == 0) {
+                    if (!pending.isEmpty()) clearPending(sp);
+                    return;
+                }
+                long when = sp.getLong(KEY_PENDING_TIME, 0);
+                boolean installed = pending.isEmpty()
+                        || compareVersions(installedVersion(ctx), stripV(pending)) >= 0;
+                boolean installerBusy = !installed
+                        && System.currentTimeMillis() - when < PENDING_GRACE_MS;
+                if (installerBusy) return;
+                clearDir(dir);
+                clearPending(sp);
+            } catch (Exception ignored) {
+            }
+        });
+    }
 
-        File part = new File(dir, "update.apk.part");
-        File out = new File(dir, "update.apk");
+    private static void clearPending(SharedPreferences sp) {
+        sp.edit().remove(KEY_PENDING_TAG).remove(KEY_PENDING_TIME).apply();
+    }
+
+    // ------------------------------------------------------------ منطق التنزيل
+
+    static final int STAGE_PREPARE = 0;
+    static final int STAGE_DOWNLOAD = 1;
+    static final int STAGE_VERIFY = 2;
+
+    private interface Progress {
+        void onProgress(int stage, long done, long total);
+    }
+
+    private static final class Probe {
+        long total;
+        boolean ranged;
+    }
+
+    /** طلب صغير (بايت واحد) لمعرفة الحجم الفعلي ومعرفة هل الخادم يدعم التنزيل المجزّأ. */
+    private static Probe probe(Result r) throws IOException {
         HttpURLConnection c = open(r.apkUrl);
+        c.setRequestProperty("Range", "bytes=0-0");
         try {
             int code = c.getResponseCode();
-            if (code != 200) throw new IOException("تعذّر تنزيل الملف (رمز الخادم " + code + ").");
-            long total = c.getContentLengthLong();
-            if (total <= 0) total = r.apkSize;
-
-            MessageDigest sha = MessageDigest.getInstance("SHA-256");
-            long done = 0;
-            long lastReport = 0;
-            try (InputStream in = c.getInputStream(); OutputStream os = new FileOutputStream(part)) {
-                byte[] buf = new byte[32 * 1024];
-                int n;
-                while ((n = in.read(buf)) > 0) {
-                    if (cancelled.get()) {
-                        os.close();
-                        //noinspection ResultOfMethodCallIgnored
-                        part.delete();
-                        return null;
-                    }
-                    os.write(buf, 0, n);
-                    sha.update(buf, 0, n);
-                    done += n;
-                    long now = System.currentTimeMillis();
-                    if (now - lastReport > 120) {
-                        lastReport = now;
-                        p.onProgress(done, total);
+            Probe p = new Probe();
+            if (code == 206) {
+                String cr = c.getHeaderField("Content-Range"); // bytes 0-0/12345
+                int slash = cr == null ? -1 : cr.lastIndexOf('/');
+                if (slash > 0) {
+                    try {
+                        p.total = Long.parseLong(cr.substring(slash + 1).trim());
+                    } catch (NumberFormatException ignored) {
                     }
                 }
+                p.ranged = p.total > 0;
+            } else if (code == 200) {
+                p.total = c.getContentLengthLong();
+            } else {
+                throw new IOException("تعذّر تنزيل الملف (رمز الخادم " + code + ").");
             }
-            p.onProgress(done, total);
-
-            if (r.apkSize > 0 && done != r.apkSize) {
-                //noinspection ResultOfMethodCallIgnored
-                part.delete();
-                throw new IOException("الملف المنزَّل غير مكتمل، حاول مرة أخرى.");
-            }
-            if (expectedHash != null && !expectedHash.equalsIgnoreCase(hex(sha.digest()))) {
-                //noinspection ResultOfMethodCallIgnored
-                part.delete();
-                throw new IOException("فشل التحقق من سلامة الملف (SHA-256)، لم يتم التثبيت.");
-            }
-            if (!part.renameTo(out)) throw new IOException("تعذّر حفظ ملف التحديث.");
-            return out;
+            return p;
         } finally {
             c.disconnect();
         }
+    }
+
+    /**
+     * ينشئ ملفًا فارغًا بحجم الـ APK كاملًا ثم يملؤه: الحجز المسبق يكشف نقص المساحة قبل البدء،
+     * ويمنع تجزّؤ الملف أثناء الكتابة، ويسمح بتنزيل عدة أجزاء بالتوازي كل جزء في موضعه مباشرة.
+     * بعد الاكتمال يتحقق من الحجم والبصمة. يرجع null لو أُلغي (ويحذف الملف المؤقت).
+     */
+    private static File download(Context ctx, Result r, AtomicBoolean cancelled, Progress p) throws Exception {
+        File dir = updatesDir(ctx);
+        if (!dir.exists() && !dir.mkdirs()) throw new IOException("تعذّر إنشاء مجلد التنزيل.");
+        clearDir(dir);
+
+        p.onProgress(STAGE_PREPARE, 0, r.apkSize);
+        String expectedHash = fetchExpectedHash(r);
+        Probe probe = probe(r);
+        final long total = probe.total > 0 ? probe.total : r.apkSize;
+        if (total <= 0) throw new IOException("تعذّر تحديد حجم ملف التحديث.");
+        if (dir.getUsableSpace() < total + 8L * 1048576) {
+            throw new IOException("مساحة التخزين لا تكفي لتنزيل التحديث (المطلوب " + mb(total)
+                    + "). حرّر بعض المساحة وحاول مرة أخرى.");
+        }
+
+        File part = new File(dir, "update.apk.part");
+        File out = new File(dir, "update.apk");
+        boolean ok = false;
+        try {
+            // 1) إنشاء ملف فارغ بالحجم الكامل
+            try (RandomAccessFile raf = new RandomAccessFile(part, "rw")) {
+                raf.setLength(total);
+            }
+            if (cancelled.get()) return null;
+
+            // 2) ملء الملف (أجزاء متوازية لو مدعوم وإلا مجرى واحد)
+            final int segs = (probe.ranged && total >= SEGMENT_MIN_BYTES) ? MAX_SEGMENTS : 1;
+            final AtomicLong done = new AtomicLong();
+            final AtomicBoolean failed = new AtomicBoolean(false);
+            final AtomicReference<IOException> error = new AtomicReference<>();
+            final ExecutorService pool = Executors.newFixedThreadPool(segs);
+            final List<Future<?>> futures = new ArrayList<>();
+            final long chunk = total / segs;
+            for (int i = 0; i < segs; i++) {
+                final long start = i * chunk;
+                final long end = (i == segs - 1) ? total - 1 : start + chunk - 1;
+                futures.add(pool.submit(() -> {
+                    try {
+                        fetchSegment(r.apkUrl, part, start, end, probe.ranged, cancelled, failed, done);
+                    } catch (IOException e) {
+                        error.compareAndSet(null, e);
+                        failed.set(true);
+                    }
+                    return null;
+                }));
+            }
+            try {
+                while (!cancelled.get() && !failed.get()) {
+                    boolean all = true;
+                    for (Future<?> f : futures) if (!f.isDone()) all = false;
+                    p.onProgress(STAGE_DOWNLOAD, Math.min(done.get(), total), total);
+                    if (all) break;
+                    Thread.sleep(150);
+                }
+            } finally {
+                pool.shutdown();
+                if (!pool.awaitTermination(15, TimeUnit.SECONDS)) pool.shutdownNow();
+            }
+            if (cancelled.get()) return null;
+            if (error.get() != null) {
+                throw new IOException("انقطع التنزيل (" + error.get().getMessage() + ")، حاول مرة أخرى.");
+            }
+            if (done.get() != total || part.length() != total) {
+                throw new IOException("الملف المنزَّل غير مكتمل، حاول مرة أخرى.");
+            }
+            if (r.apkSize > 0 && total != r.apkSize) {
+                throw new IOException("حجم الملف لا يطابق الإصدار المنشور، حاول مرة أخرى.");
+            }
+            p.onProgress(STAGE_DOWNLOAD, total, total);
+
+            // 3) التحقق من البصمة
+            if (expectedHash != null) {
+                p.onProgress(STAGE_VERIFY, total, total);
+                if (!expectedHash.equalsIgnoreCase(sha256(part))) {
+                    throw new IOException("فشل التحقق من سلامة الملف (SHA-256)، لم يتم التثبيت.");
+                }
+            }
+            if (cancelled.get()) return null;
+            if (!part.renameTo(out)) throw new IOException("تعذّر حفظ ملف التحديث.");
+            ok = true;
+            return out;
+        } finally {
+            if (!ok) //noinspection ResultOfMethodCallIgnored
+                part.delete();
+        }
+    }
+
+    /** ينزّل الجزء [start..end] ويكتبه في موضعه داخل الملف المحجوز، مع إعادة محاولة واستئناف. */
+    private static void fetchSegment(String url, File part, long start, long end, boolean ranged,
+                                     AtomicBoolean cancelled, AtomicBoolean failed, AtomicLong done)
+            throws IOException {
+        long pos = start;
+        int attempts = 0;
+        while (pos <= end) {
+            if (cancelled.get() || failed.get()) return;
+            if (!ranged && pos != start) { // بدون دعم الاستئناف: نبدأ الجزء من أوله
+                done.addAndGet(-(pos - start));
+                pos = start;
+            }
+            HttpURLConnection c = null;
+            try {
+                c = open(url);
+                if (ranged) c.setRequestProperty("Range", "bytes=" + pos + "-" + end);
+                int code = c.getResponseCode();
+                if (code != (ranged ? 206 : 200)) throw new IOException("رمز الخادم " + code);
+                try (InputStream in = c.getInputStream();
+                     RandomAccessFile raf = new RandomAccessFile(part, "rw")) {
+                    raf.seek(pos);
+                    byte[] buf = new byte[64 * 1024];
+                    int n;
+                    while (pos <= end
+                            && (n = in.read(buf, 0, (int) Math.min(buf.length, end - pos + 1))) > 0) {
+                        if (cancelled.get() || failed.get()) return;
+                        raf.write(buf, 0, n);
+                        pos += n;
+                        done.addAndGet(n);
+                    }
+                }
+                if (pos <= end) throw new IOException("انقطع الاتصال");
+            } catch (IOException e) {
+                if (++attempts >= 4) throw e;
+                try {
+                    Thread.sleep(700L * attempts);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("توقف التنزيل");
+                }
+            } finally {
+                if (c != null) c.disconnect();
+            }
+        }
+    }
+
+    private static String sha256(File f) throws Exception {
+        MessageDigest sha = MessageDigest.getInstance("SHA-256");
+        try (InputStream in = new java.io.FileInputStream(f)) {
+            byte[] buf = new byte[256 * 1024];
+            int n;
+            while ((n = in.read(buf)) > 0) sha.update(buf, 0, n);
+        }
+        return hex(sha.digest());
     }
 
     /** بصمة SHA-256 المتوقعة للـ APK من SHA256SUMS.txt (أو null لو غير متاحة). */
@@ -589,6 +920,7 @@ final class UpdateManager {
     private static void install(Activity activity, Context app, File apk, Result r) {
         Boolean same = sameSigner(app, apk);
         if (same != null && !same) {
+            clearDir(updatesDir(app)); // ملف لن يُقبل: لا داعي لإبقائه
             if (activity.isFinishing() || activity.isDestroyed()) return;
             new ClaudeDialog(activity)
                     .setTitle("لا يمكن التثبيت فوق النسخة الحالية")
@@ -611,8 +943,13 @@ final class UpdateManager {
             Intent i = new Intent(Intent.ACTION_VIEW)
                     .setDataAndType(uri, "application/vnd.android.package-archive")
                     .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+            // نسجّل أن تثبيتًا جاريًا: يُحذف الملف المؤقت تلقائيًا في أول تشغيل بعد نجاح التثبيت
+            prefs(app).edit().putString(KEY_PENDING_TAG, r.tag)
+                    .putLong(KEY_PENDING_TIME, System.currentTimeMillis()).apply();
             app.startActivity(i);
         } catch (Exception e) {
+            clearDir(updatesDir(app));
+            clearPending(prefs(app));
             if (activity.isFinishing() || activity.isDestroyed()) return;
             new ClaudeDialog(activity)
                     .setTitle("تعذّر فتح المُثبّت")

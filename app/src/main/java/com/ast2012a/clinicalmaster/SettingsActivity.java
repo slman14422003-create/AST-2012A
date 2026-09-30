@@ -50,6 +50,9 @@ public class SettingsActivity extends AppCompatActivity {
     private TextView themeValue;
     private TextView notifStatus;
     private TextView updateStatus;
+    private View updateProgress;
+    private android.content.res.ColorStateList updateStatusDefaultColors;
+    private android.graphics.Typeface updateStatusDefaultTypeface;
     private TextView instructionsStatus;
     private TextView builtinOverridesStatus;
     private TextView dictPacksStatus;
@@ -133,9 +136,13 @@ public class SettingsActivity extends AppCompatActivity {
 
         // عن التطبيق
         updateStatus = findViewById(R.id.update_status);
-        updateStatus.setText(UpdateManager.statusText(this));
+        updateProgress = findViewById(R.id.update_progress);
+        updateStatusDefaultColors = updateStatus.getTextColors();
+        updateStatusDefaultTypeface = updateStatus.getTypeface();
+        showUpdateStatus(UpdateManager.statusText(this));
+        UpdateManager.cleanupTemp(this);
         findViewById(R.id.btn_check_update).setOnClickListener(v ->
-                UpdateManager.checkInteractive(this, text -> updateStatus.setText(text)));
+                UpdateManager.checkInteractive(this, this::showUpdateStatus));
         findViewById(R.id.btn_about).setOnClickListener(v -> showAboutDialog());
         findViewById(R.id.btn_privacy_policy).setOnClickListener(v -> {
             startActivity(new Intent(this, PrivacyPolicyActivity.class));
@@ -839,6 +846,21 @@ public class SettingsActivity extends AppCompatActivity {
     // -----------------------------------------------------------------
     // عن التطبيق
     // -----------------------------------------------------------------
+
+    /** يعرض حالة صف التحديث: مؤشر أثناء الفحص، ولون مميّز وخط عريض لو يوجد تحديث متاح. */
+    private void showUpdateStatus(String text) {
+        boolean checking = UpdateManager.STATUS_CHECKING.equals(text);
+        boolean available = text != null && text.startsWith("تحديث متاح");
+        updateStatus.setText(text);
+        updateProgress.setVisibility(checking ? View.VISIBLE : View.GONE);
+        if (available) {
+            updateStatus.setTextColor(getColor(R.color.primary_cyan));
+            updateStatus.setTypeface(updateStatusDefaultTypeface, android.graphics.Typeface.BOLD);
+        } else {
+            updateStatus.setTextColor(updateStatusDefaultColors);
+            updateStatus.setTypeface(updateStatusDefaultTypeface);
+        }
+    }
 
     private void showAboutDialog() {
         String message = "Phizyo Studio\nالإصدار " + getVersionLabel() + "\n\n" +
