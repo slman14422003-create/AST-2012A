@@ -208,6 +208,12 @@ final class SpeechPrep {
                 if (!sp.isEmpty()) fst = false;
             }
             if (ar && (taaMode != ArabicPhonetics.TAA_AUTO || noIrab)) shapeEndingsAll(sps, toks);
+            // تدقيق: أواخر الكلمات الانفجارية (ك ق ط ب د ت ج ض) تُطلَق بسكون كي لا يبتلعها المحرك
+            if (ar) {
+                for (int q = 0; q < sps.length; q++) {
+                    if (sps[q] != null && !sps[q].isEmpty()) sps[q] = SpeechAuditor.releaseFinals(sps[q]);
+                }
+            }
         }
 
         // 3) تحويل كل كلمة إلى صيغتها المنطوقة مع خريطة المواضع
@@ -250,6 +256,15 @@ final class SpeechPrep {
             }
             boolean onlyPunct = sp.length() == 1 && PUNCT.indexOf(sp.charAt(0)) >= 0;
             if (onlyPunct && out.length() == 0) continue;
+            // سلاسة: لا وقفتان متتاليتان (\"،.\" أو \"؛،\"): نُبقي واحدة، ولو كانت الثانية نهاية جملة حلّت محل الفاصلة
+            if (onlyPunct && PUNCT.indexOf(out.charAt(out.length() - 1)) >= 0) {
+                char nc = sp.charAt(0);
+                char lc = out.charAt(out.length() - 1);
+                boolean newEnds = ".!?\u061F".indexOf(nc) >= 0;
+                boolean lastSoft = ",;:\u060C\u061B".indexOf(lc) >= 0;
+                if (newEnds && lastSoft) out.setCharAt(out.length() - 1, nc);
+                continue;
+            }
             if (out.length() > 0 && !onlyPunct) {
                 map = ensure(map, mlen + 1);
                 out.append(' ');

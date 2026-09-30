@@ -218,6 +218,28 @@ final class SpeechAuditor {
                 }
             }
 
+            // (1-ب) أي حرف منفصل بتطويل يحدد اتجاه وصله: "ـل" تتصل بما قبلها، و"ل ـ" / "لـ" بما بعدها.
+            //       وحروف لا تقف وحدها أبدًا (ة ء ئ ؤ) تتصل بما قبلها: "عضل ة" -> "عضلة".
+            if (!nt.isEmpty() && isLoneLetter(cur) && cur.charAt(0) != KAF && !isLoneKafToken(cur)) {
+                String prev = nt.get(nt.size() - 1);
+                char b0 = skeleton(cur).charAt(0);
+                boolean leadT = cur.charAt(0) == TATWEEL;
+                boolean neverAlone = "\u0629\u0621\u0626\u0624".indexOf(unifyLetter(stripLead(cur))) >= 0;
+                if ((leadT || neverAlone) && canTakeSuffix(prev) && b0 != '\u0648') {
+                    nt.set(nt.size() - 1, prev + cur);
+                    continue;
+                }
+            }
+            if (k + 1 < n && isLoneLetter(cur) && cur.charAt(cur.length() - 1) == TATWEEL) {
+                String nx = toks.get(k + 1);
+                if (isPureArabic(nx) && startsWithArabicLetter(nx)) {
+                    ns.add(starts.get(k));
+                    nt.add(cur + nx);
+                    k++;
+                    continue;
+                }
+            }
+
             // (2) "ال" + حرف منفصل + بقية الكلمة -> كلمة واحدة (ال ك تاب)
             if (k + 2 < n && isPureArabic(cur) && AL_ONLY.contains(skeleton(cur))) {
                 String mid = toks.get(k + 1);
@@ -319,5 +341,50 @@ final class SpeechAuditor {
         if (name == null) name = "\u0643\u064E\u0627\u0641";
         char p = lastPunct(ct.substring(b));
         return p == 0 ? name : name + p;
+    }
+
+    private static char stripLead(String s) {
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == TATWEEL || ArabicPhonetics.isMark(c)) continue;
+            return c;
+        }
+        return ' ';
+    }
+
+    // ------------------------------------------------------------------ د) إطلاق الحروف الأخيرة
+
+    /**
+     * حروف انفجارية إذا جاءت آخر الكلمة بلا حركة (ذَلِك، كتاب، وقت) ابتلعها المحرك العصبي فلا يُسمع الحرف:
+     * الكاف أكثرها، ثم ق ط ب د ت ج ض. نضع عليها سكونًا صريحًا فيُنطق الحرف مُطلَقًا واضحًا.
+     * لا نمسّ: كلمة فيها حركة/تنوين على آخرها، كلمة أقل من ثلاثة حروف، التاء المربوطة، ما فيه لاتينية/أرقام.
+     */
+    private static final String RELEASE = "\u0643\u0642\u0637\u0628\u062F\u062A\u062C\u0636";
+
+    static String releaseFinals(String sp) {
+        if (sp == null || sp.isEmpty() || sp.indexOf(' ') < 0 && sp.length() < 3) return sp;
+        String[] parts = sp.split(" ", -1);
+        boolean changed = false;
+        for (int i = 0; i < parts.length; i++) {
+            String part = parts[i];
+            int b = part.length();
+            while (b > 0 && !isWordChar(part.charAt(b - 1))) b--;
+            if (b < 3) continue;
+            int a = 0;
+            while (a < b && !isWordChar(part.charAt(a))) a++;
+            String w = part.substring(a, b);
+            if (!isPureArabic(w) || skeleton(w).length() < 3) continue;
+            char last = w.charAt(w.length() - 1);
+            if (RELEASE.indexOf(unifyLetter(last)) < 0) continue;
+            parts[i] = part.substring(0, b) + '\u0652' + part.substring(b);
+            changed = true;
+        }
+        if (!changed) return sp;
+        StringBuilder sb = new StringBuilder(sp.length() + 8);
+        for (int i = 0; i < parts.length; i++) {
+            if (i > 0) sb.append(' ');
+            sb.append(parts[i]);
+        }
+        return sb.toString();
     }
 }
