@@ -81,15 +81,23 @@ final class SpeechPrep {
      * mixed = true يُنتج runs لتبديل الصوت عند كل كلمة بلغة مختلفة.
      */
     static Spoken prepare(String src, String lang, String latinLang, boolean mixed) {
+        return prepare(src, lang, latinLang, mixed, false);
+    }
+
+    /**
+     * continues = true: المقطع ينتهي في منتصف جملة (قُطع لطوله، أو الجملة تكمل في المقطع التالي). نختمه بفاصلة بدل
+     * النقطة فلا تهبط النغمة كأن الجملة انتهت، ويكمل المقطع التالي الجملة بسلاسة.
+     */
+    static Spoken prepare(String src, String lang, String latinLang, boolean mixed, boolean continues) {
         LATIN.set(latinLang);
         try {
-            return prepareImpl(src, lang, latinLang, mixed);
+            return prepareImpl(src, lang, latinLang, mixed, continues);
         } finally {
             LATIN.set(null);
         }
     }
 
-    private static Spoken prepareImpl(String src, String lang, String latinLang, boolean mixed) {
+    private static Spoken prepareImpl(String src, String lang, String latinLang, boolean mixed, boolean continues) {
         if (src == null || src.isEmpty()) return new Spoken("", new int[0]);
         final boolean ar = "ar".equals(lang);
         int n = src.length();
@@ -106,6 +114,8 @@ final class SpeechPrep {
             starts.add(s);
             toks.add(src.substring(s, i));
         }
+        // 1-ب) فواصل ملتصقة/مقلوبة وعلامات تشكيل منفصلة (تخرج هكذا من بعض ملفات الـ PDF)
+        repairPunctuation(starts, toks);
 
         // 2) دمج الكلمات العربية المتقطّعة في الـ PDF: "ال" منفصلة عن كلمتها، أو حروف متباعدة
         //    (كانت تُنطق "ألف لام" أو تُقطَّع الكلمة). التظليل يبقى على أول جزء.
@@ -232,12 +242,82 @@ final class SpeechPrep {
         // نهاية المقطع (عنوان أو بند بلا نقطة): نختمه بنقطة ليهبط الصوت ويقف بدل أن يلتصق بما بعده
         if (out.length() > 0 && PUNCT.indexOf(out.charAt(out.length() - 1)) < 0) {
             map = ensure(map, mlen + 1);
-            out.append('.');
+            out.append(continues ? (ar ? '\u060C' : ',') : '.');
             map[mlen] = map[Math.max(0, mlen - 1)];
             mlen++;
         }
         List<Run> runs = mixed ? buildRuns(runS, runL, runU, out.length(), lang) : null;
         return new Spoken(out.toString(), Arrays.copyOf(map, mlen), runs);
+    }
+
+    /** فواصل تُعامل كفاصل جملة داخل الكلمة الملتصقة: ، ؛ , ; */
+    private static final String SOFT_PUNCT = "\u060C\u061B,;";
+
+    private static boolean allMarks(String t) {
+        if (t.isEmpty()) return false;
+        for (int i = 0; i < t.length(); i++) {
+            if (!ArabicPhonetics.isMark(t.charAt(i))) return false;
+        }
+        return true;
+    }
+
+    private static boolean endsWithAnyPunct(String t) {
+        if (t.isEmpty()) return false;
+        char e = t.charAt(t.length() - 1);
+        return PUNCT.indexOf(e) >= 0 || e == '\u2026' || e == ')' || e == ']';
+    }
+
+    /**
+     * يصلح ثلاث مشاكل شائعة في النص المستخرج قبل النطق (المواضع الأصلية محفوظة فيبقى التظليل صحيحًا):
+     *  1) علامة تشكيل ظهرت كلمة مستقلة: تُلصق بالكلمة قبلها.
+     *  2) فاصلة التصقت بالكلمة التالية ("كلمة ،كلمة"): تُنقل لآخر الكلمة السابقة فيقف الصوت في مكانها الصحيح.
+     *  3) فاصلة بلا مسافة بعدها ("العضلات،الأوتار" أو "a,b"): تُفصل لتُفهم كفاصلة فيحصل الوقف. الفاصلة بين رقمين
+     *     (1,5) لا تُمَسّ.
+     */
+    private static void repairPunctuation(List<Integer> starts, List<String> toks) {
+        List<Integer> ns = new ArrayList<>(starts.size() + 8);
+        List<String> nt = new ArrayList<>(toks.size() + 8);
+        for (int k = 0; k < toks.size(); k++) {
+            String t = toks.get(k);
+            int st = starts.get(k);
+            if (!nt.isEmpty() && allMarks(t)) {
+                nt.set(nt.size() - 1, nt.get(nt.size() - 1) + t);
+                continue;
+            }
+            int lead = 0;
+            while (lead < t.length() && (t.charAt(lead) == '\u060C' || t.charAt(lead) == '\u061B' || t.charAt(lead) == ',')) {
+                lead++;
+            }
+            if (lead > 0 && lead < t.length() && Character.isLetter(t.charAt(lead)) && !nt.isEmpty()) {
+                String pv = nt.get(nt.size() - 1);
+                if (!endsWithAnyPunct(pv)) {
+                    nt.set(nt.size() - 1, pv + t.substring(0, lead));
+                    t = t.substring(lead);
+                    st += lead;
+                }
+            }
+            int from = 0;
+            boolean urlLike = t.contains("://") || t.startsWith("www.") || t.indexOf('@') >= 0;
+            for (int q = 1; !urlLike && q + 1 < t.length(); q++) {
+                char c = t.charAt(q);
+                if (SOFT_PUNCT.indexOf(c) < 0) continue;
+                boolean arPunct = c == '\u060C' || c == '\u061B';
+                char pc = t.charAt(q - 1);
+                char nc = t.charAt(q + 1);
+                boolean ok = Character.isLetter(nc) && (arPunct ? (Character.isLetter(pc) || ArabicPhonetics.isMark(pc))
+                        : Character.isLetter(pc));
+                if (!ok) continue;
+                ns.add(st + from);
+                nt.add(t.substring(from, q + 1));
+                from = q + 1;
+            }
+            ns.add(st + from);
+            nt.add(from == 0 ? t : t.substring(from));
+        }
+        starts.clear();
+        starts.addAll(ns);
+        toks.clear();
+        toks.addAll(nt);
     }
 
     /**
@@ -1613,6 +1693,8 @@ final class SpeechPrep {
             if (Character.isSurrogate(c)) continue; // إيموجي
             if (c >= 0xE000 && c <= 0xF8FF) continue; // أيقونات الخطوط
             if ("\u2022\u25CF\u25AA\u25E6\u25A0\u25A1\u25C6\u25C7\u2605\u2606\u2713\u2714\u2717\u2718\u27A2\u27A4\u25BA\u25B6\u00B7\u2023\u2043".indexOf(c) >= 0) continue;
+            // NFKC لشكل علامة معزول (ﹰ ﹲ ﹷ ﱞ...) يعطي فراغًا قبل العلامة: نحذفه لتلتصق بحرفها
+            if (presentation && c == ' ' && i + 1 < x.length() && ArabicPhonetics.isMark(x.charAt(i + 1))) continue;
             if (c >= 0x0660 && c <= 0x0669) c = (char) ('0' + (c - 0x0660));
             else if (c >= 0x06F0 && c <= 0x06F9) c = (char) ('0' + (c - 0x06F0));
             else if (c == 0x066B) c = '.';

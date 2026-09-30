@@ -1457,7 +1457,7 @@ final class PdfSpeaker {
         int s = Math.min(c.end, c.start + Math.max(0, shift));
         String rawText = currentText.text.substring(s, c.end);
         if (rawText.trim().isEmpty()) return false;
-        SpeechPrep.Spoken spoken = SpeechPrep.prepare(EdgeTtsClient.sanitize(rawText), c.lang, currentText.latin, false);
+        SpeechPrep.Spoken spoken = SpeechPrep.prepare(EdgeTtsClient.sanitize(rawText), c.lang, currentText.latin, false, c.cont);
         String text = spoken.text;
         if (text.trim().isEmpty()) return false; // رموز فقط
         deviceSpoken = spoken;
@@ -1554,7 +1554,7 @@ final class PdfSpeaker {
         if (cloudReady.containsKey(key) || cloudPending.contains(key)) return key;
         final boolean mix = isMixedVoices();
         final SpeechPrep.Spoken spoken = SpeechPrep.prepare(
-                EdgeTtsClient.sanitize(pt.text.substring(c.start, c.end)), c.lang, pt.latin, mix);
+                EdgeTtsClient.sanitize(pt.text.substring(c.start, c.end)), c.lang, pt.latin, mix, c.cont);
         final String sent = spoken.text;
         final EdgeTtsClient.Style style = cloudStyle();
         List<EdgeTtsClient.Run> runList = null;

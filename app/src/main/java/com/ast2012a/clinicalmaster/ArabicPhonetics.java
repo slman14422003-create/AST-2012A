@@ -74,6 +74,8 @@ final class ArabicPhonetics {
                 case '\u06E1':
                     sb.append(SUKUN);
                     continue;
+                case '\u0640': // تطويل: لا يُنطق (وقد يفصل بين الحرف وعلامته)
+                    continue;
                 case '\u0670': { // ألف خنجرية: تُنطق مدًّا. بعد ى/ي تكون المدّ نفسه فلا نكرّره
                     char base = lastBase(sb);
                     if (base != '\u0649' && base != '\u064A' && base != '\u0627') sb.append('\u0627');
@@ -94,7 +96,7 @@ final class ArabicPhonetics {
             x = Normalizer.normalize(x, Normalizer.Form.NFC); // أ إ ؤ ئ آ
         } catch (Throwable ignored) {
         }
-        return orderMarks(x);
+        return fixDefiniteArticles(relocateTanween(orderMarks(x)));
     }
 
     private static char lastBase(StringBuilder sb) {
@@ -134,6 +136,180 @@ final class ArabicPhonetics {
             i = j;
         }
         return sb.toString();
+    }
+
+    // ------------------------------------------------------------------ 1b) تنوين الفتح + ال التعريف + الشدّة
+
+    private static boolean isWordPart(char c) {
+        return isArabicLetter(c) || isMark(c);
+    }
+
+    private static boolean isShortVowel(char c) {
+        return c == FATHA || c == DAMMA || c == KASRA;
+    }
+
+    /**
+     * تنوين الفتح يُكتب أحيانًا على الألف (كتاباً) وأحيانًا على الحرف قبلها (كتابًا). نوحّده على الحرف قبل الألف
+     * كي يقرأه المحرك بنفس الطريقة في الحالتين (بلا تكرار الألف أو إسقاط التنوين).
+     */
+    static String relocateTanween(String s) {
+        if (s == null || s.indexOf(FATHATAN) < 0) return s;
+        StringBuilder sb = new StringBuilder(s);
+        boolean changed = false;
+        for (int i = 1; i + 1 < sb.length(); i++) {
+            if (sb.charAt(i) != '\u0627' || sb.charAt(i + 1) != FATHATAN) continue;
+            if (i + 2 < sb.length() && isMark(sb.charAt(i + 2))) continue; // علامات أخرى على الألف: لا نمسّها
+            int p = i - 1;
+            while (p >= 0 && isMark(sb.charAt(p))) p--;
+            if (p < 0) continue;
+            char base = sb.charAt(p);
+            if (base < '\u0621' || base > '\u064A' || base == '\u0627') continue;
+            boolean hasVowel = false;
+            for (int k = p + 1; k < i; k++) {
+                if (sb.charAt(k) != SHADDA) hasVowel = true;
+            }
+            if (hasVowel) continue;
+            sb.deleteCharAt(i + 1);
+            sb.insert(i, FATHATAN); // قبل الألف مباشرة = على الحرف السابق (بعد شدّته لو وُجدت)
+            changed = true;
+        }
+        return changed ? orderMarks(sb.toString()) : s;
+    }
+
+    /** جذوع تبدأ بـ "ال" لكنها ليست أداة تعريف (اِلْتِهَاب، اِلْتِزَام...): لا نضع عليها شدّة الإدغام. */
+    private static final String[] IL_FORMS = {
+            "التهاب", "التزام", "التقاط", "التقاء", "التحاق", "التحام", "التفاف", "التفات", "التماس",
+            "التصاق", "التواء", "الحاق", "الزام", "الغاء", "الهام", "الصاق", "الحاح", "التقى",
+            "التحم", "التهب", "التزم", "التفت", "التمس", "التصق", "التوى", "التقط", "التحق"
+    };
+
+    private static boolean isIlForm(String stem) {
+        for (String f : IL_FORMS) {
+            if (stem.startsWith(f)) return true;
+        }
+        return false;
+    }
+
+    /**
+     * ضبط "ال" التعريف في النص المشكول (كلّ كلمة على حدة):
+     *  - الحرف الشمسي بعد ال: الشدّة عليه إلزامية واللام لا علامة عليها (الشَّمْس لا الْشَمْس). لو سقطت الشدّة عند
+     *    استخراج الـ PDF (والكلمة مشكولة) نُعيدها، ولو بقي سكون/حركة على لام ال قبل حرف شمسي مشدّد نحذفه.
+     *  - الحرف القمري: سكون على اللام (الْقَمَر) لو الكلمة مشكولة وبلا علامة على اللام.
+     * الكلمات بلا تشكيل تُترك كما هي (المحرك يضبطها)، وكذلك ما يبدأ بـ "ال" وهو من الجذر (التهاب، التزام).
+     */
+    static String fixDefiniteArticles(String s) {
+        if (s == null || s.length() < 5) return s;
+        boolean anyMark = false;
+        for (int i = 0; i < s.length(); i++) {
+            if (isMark(s.charAt(i))) {
+                anyMark = true;
+                break;
+            }
+        }
+        if (!anyMark) return s;
+        StringBuilder out = null;
+        int n = s.length();
+        int i = 0;
+        int copied = 0;
+        while (i < n) {
+            if (!isWordPart(s.charAt(i))) {
+                i++;
+                continue;
+            }
+            int j = i;
+            while (j < n && isWordPart(s.charAt(j))) j++;
+            String w = s.substring(i, j);
+            String fixed = fixArticleWord(w);
+            if (!fixed.equals(w)) {
+                if (out == null) out = new StringBuilder(n + 4);
+                out.append(s, copied, i).append(fixed);
+                copied = j;
+            }
+            i = j;
+        }
+        if (out == null) return s;
+        out.append(s, copied, n);
+        return out.toString();
+    }
+
+    private static String fixArticleWord(String w) {
+        if (w.length() < 5 || isMark(w.charAt(0))) return w;
+        List<Character> base = new ArrayList<>(w.length());
+        List<StringBuilder> marks = new ArrayList<>(w.length());
+        for (int i = 0; i < w.length(); i++) {
+            char c = w.charAt(i);
+            if (isMark(c)) {
+                marks.get(marks.size() - 1).append(c);
+            } else {
+                base.add(c);
+                marks.add(new StringBuilder());
+            }
+        }
+        final int nb = base.size();
+        StringBuilder plainSb = new StringBuilder(nb);
+        for (char c : base) plainSb.append(c);
+        String plain = plainSb.toString();
+        int a = -1;
+        if (plain.startsWith("\u0627\u0644")) {
+            a = 0;
+        } else if (plain.length() >= 3 && "\u0648\u0641\u0628\u0643".indexOf(plain.charAt(0)) >= 0
+                && plain.startsWith("\u0627\u0644", 1)) {
+            a = 1;
+        } else if (plain.length() >= 4 && "\u0648\u0641".indexOf(plain.charAt(0)) >= 0
+                && "\u0628\u0643\u0644".indexOf(plain.charAt(1)) >= 0 && plain.startsWith("\u0627\u0644", 2)) {
+            a = 2;
+        }
+        if (a < 0) return w;
+        if (a + 4 > nb) return w; // بعد ال حرفان على الأقل
+        if (isIlForm(plain.substring(a))) return w;
+        StringBuilder alifMarks = marks.get(a);
+        StringBuilder lam = marks.get(a + 1);
+        char x = base.get(a + 2);
+        StringBuilder xm = marks.get(a + 2);
+        if (alifMarks.indexOf(String.valueOf(KASRA)) >= 0 && lam.indexOf(String.valueOf(SUKUN)) >= 0) return w; // اِلْتِ...
+        boolean xShadda = xm.indexOf(String.valueOf(SHADDA)) >= 0;
+        boolean xVowel = false;
+        for (int k = 0; k < xm.length(); k++) {
+            char m = xm.charAt(k);
+            if ((m >= FATHATAN && m <= KASRATAN) || isShortVowel(m)) xVowel = true;
+        }
+        boolean vocalizedRest = false;
+        for (int k = a + 3; k < nb && !vocalizedRest; k++) {
+            StringBuilder mm = marks.get(k);
+            for (int q = 0; q < mm.length(); q++) {
+                char m = mm.charAt(q);
+                if (m == SHADDA || m == SUKUN || isShortVowel(m) || (m >= FATHATAN && m <= KASRATAN)) {
+                    vocalizedRest = true;
+                    break;
+                }
+            }
+        }
+        boolean lamSukun = lam.indexOf(String.valueOf(SUKUN)) >= 0;
+        boolean lamVowel = false;
+        for (int k = 0; k < lam.length(); k++) {
+            if (isShortVowel(lam.charAt(k))) lamVowel = true;
+        }
+        boolean sun = SUN.indexOf(x) >= 0;
+        boolean changed = false;
+        if (sun) {
+            if (xShadda) {
+                if (lam.length() > 0) {
+                    lam.setLength(0); // ال + حرف شمسي مشدّد: لا علامة على اللام
+                    changed = true;
+                }
+            } else if (!lamSukun && (xVowel || vocalizedRest)) {
+                xm.insert(0, SHADDA); // سقطت الشدّة عند الاستخراج
+                lam.setLength(0);
+                changed = true;
+            }
+        } else if (x != '\u0627' && !lamSukun && !lamVowel && (xVowel || vocalizedRest)) {
+            lam.append(SUKUN);
+            changed = true;
+        }
+        if (!changed) return w;
+        StringBuilder sb = new StringBuilder(w.length() + 2);
+        for (int k = 0; k < nb; k++) sb.append(base.get(k)).append(marks.get(k));
+        return orderMarks(sb.toString());
     }
 
     // ------------------------------------------------------------------ 2) الوقف

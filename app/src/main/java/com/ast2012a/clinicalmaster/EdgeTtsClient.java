@@ -702,7 +702,7 @@ final class EdgeTtsClient {
             if (!boundary) continue;
             if (st.sentencePauseMs > 0 && ".!?\u061F\u061B\u2026".indexOf(c) >= 0) {
                 sb.append("<break time='").append(st.sentencePauseMs).append("ms'/>");
-            } else if (st.commaPauseMs > 0 && ",\u060C:".indexOf(c) >= 0) {
+            } else if (st.commaPauseMs > 0 && ",\u060C:;".indexOf(c) >= 0) {
                 sb.append("<break time='").append(st.commaPauseMs).append("ms'/>");
             }
         }

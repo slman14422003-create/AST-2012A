@@ -58,6 +58,8 @@ final class PdfSpeechText {
         final int start;    // داخل PageText.text
         final int end;
         final String lang;  // ar / en / fr / tr
+        /** true = الجملة تكمل بعد هذا المقطع (قُطعت لطولها): يُختم بفاصلة لا نقطة فلا تهبط النغمة. */
+        boolean cont;
 
         Chunk(int firstWord, int lastWord, int start, int end, String lang) {
             this.firstWord = firstWord;
@@ -207,6 +209,8 @@ final class PdfSpeechText {
         int line;
         /** L = لاتيني، R = عربي/عبري، N = أرقام/رموز فقط. */
         char cls;
+        /** علامة ترقيم جملة منفصلة (، , . ؛ ؟ ...): تُلصق بالكلمة قبلها في القراءة ولا تُهمل. */
+        boolean punct;
     }
 
     /** مقطع سطر متصل (سطر كامل، أو جزء منه إذا كان في الصفحة أعمدة/خلايا). */
@@ -315,8 +319,32 @@ final class PdfSpeechText {
                 r = Normalizer.normalize(r, Normalizer.Form.NFKC);
             } catch (Throwable ignored) {
             }
+            r = dropSpaceBeforeMark(r);
         }
         return r.isEmpty() ? null : r;
+    }
+
+    /**
+     * أشكال العرض المعزولة لعلامات التشكيل (ﹰ ﹲ ﹷ ﱞ ﱟ ﱠ...) تتفكك بـ NFKC إلى "فراغ + علامة": كان الفراغ يجعل العلامة
+     * تُعامل كحرف عادي فلا تلتصق بحرفها وتضيع الشدّة/الحركة. نحذف الفراغ لتبقى العلامة علامةً.
+     */
+    private static String dropSpaceBeforeMark(String r) {
+        if (r.indexOf(' ') < 0 && r.indexOf('\u0640') < 0) return r;
+        StringBuilder sb = null;
+        for (int i = 0; i < r.length(); i++) {
+            char c = r.charAt(i);
+            // التطويل الناتج عن NFKC لأشكال العلامات الوسطية (ﹽ = ـّ) لا يُنطق أبدًا: نحذفه أيضًا
+            boolean junk = c == '\u0640' || (c == ' ' && i + 1 < r.length() && ArabicPhonetics.isMark(r.charAt(i + 1)));
+            if (junk) {
+                if (sb == null) {
+                    sb = new StringBuilder(r.length());
+                    sb.append(r, 0, i);
+                }
+                continue;
+            }
+            if (sb != null) sb.append(c);
+        }
+        return sb == null ? r : sb.toString();
     }
 
     private static float clamp01(float v) {
@@ -334,23 +362,68 @@ final class PdfSpeechText {
             else bases.add(g);
         }
         for (Glyph m : marks) {
+            final boolean arMark = isArabicMarkGlyph(m.u);
             Glyph best = null;
-            float bestD = Float.MAX_VALUE;
+            float bestScore = Float.MAX_VALUE;
+            float bestD = 0f;
             float mc = m.cx();
             for (Glyph b : bases) {
                 if (b.space) continue;
-                if (Math.abs(b.base - m.base) > b.font * 1.2f) continue;
+                // علامة عربية (شدّة/فتحة/كسرة/ضمّة/سكون/تنوين) لا تلتصق إلا بحرف عربي (لا رقم ولا علامة ترقيم)
+                if (arMark && !hasArabicLetterIn(b.u)) continue;
+                float dy = Math.abs(b.base - m.base);
+                if (dy > b.font * 1.2f) continue;
                 float d;
                 if (mc >= b.x0 && mc <= b.x1) d = 0f;
                 else d = Math.min(Math.abs(mc - b.x0), Math.abs(mc - b.x1));
-                if (d < bestD) {
+                // أقرب حرف أفقيًا أولًا، ثم الأقرب لمركز الحرف، ثم الأقرب رأسيًا (كي لا تقفز علامة لسطر مجاور)
+                float score = d + 0.15f * Math.abs(mc - (b.x0 + b.x1) / 2f) + 0.35f * dy;
+                if (score < bestScore) {
+                    bestScore = score;
                     bestD = d;
                     best = b;
                 }
             }
-            if (best != null && bestD <= best.font * 0.6f) best.u = best.u + m.u;
+            // الحدّ كان 0.6 من حجم الخط فتضيع الشدّة/الحركة المزاحة عن حرفها (خطوط تشكيل واسعة): رفعناه
+            if (best != null && bestD <= best.font * 0.9f) appendMark(best, m);
         }
         return bases;
+    }
+
+    private static boolean isArabicMarkGlyph(String u) {
+        if (u == null || u.isEmpty()) return false;
+        char c = u.charAt(0);
+        return (c >= 0x064B && c <= 0x065F) || c == 0x0670 || (c >= 0x06D6 && c <= 0x06ED);
+    }
+
+    private static boolean hasArabicLetterIn(String u) {
+        for (int i = 0; i < u.length(); i++) {
+            char c = u.charAt(i);
+            if ((c >= 0x0621 && c <= 0x064A) || (c >= 0x066E && c <= 0x06D3) || c == 0x0671) return true;
+        }
+        return false;
+    }
+
+    /**
+     * يلصق العلامة بحرفها. في مركّب "لا" (لام+ألف في glyph واحد) العلامة تخصّ اللام (لَا) لا الألف، فندرجها بعد
+     * اللام بدل آخر المركّب (كانت "لاَ" فتنقلب الحركة).
+     */
+    private static void appendMark(Glyph b, Glyph m) {
+        String u = b.u;
+        if (u.length() >= 2 && u.charAt(0) == '\u0644' && isArabicMarkGlyph(m.u)) {
+            int second = -1;
+            int bases = 0;
+            for (int i = 0; i < u.length(); i++) {
+                if (ArabicPhonetics.isMark(u.charAt(i))) continue;
+                bases++;
+                if (bases == 2) second = i;
+            }
+            if (bases == 2 && second > 0 && "\u0627\u0623\u0625\u0622".indexOf(u.charAt(second)) >= 0) {
+                b.u = u.substring(0, second) + m.u + u.substring(second);
+                return;
+            }
+        }
+        b.u = u + m.u;
     }
 
     private static List<Seg> buildSegments(List<Glyph> bases, float pw, float ph) {
@@ -417,7 +490,25 @@ final class PdfSpeechText {
                     break;
                 }
             }
-            if (!has) continue; // رموز/نقاط تعداد/خطوط نقطية/أيقونات
+            if (!has) {
+                // فاصلة/نقطة انفصلت عن كلمتها بفجوة (تبرير السطر): كانت تُهمل فتضيع الوقفة وحدود الجملة.
+                // نحتفظ بها ثم نلصقها بالكلمة السابقة في ترتيب القراءة. غير ذلك (نقاط تعداد/أيقونات) يُهمل.
+                if (!isSentencePunct(text)) continue;
+                RawWord pw0 = new RawWord();
+                float px0 = Float.MAX_VALUE, py0 = Float.MAX_VALUE, px1 = -Float.MAX_VALUE, py1 = -Float.MAX_VALUE;
+                for (Glyph g : wg) {
+                    px0 = Math.min(px0, g.x0);
+                    px1 = Math.max(px1, g.x1);
+                    py0 = Math.min(py0, g.top);
+                    py1 = Math.max(py1, g.bottom);
+                }
+                pw0.text = text;
+                pw0.punct = true;
+                pw0.cls = 'N';
+                pw0.box = new RectF(clamp01(px0 / pw), clamp01(py0 / ph), clamp01(px1 / pw), clamp01(py1 / ph));
+                words.add(pw0);
+                continue;
+            }
             float x0 = Float.MAX_VALUE, y0 = Float.MAX_VALUE, x1 = -Float.MAX_VALUE, y1 = -Float.MAX_VALUE;
             for (Glyph g : wg) {
                 x0 = Math.min(x0, g.x0);
@@ -451,8 +542,54 @@ final class PdfSpeechText {
             }
         }
         seg.rtl = ar > 0 && ar >= lat;
-        seg.words.addAll(orderWords(words, seg.rtl));
+        seg.words.addAll(orderWords(attachPunct(words, seg.rtl), seg.rtl));
         segs.add(seg);
+    }
+
+    private static final String SENTENCE_PUNCT = ".,;:!?\u060C\u061B\u061F\u2026";
+
+    /** كلمة (مجموعة أحرف) كلها علامات ترقيم جملة وقصيرة: فاصلة/نقطة/نقطتان/؟... (بلا أقواس ولا رموز). */
+    private static boolean isSentencePunct(String t) {
+        if (t.isEmpty() || t.length() > 3) return false;
+        for (int i = 0; i < t.length(); i++) {
+            if (SENTENCE_PUNCT.indexOf(t.charAt(i)) < 0) return false;
+        }
+        return true;
+    }
+
+    /**
+     * يُلصق علامات الترقيم المنفصلة بالكلمة التي تسبقها في اتجاه القراءة: في السطر العربي العلامة تقع بصريًا يسار
+     * كلمتها (فالهدف أقرب كلمة على اليمين)، وفي اللاتيني يمينها (الهدف أقرب كلمة على اليسار). علامة بلا كلمة قبلها
+     * (بداية السطر) تُهمل، ولا تُكرَّر علامة انتهت بها الكلمة أصلًا.
+     */
+    private static List<RawWord> attachPunct(List<RawWord> words, boolean rtl) {
+        boolean any = false;
+        for (RawWord w : words) {
+            if (w.punct) {
+                any = true;
+                break;
+            }
+        }
+        if (!any) return words;
+        int n = words.size();
+        RawWord target = null;
+        for (int k = 0; k < n; k++) {
+            int i = rtl ? n - 1 - k : k;
+            RawWord w = words.get(i);
+            if (!w.punct) {
+                target = w;
+                continue;
+            }
+            if (target == null) continue;
+            String tt = target.text;
+            if (tt.isEmpty() || SENTENCE_PUNCT.indexOf(tt.charAt(tt.length() - 1)) >= 0) continue;
+            target.text = tt + w.text;
+        }
+        List<RawWord> kept = new ArrayList<>(n);
+        for (RawWord w : words) {
+            if (!w.punct) kept.add(w);
+        }
+        return kept;
     }
 
     /** يقسّم أحرف المقطع (مرتبة بصريًا) إلى كلمات: عند الفراغ الفعلي أو عند فجوة أفقية بعرض مسافة. */
@@ -874,6 +1011,7 @@ final class PdfSpeechText {
         }
 
         List<Chunk> chunks = mergeChunks(makeChunks(words, text, paraBefore, latin), text);
+        markContinuations(chunks, words);
         return new PageText(pageIndex, text, words, chunks, latin);
     }
 
@@ -902,13 +1040,75 @@ final class PdfSpeechText {
             float dy = cur.box.top - prev.box.top;
             // مقطع آخر على نفس الارتفاع (خلية جدول/عمود مجاور): وقفة بدل وصل الجملتين ببعض
             if (Math.abs(dy) < lineH * 0.35f) {
-                flags[i] = true;
+                // ...إلا لو الكلمة قبلها تنتهي بفاصلة/أداة ربط: الجملة لم تكتمل (سطر مبرَّر انقسم لمقطعين)
+                flags[i] = !continuesSentence(prev.text, cur.text);
                 continue;
             }
             float gap = median > 0 ? Math.max(median * 1.7f, lineH * 1.6f) : lineH * 2.1f;
-            if (dy > gap || dy < -lineH * 2.4f) flags[i] = true;
+            if (dy > gap) {
+                flags[i] = true;
+            } else if (dy < -lineH * 2.4f) {
+                // قفزة للأعلى = عمود جديد: لو الجملة لم تكتمل (فاصلة/حرف جر في آخر العمود) فهي تكمل في العمود التالي
+                flags[i] = !continuesSentence(prev.text, cur.text);
+            }
         }
         return flags;
+    }
+
+    /** كلمات لا تُنهى بها جملة: حروف جر وعطف وأدوات ربط (عربي/إنجليزي). */
+    private static final java.util.Set<String> OPEN_ENDERS = new java.util.HashSet<>(java.util.Arrays.asList(
+            "\u0648", "\u0623\u0648", "\u0627\u0648", "\u062B\u0645", "\u0641\u064A", "\u0645\u0646", "\u0639\u0644\u0649",
+            "\u0625\u0644\u0649", "\u0627\u0644\u0649", "\u0639\u0646", "\u0645\u0639", "\u0628\u064A\u0646", "\u062D\u062A\u0649",
+            "\u0625\u0630\u0627", "\u0627\u0630\u0627", "\u0644\u0643\u0646", "\u0623\u0646", "\u0627\u0646", "\u0625\u0646",
+            "\u0644\u0623\u0646", "\u0644\u0627\u0646", "\u0643\u0645\u0627", "\u0627\u0644\u062A\u064A", "\u0627\u0644\u0630\u064A",
+            "\u0627\u0644\u0630\u064A\u0646", "\u0628\u062D\u064A\u062B", "\u062D\u064A\u062B", "\u062D\u0648\u0644",
+            "\u062E\u0644\u0627\u0644", "\u0639\u0646\u062F", "\u0644\u062F\u0649", "\u0646\u062D\u0648", "\u0636\u062F",
+            "\u062F\u0648\u0646", "\u0628\u062F\u0648\u0646", "\u0639\u0628\u0631", "\u0642\u0628\u0644", "\u0628\u0639\u062F",
+            "\u0623\u062B\u0646\u0627\u0621", "\u0628\u0633\u0628\u0628", "\u0639\u0646\u062F\u0645\u0627", "\u0623\u0645\u0627",
+            "the", "of", "and", "or", "to", "in", "with", "for", "a", "an", "by", "as", "at", "on", "from", "that", "which",
+            "is", "are", "was", "were", "be", "if", "but", "than", "between", "during", "after", "before"));
+
+    /** كلمات تبدأ بها جملة فرعية: مكان جيد لقطع المقطع الطويل قبلها. */
+    private static final java.util.Set<String> CLAUSE_STARTERS = new java.util.HashSet<>(java.util.Arrays.asList(
+            "\u0623\u0648", "\u062B\u0645", "\u0644\u0643\u0646", "\u062D\u064A\u062B", "\u0628\u064A\u0646\u0645\u0627",
+            "\u0643\u0645\u0627", "\u0639\u0646\u062F\u0645\u0627", "\u0625\u0630\u0627", "\u0628\u062D\u064A\u062B",
+            "\u0644\u0623\u0646", "\u0625\u0630", "\u0623\u0645\u0627", "\u0648\u0644\u0643\u0646",
+            "and", "but", "which", "while", "because", "when", "if", "so", "whereas", "however"));
+
+    private static String bareLower(String w) {
+        StringBuilder sb = new StringBuilder(w.length());
+        for (int i = 0; i < w.length(); i++) {
+            char c = w.charAt(i);
+            if (ArabicPhonetics.isMark(c)) continue;
+            if (Character.isLetter(c)) sb.append(Character.toLowerCase(c));
+        }
+        return sb.toString();
+    }
+
+    private static boolean isOpenEnder(String w) {
+        if (w == null || w.isEmpty()) return false;
+        char e = w.charAt(w.length() - 1);
+        if (!Character.isLetter(e) && !ArabicPhonetics.isMark(e)) return false; // عليها علامة ترقيم: انتهت
+        return OPEN_ENDERS.contains(bareLower(w));
+    }
+
+    private static boolean endsClause(String w) {
+        if (w == null || w.isEmpty()) return false;
+        char e = w.charAt(w.length() - 1);
+        return e == ',' || e == '\u060C' || e == ';' || e == '\u061B' || e == ':';
+    }
+
+    /**
+     * هل الكلمة الحالية تكمل جملة الكلمة السابقة عبر انكسار رخو (عمود/مقطع)؟ نعم لو السابقة تنتهي بفاصلة أو بحرف
+     * جر/عطف/أداة ربط، والحالية تبدأ بحرف (لا رقم بند ولا رمز).
+     */
+    private static boolean continuesSentence(String prev, String cur) {
+        if (prev == null || prev.isEmpty() || cur == null || cur.isEmpty()) return false;
+        char f = cur.charAt(0);
+        if (!Character.isLetter(f)) return false;
+        char e = prev.charAt(prev.length() - 1);
+        if (e == ',' || e == '\u060C') return true;
+        return isOpenEnder(prev);
     }
 
     // مقاطع أطول = فجوات أقل بين الجمل ونبرة أكثر سلاسة (الجمل القصيرة تُدمج مع التي تليها)
@@ -931,14 +1131,7 @@ final class PdfSpeechText {
             boolean tooLong = len >= MAX_CHUNK_CHARS;
             // عند تجاوز الحد نفضّل الكسر بعد فاصلة قريبة
             if (tooLong && !sentenceEnd) {
-                int cut = i;
-                for (int k = i; k > first && words.get(i).end - words.get(k).start < 140; k--) {
-                    String t = words.get(k).text;
-                    if (t.endsWith(",") || t.endsWith("،") || t.endsWith(";") || t.endsWith("؛") || t.endsWith(":")) {
-                        cut = k;
-                        break;
-                    }
-                }
+                int cut = findCut(words, first, i);
                 emit(out, words, text, first, cut, latin);
                 first = cut + 1;
                 i = cut + 1;
@@ -951,6 +1144,39 @@ final class PdfSpeechText {
             i++;
         }
         return out;
+    }
+
+    /**
+     * أين نقطع مقطعًا طال بلا نهاية جملة: بعد فاصلة قريبة، وإلا بعد فاصلة أبعد، وإلا قبل أداة ربط تبدأ جملة فرعية،
+     * وإلا عند آخر كلمة (مع التراجع كي لا ينتهي المقطع بحرف جر أو عطف معلّق: "...الألم في").
+     */
+    private static int findCut(List<Word> words, int first, int i) {
+        for (int lim : new int[]{140, 300}) {
+            for (int k = i; k > first && words.get(i).end - words.get(k).start < lim; k--) {
+                if (endsClause(words.get(k).text)) return k;
+            }
+        }
+        for (int k = i; k > first + 2 && words.get(i).end - words.get(k).start < 300; k--) {
+            if (CLAUSE_STARTERS.contains(bareLower(words.get(k).text))) return k - 1;
+        }
+        int cut = i;
+        while (cut > first + 2 && isOpenEnder(words.get(cut).text)) cut--;
+        return cut;
+    }
+
+    /** يعلّم كل مقطع تكمل جملته في المقطع التالي (أو تنتهي الصفحة بحرف جر/عطف معلّق) ليُختم بفاصلة لا بنقطة. */
+    private static void markContinuations(List<Chunk> chunks, List<Word> words) {
+        for (int ci = 0; ci < chunks.size(); ci++) {
+            Chunk c = chunks.get(ci);
+            if (c.lastWord < 0 || c.lastWord >= words.size()) continue;
+            Word lw = words.get(c.lastWord);
+            if (ci + 1 < chunks.size()) {
+                Chunk nx = chunks.get(ci + 1);
+                c.cont = nx.firstWord >= 0 && nx.firstWord < words.size() && words.get(nx.firstWord).sent == lw.sent;
+            } else {
+                c.cont = isOpenEnder(lw.text);
+            }
+        }
     }
 
     /**
