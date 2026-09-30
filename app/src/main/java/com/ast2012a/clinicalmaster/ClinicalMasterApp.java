@@ -36,6 +36,10 @@ public class ClinicalMasterApp extends Application {
         // آمنة تمامًا لو فشلت (مثلًا مفيش تخزين سحابي مضبوط أصلًا).
         new Thread(() -> DocumentTextExtractor.warmUp(getApplicationContext())).start();
 
+        // تحميل قاموس التشكيل المحلي (assets/tashkeel_dict.txt) في الخلفية؛ لو الملف
+        // غير موجود يبقى القاموس فارغًا ولا يتأثر أي شيء.
+        new Thread(() -> TashkeelDict.load(getApplicationContext())).start();
+
         DynamicColorsOptions options = new DynamicColorsOptions.Builder()
                 .setPrecondition((activity, theme) -> DynamicColors.isDynamicColorAvailable()
                         // شاشة splash مستثناة عمدًا: لازم تفضل بنفس لون علامة

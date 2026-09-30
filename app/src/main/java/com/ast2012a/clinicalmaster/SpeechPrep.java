@@ -1796,7 +1796,12 @@ final class SpeechPrep {
         String r = p.length() <= 14 ? diacritizeCore(p) : p;
         if (assist && r.equals(p)) {
             String lx = ArabicPhonetics.lookup(p); // مصطلحات طبية/علاجية بتشكيل كامل
-            if (lx != null) r = lx;
+            if (lx != null) {
+                r = lx;
+            } else {
+                String td = TashkeelDict.lookup(p); // قاموس تشكيل محلي مبني من مدوّنة عربية (اختياري)
+                if (td != null) r = td;
+            }
         }
         return hamzaAfterAl(r);
     }
