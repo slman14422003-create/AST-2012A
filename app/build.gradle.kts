@@ -98,4 +98,8 @@ dependencies {
 
     // القراءة الصوتية بالأصوات العصبية المجانية (اتصال WebSocket في EdgeTtsClient)
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    // التعرّف الضوئي على الحروف (Tesseract) لقراءة ملفات PDF الممسوحة ضوئيًا/المصوَّرة صوتيًا
+    // (عربي + إنجليزي) - نموذج اللغة يُنزَّل مرة واحدة عند أول استخدام (PdfOcr).
+    implementation("cz.adaptech.tesseract4android:tesseract4android:4.7.0")
 }
