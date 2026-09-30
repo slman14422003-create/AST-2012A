@@ -41,7 +41,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: ./.github/actions/setup-android-build
         with:
@@ -73,7 +73,7 @@ jobs:
     outputs:
       version: ${{ steps.ver.outputs.name }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: ./.github/actions/setup-android-build
         with:
@@ -199,7 +199,7 @@ jobs:
     steps:
       # السجل الكامل (fetch-depth: 0) لازم لمعرفة ما تغيّر منذ الإصدار السابق.
       # يجب أن تسبق هذه الخطوة تنزيل الملفات لأن checkout ينظّف مجلد العمل.
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
