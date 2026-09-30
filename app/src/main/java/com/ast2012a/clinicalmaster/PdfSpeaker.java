@@ -100,6 +100,12 @@ final class PdfSpeaker {
     private static final String KEY_TAA = "taa_mode";         // نطق التاء المربوطة
     private static final String KEY_TAAFIX = "taa_fix";       // تصحيح إملاء ة/ه
     private static final String KEY_NOIRAB = "no_irab";       // قراءة بلا إعراب
+    private static final String KEY_DEV_ENGINE = "dev_engine";        // حزمة محرك النطق المحلي (null = افتراضي النظام)
+    private static final String KEY_DEV_OFFLINE = "dev_offline_only"; // أصوات الجهاز التي لا تحتاج إنترنت فقط
+    private static final String KEY_DEV_FALLBACK = "dev_fallback";    // الرجوع التلقائي لصوت الجهاز عند تعطل العصبي
+    private static final String KEY_DEV_SPEED = "dev_speed_idx";      // معايرة سرعة صوت الجهاز عن العصبي
+    private static final String[] DEV_SPEED_LABELS = {"مطابقة للعصبي", "أبطأ 10%", "أبطأ 20%", "أسرع 10%", "أسرع 20%"};
+    private static final float[] DEV_SPEED_MUL = {1f, 0.9f, 0.8f, 1.1f, 1.2f};
     private static final String[] EQ_LABELS = {"طبيعي", "صافٍ (يُبرز الحروف)", "دافئ", "عميق"};
     private static final String[] GAIN_LABELS = {"عادي", "+3 ديسيبل", "+6 ديسيبل"};
     private static final int[] GAIN_MB = {0, 300, 600};
@@ -298,34 +304,60 @@ final class PdfSpeaker {
 
     // ------------------------------------------------------------------ محرك الجهاز
 
+    /** جيل محرك النطق: ردود تهيئة محرك سابق (بعد تبديل المحرك) تُهمَل. */
+    private int ttsGen = 0;
+
     private void initTts() {
-        try {
-            tts = new TextToSpeech(app, status -> main.post(() -> {
-                if (status != TextToSpeech.SUCCESS) {
-                    ttsFailed = true;
-                    if (pendingAfterInit != null) {
-                        pendingAfterInit = null;
-                        setState(State.IDLE);
-                        listener.onEngineUnavailable();
-                    }
-                    return;
-                }
-                ttsReady = true;
+        initTts(prefs.getString(KEY_DEV_ENGINE, null), false);
+    }
+
+    private void initTts(final String enginePkg, final boolean retriedDefault) {
+        final int gen = ++ttsGen;
+        final TextToSpeech.OnInitListener onInit = status -> main.post(() -> {
+            if (gen != ttsGen) return;
+            if (status != TextToSpeech.SUCCESS) {
                 try {
-                    tts.setAudioAttributes(new AudioAttributes.Builder()
-                            .setUsage(AudioAttributes.USAGE_MEDIA)
-                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                            .build());
-                    tts.setSpeechRate(rate);
-                    tts.setPitch(devicePitch());
+                    if (tts != null) tts.shutdown();
                 } catch (Throwable ignored) {
                 }
-                tts.setOnUtteranceProgressListener(progressListener);
-                Runnable r = pendingAfterInit;
-                pendingAfterInit = null;
-                if (r != null) r.run();
-            }));
+                tts = null;
+                if (enginePkg != null && !retriedDefault) {
+                    // المحرك المختار لم يعد يعمل (حُذف/عُطّل): نرجع لمحرك النظام الافتراضي بدل تعطيل القراءة
+                    prefs.edit().remove(KEY_DEV_ENGINE).apply();
+                    usedVoice.clear();
+                    badVoices.clear();
+                    lastAppliedLang = null;
+                    initTts(null, true);
+                    return;
+                }
+                ttsFailed = true;
+                if (pendingAfterInit != null) {
+                    pendingAfterInit = null;
+                    setState(State.IDLE);
+                    listener.onEngineUnavailable();
+                }
+                return;
+            }
+            ttsReady = true;
+            ttsFailed = false;
+            try {
+                tts.setAudioAttributes(new AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .build());
+                tts.setSpeechRate(deviceRate());
+                tts.setPitch(devicePitch());
+            } catch (Throwable ignored) {
+            }
+            tts.setOnUtteranceProgressListener(progressListener);
+            Runnable r = pendingAfterInit;
+            pendingAfterInit = null;
+            if (r != null) r.run();
+        });
+        try {
+            tts = enginePkg == null ? new TextToSpeech(app, onInit) : new TextToSpeech(app, onInit, enginePkg);
         } catch (Throwable t) {
+            tts = null;
             ttsFailed = true;
         }
     }
@@ -574,6 +606,12 @@ final class PdfSpeaker {
                     });
                     return;
                 }
+                // قاموس التشكيل يُحمَّل في الخلفية؛ ننتظره (على خيط io لا الرئيسي) قبل تجهيز أول جملة،
+                // وإلا تُنطق الجمل الأولى (وتُخزَّن أصواتها المجهّزة مسبقًا) بلا تشكيل القاموس.
+                try {
+                    if (!TashkeelDict.isReady()) TashkeelDict.awaitReady(4000);
+                } catch (Throwable ignored) {
+                }
                 loadPageOnIo(startPage, sess, 0, 0);
             });
         };
@@ -743,7 +781,7 @@ final class PdfSpeaker {
         prefs.edit().putFloat(KEY_RATE, rate).apply();
         if (ttsReady) {
             try {
-                tts.setSpeechRate(rate);
+                tts.setSpeechRate(deviceRate());
             } catch (Throwable ignored) {
             }
         }
@@ -1026,12 +1064,43 @@ final class PdfSpeaker {
         void onFailed(String message);
     }
 
-    void previewSample(final String sample, final PreviewListener cb) {
-        if (!isCloudEngine()) {
-            cb.onFailed("تجربة النطق متاحة مع الصوت العصبي الأونلاين فقط.");
+    /** تجربة النطق بصوت الجهاز: نفس تجهيز النص (تشكيل/ة-ه) ثم ينطقه محرك الجهاز المختار. */
+    private void previewOnDevice(String sample, PreviewListener cb) {
+        if (ttsFailed) {
+            cb.onFailed("محرك النطق غير متاح على الجهاز.");
             return;
         }
+        if (!ttsReady || tts == null) {
+            cb.onFailed("محرك النطق قيد التجهيز، أعد المحاولة بعد لحظات.");
+            return;
+        }
+        if (!applyVoice("ar")) {
+            cb.onFailed("لا يوجد صوت عربي مثبّت" + (isDeviceOfflineOnly() ? " يعمل بدون إنترنت." : "."));
+            return;
+        }
+        final SpeechPrep.Spoken spoken = SpeechPrep.prepare(EdgeTtsClient.sanitize(sample), "ar", "en", false);
+        try {
+            speakToken++; // يُبطل أي ردود متأخرة من قراءة سابقة
+            tts.setSpeechRate(deviceRate());
+            tts.setPitch(devicePitch());
+            int r = tts.speak(spoken.text, TextToSpeech.QUEUE_FLUSH, null, "preview");
+            if (r == TextToSpeech.ERROR) {
+                cb.onFailed("تعذّر تشغيل التجربة بصوت الجهاز.");
+                return;
+            }
+        } catch (Throwable t) {
+            cb.onFailed("تعذّر تشغيل التجربة بصوت الجهاز.");
+            return;
+        }
+        cb.onPrepared(spoken.text);
+    }
+
+    void previewSample(final String sample, final PreviewListener cb) {
         if (state == State.PLAYING) pause();
+        if (!isCloudEngine()) {
+            previewOnDevice(sample, cb);
+            return;
+        }
         releasePreview();
         final String voice = cloudVoiceFor("ar");
         final SpeechPrep.Spoken spoken = SpeechPrep.prepare(EdgeTtsClient.sanitize(sample), "ar", "en", false);
@@ -1254,6 +1323,115 @@ final class PdfSpeaker {
         }
     }
 
+    // ---- التحكم بمحرك النطق المحلي (بدون إنترنت): المحرك، الأصوات، السرعة، الرجوع التلقائي
+
+    /** سرعة صوت الجهاز = السرعة العامة × معايرة الجهاز (لأن محركات الجهاز تختلف سرعتها عن العصبي). */
+    private float deviceRate() {
+        return Math.max(0.3f, Math.min(3.0f, rate * DEV_SPEED_MUL[getDeviceSpeedIndex()]));
+    }
+
+    int getDeviceSpeedIndex() {
+        return Math.max(0, Math.min(DEV_SPEED_MUL.length - 1, prefs.getInt(KEY_DEV_SPEED, 0)));
+    }
+
+    String getDeviceSpeedLabel() {
+        return DEV_SPEED_LABELS[getDeviceSpeedIndex()];
+    }
+
+    void cycleDeviceSpeed() {
+        prefs.edit().putInt(KEY_DEV_SPEED, (getDeviceSpeedIndex() + 1) % DEV_SPEED_MUL.length).apply();
+        if (ttsReady) {
+            try {
+                tts.setSpeechRate(deviceRate());
+            } catch (Throwable ignored) {
+            }
+        }
+        if (state == State.PLAYING && !cloudActive) restartFromCurrentPoint();
+    }
+
+    boolean isDeviceOfflineOnly() {
+        return prefs.getBoolean(KEY_DEV_OFFLINE, false);
+    }
+
+    /** true = لا تُستعمل إلا أصوات الجهاز التي تعمل بلا إنترنت (لا أصوات شبكية من محرك النطق). */
+    void setDeviceOfflineOnly(boolean v) {
+        prefs.edit().putBoolean(KEY_DEV_OFFLINE, v).apply();
+        usedVoice.clear();
+        badVoices.clear();
+        notifiedMissing.clear();
+        lastAppliedLang = null;
+        if (state != State.IDLE && (!isCloudEngine() || cloudBroken || !cloudActive)) restartFromCurrentPoint();
+    }
+
+    boolean isDeviceFallback() {
+        return prefs.getBoolean(KEY_DEV_FALLBACK, true);
+    }
+
+    void setDeviceFallback(boolean v) {
+        prefs.edit().putBoolean(KEY_DEV_FALLBACK, v).apply();
+    }
+
+    /** حزمة محرك النطق المحلي المختار، أو null = الافتراضي في النظام. */
+    String getDeviceEnginePackage() {
+        return prefs.getString(KEY_DEV_ENGINE, null);
+    }
+
+    /** محركات النطق المثبّتة على الجهاز (الاسم الظاهر + الحزمة). فارغة لو المحرك لم يجهز بعد. */
+    List<VoiceOption> listDeviceEngines() {
+        List<VoiceOption> out = new ArrayList<>();
+        try {
+            if (tts == null || !ttsReady) return out;
+            List<TextToSpeech.EngineInfo> infos = tts.getEngines();
+            if (infos == null) return out;
+            for (TextToSpeech.EngineInfo e : infos) {
+                if (e == null || e.name == null) continue;
+                String label = (e.label != null && !e.label.isEmpty() ? e.label : e.name);
+                out.add(new VoiceOption(e.name, label));
+            }
+        } catch (Throwable ignored) {
+        }
+        return out;
+    }
+
+    /** يبدّل محرك النطق المحلي (pkg = null يعني افتراضي النظام) ويكمل القراءة من نفس الموضع لو كانت على صوت الجهاز. */
+    void setDeviceEngine(String pkg) {
+        String cur = getDeviceEnginePackage();
+        if ((cur == null && pkg == null) || (cur != null && cur.equals(pkg))) return;
+        SharedPreferences.Editor e = prefs.edit();
+        if (pkg == null) e.remove(KEY_DEV_ENGINE);
+        else e.putString(KEY_DEV_ENGINE, pkg);
+        e.apply();
+        final boolean deviceInUse = state != State.IDLE && currentText != null
+                && (!isCloudEngine() || cloudBroken || !cloudActive);
+        if (deviceInUse) {
+            captureResumePoint();
+            hardStopOutputs();
+        }
+        try {
+            if (tts != null) {
+                tts.stop();
+                tts.shutdown();
+            }
+        } catch (Throwable ignored) {
+        }
+        tts = null;
+        ttsReady = false;
+        ttsFailed = false;
+        usedVoice.clear();
+        badVoices.clear();
+        notifiedMissing.clear();
+        lastAppliedLang = null;
+        deviceErrStreak = 0;
+        if (deviceInUse) {
+            setState(State.LOADING);
+            pendingAfterInit = () -> {
+                lastAppliedLang = null;
+                speakChunk(resumeChunk, resumeShift);
+            };
+        }
+        initTts(pkg, false);
+    }
+
     String getPreferredVoice(String lang) {
         return prefs.getString("voice_" + lang, null);
     }
@@ -1304,6 +1482,7 @@ final class PdfSpeaker {
                 if (!lang.equals(v.getLocale().getLanguage())) continue;
                 Set<String> f = v.getFeatures();
                 if (f != null && f.contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED)) continue;
+                if (isDeviceOfflineOnly() && v.isNetworkConnectionRequired()) continue;
                 list.add(v);
             }
         } catch (Throwable ignored) {
@@ -1372,7 +1551,7 @@ final class PdfSpeaker {
             if (v != null) {
                 ok = tts.setVoice(v) == TextToSpeech.SUCCESS;
             }
-            if (!ok) {
+            if (!ok && !(isDeviceOfflineOnly() && v == null)) {
                 Locale loc = localeFor(lang);
                 int avail = tts.isLanguageAvailable(loc);
                 if (avail >= TextToSpeech.LANG_AVAILABLE) {
@@ -1743,6 +1922,14 @@ final class PdfSpeaker {
     }
 
     private void fallbackToDevice(String message) {
+        if (!isDeviceFallback()) {
+            // المستخدم عطّل الرجوع التلقائي: لا نبدّل المحرك بصمت، نوقف مؤقتًا ونخبره ليقرّر
+            cloudActive = false;
+            pause();
+            listener.onError(message.replace("تم التحويل لصوت الجهاز تلقائيًا.",
+                    "الرجوع التلقائي لصوت الجهاز معطّل في الإعدادات، فتوقفت القراءة."));
+            return;
+        }
         cloudBroken = true;
         cloudBrokenAt = System.currentTimeMillis();
         cloudActive = false;

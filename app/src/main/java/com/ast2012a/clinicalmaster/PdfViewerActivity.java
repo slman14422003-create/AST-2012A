@@ -1744,6 +1744,26 @@ public class PdfViewerActivity extends AppCompatActivity {
             });
         }
 
+        // ---- التحكم بالصوت المحلي (محرك الجهاز - يعمل بدون إنترنت)
+        LinearLayout gLocal = voiceGroup(root, "الصوت المحلي (بدون إنترنت)");
+        addVoiceRow(gLocal, "محرك النطق المحلي", "المحرك الذي يقرأ به الجهاز عند عدم استخدام العصبي",
+                localEngineLabel(), true, () -> {
+                    if (voiceDialog != null) voiceDialog.dismiss();
+                    showDeviceEnginePicker();
+                });
+        addVoiceSwitch(gLocal, "أصوات بلا إنترنت فقط", "يتجاهل أصوات المحرك التي تحتاج اتصالًا",
+                speaker.isDeviceOfflineOnly(), () -> {
+                    speaker.setDeviceOfflineOnly(!speaker.isDeviceOfflineOnly());
+                    refresh.run();
+                });
+        addVoiceRow(gLocal, "سرعة صوت الجهاز", "معايرة نسبةً للسرعة العامة (للمحرك المحلي فقط)",
+                speaker.getDeviceSpeedLabel(), false, () -> { speaker.cycleDeviceSpeed(); refresh.run(); });
+        addVoiceSwitch(gLocal, "الرجوع التلقائي لصوت الجهاز", "عند انقطاع الإنترنت أو تعطل الصوت العصبي",
+                speaker.isDeviceFallback(), () -> {
+                    speaker.setDeviceFallback(!speaker.isDeviceFallback());
+                    refresh.run();
+                });
+
         // ---- جودة الصوت
         LinearLayout g2 = voiceGroup(root, "جودة الصوت");
         addVoiceRow(g2, "صفاء الصوت", null, speaker.getEqLabel(), false, () -> { speaker.cycleEq(); refresh.run(); });
@@ -1944,6 +1964,43 @@ public class PdfViewerActivity extends AppCompatActivity {
                 .show();
     }
 
+    /** اسم المحرك المحلي الظاهر في الإعدادات (الافتراضي أو المختار). */
+    private String localEngineLabel() {
+        String pkg = speaker.getDeviceEnginePackage();
+        if (pkg == null) return "افتراضي النظام";
+        for (PdfSpeaker.VoiceOption o : speaker.listDeviceEngines()) {
+            if (o.name.equals(pkg)) return o.label;
+        }
+        return pkg;
+    }
+
+    /** قائمة محركات النطق المثبّتة لاختيار محرك الصوت المحلي. */
+    private void showDeviceEnginePicker() {
+        final List<PdfSpeaker.VoiceOption> engines = speaker.listDeviceEngines();
+        if (engines.isEmpty()) {
+            Toast.makeText(this, "لا توجد محركات نطق أخرى ظاهرة (أو المحرك قيد التجهيز). يمكنك إدارتها من إعدادات النظام.",
+                    Toast.LENGTH_LONG).show();
+            openSystemTtsSettings();
+            return;
+        }
+        String[] labels = new String[engines.size() + 1];
+        labels[0] = "افتراضي النظام";
+        int checked = 0;
+        String saved = speaker.getDeviceEnginePackage();
+        for (int i = 0; i < engines.size(); i++) {
+            labels[i + 1] = engines.get(i).label;
+            if (engines.get(i).name.equals(saved)) checked = i + 1;
+        }
+        voiceDialog = new ClaudeDialog(this)
+                .setTitle("محرك النطق المحلي")
+                .setSingleChoiceItems(labels, checked, (d, which) -> {
+                    speaker.setDeviceEngine(which == 0 ? null : engines.get(which - 1).name);
+                    Toast.makeText(this, "تم تغيير محرك النطق المحلي", Toast.LENGTH_SHORT).show();
+                    if (voiceDialog != null) voiceDialog.dismiss();
+                })
+                .show();
+    }
+
     private void showVoicePicker(int langIdx) {
         final String lang = TTS_LANG_CODES[langIdx];
         if (speaker.isCloudEngine()) {
@@ -1968,6 +2025,10 @@ public class PdfViewerActivity extends AppCompatActivity {
         }
         final List<PdfSpeaker.VoiceOption> opts = speaker.listVoices(lang);
         if (opts.isEmpty()) {
+            if (speaker.isDeviceOfflineOnly()) {
+                Toast.makeText(this, "لا يوجد صوت " + TTS_LANG_LABELS[langIdx]
+                        + " يعمل بدون إنترنت. ثبّته أو أوقف خيار \"أصوات بلا إنترنت فقط\".", Toast.LENGTH_LONG).show();
+            }
             offerInstallVoice(lang, false);
             return;
         }
