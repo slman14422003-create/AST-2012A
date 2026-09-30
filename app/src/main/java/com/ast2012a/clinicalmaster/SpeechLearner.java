@@ -26,6 +26,9 @@ import java.util.Map;
  *     المقطع تُتّهم؛ فإذا تكرّر الاتهام تُنطق بشكلها الأصلي بلا تدخلنا (ربما كان تشكيلنا هو الخطأ)، وإذا سُمع المقطع
  *     كاملًا بلا رجوع يخفّ الاتهام. وتتكيّف السرعة المقترحة: كثرة الرجوع تُبطّئ القراءة قليلًا (حتى 8%).
  *
+ * 4) فهم الحروف: كل كلمة مشكولة تُتعلَّم (من الملف أو من تعليم المستخدم) تُغذّي أيضًا LetterModel (طبقة المستخدم)، فيتكيّف
+ *    نموذج الحروف مع أسلوب المستخدم وملفاته: الكلمة الجديدة المشابهة تُشكَّل بنفس الأنماط حرفًا حرفًا.
+ *
  * كل شيء محفوظ في ملف نصي صغير داخل مجلد التطبيق، بحدّ أقصى للحجم، وأولوية النطق: قاموس المستخدم > التصحيحات >
  * الاتهام (الأصل بلا تدخل) > التشكيل المتعلَّم > الافتراضي. لا يلمس النص المعروض.
  */
@@ -120,8 +123,13 @@ final class SpeechLearner {
             while ((line = r.readLine()) != null) {
                 String[] p = line.split("\t", -1);
                 try {
-                    if (p[0].equals("T") && p.length >= 3) taught.put(p[1], p[2]);
-                    else if (p[0].equals("V") && p.length >= 4) voweled.put(p[1], new String[]{p[2], p[3]});
+                    if (p[0].equals("T") && p.length >= 3) {
+                        taught.put(p[1], p[2]);
+                        feedLetterModel(p[2], 6); // تعليم مباشر: وزن أعلى
+                    } else if (p[0].equals("V") && p.length >= 4) {
+                        voweled.put(p[1], new String[]{p[2], p[3]});
+                        feedLetterModel(p[2], 1 + Math.min(4, parseInt(p[3])));
+                    }
                     else if (p[0].equals("B") && p.length >= 3) blame.put(p[1], Float.parseFloat(p[2]));
                     else if (p[0].equals("S") && p.length >= 3) {
                         rewinds = Float.parseFloat(p[1]);
@@ -224,12 +232,17 @@ final class SpeechLearner {
                 String[] cur = voweled.get(f[0]);
                 if (cur == null) {
                     voweled.put(f[0], new String[]{f[1], "1"});
+                    feedLetterModel(f[1], 1); // كلمة جديدة: يتعلّم منها نموذج الحروف مرة واحدة
                 } else if (cur[0].equals(f[1])) {
                     cur[1] = String.valueOf(Math.min(1000, parseInt(cur[1]) + 1));
                 } else {
                     int c = parseInt(cur[1]) - 1; // شكل مختلف: نضعف القديم حتى يحلّ الجديد
-                    if (c <= 0) voweled.put(f[0], new String[]{f[1], "1"});
-                    else cur[1] = String.valueOf(c);
+                    if (c <= 0) {
+                        voweled.put(f[0], new String[]{f[1], "1"});
+                        feedLetterModel(f[1], 1);
+                    } else {
+                        cur[1] = String.valueOf(c);
+                    }
                 }
             }
             touch();
@@ -241,6 +254,20 @@ final class SpeechLearner {
             return Integer.parseInt(s);
         } catch (NumberFormatException e) {
             return 0;
+        }
+    }
+
+    /**
+     * يغذّي نموذج الحروف (LetterModel) بكلمة مشكولة واحدة. يتجاهل العبارات والكلمات غير المشكولة أو غير العربية،
+     * فما يُغذَّى به هو كلمة عربية بحروفها وعلاماتها فقط.
+     */
+    private static void feedLetterModel(String form, int weight) {
+        if (form == null) return;
+        String w = bare(form.trim());
+        if (w.length() < 4 || w.indexOf(' ') >= 0 || markCount(w) < 2 || !isArabicWord(w)) return;
+        try {
+            LetterModel.learnUser(w, weight);
+        } catch (RuntimeException ignored) {
         }
     }
 
@@ -256,6 +283,8 @@ final class SpeechLearner {
             blame.remove(k);
             touch();
         }
+        // تعليم المستخدم أقوى إشارة: إن كان نطقًا مشكولًا لكلمة واحدة بنفس حروفها فنموذج الحروف يتعلّم منه بوزن عالٍ
+        if (key(bare(v)).equals(k)) feedLetterModel(v, 6);
     }
 
     static void forget(String word) {
@@ -290,6 +319,7 @@ final class SpeechLearner {
             dirty = true;
             save(true);
         }
+        LetterModel.resetUser();
     }
 
     // ------------------------------------------------------------------ التطبيق على الكلمة
@@ -435,8 +465,9 @@ final class SpeechLearner {
             int strict = 0;
             for (Float f : blame.values()) if (f >= BLAME_LIMIT) strict++;
             return String.format(Locale.ROOT,
-                    "taught=%d | learnedVoweled=%d | blamed=%d (reverted=%d) | rewinds=%.0f | heard=%.0f | rateAdj=%d%%",
-                    taught.size(), voweled.size(), blame.size(), strict, rewinds, heard, rateAdjustPct());
+                    "taught=%d | learnedVoweled=%d | blamed=%d (reverted=%d) | rewinds=%.0f | heard=%.0f | rateAdj=%d%%\n%s",
+                    taught.size(), voweled.size(), blame.size(), strict, rewinds, heard, rateAdjustPct(),
+                    LetterModel.stats());
         }
     }
 

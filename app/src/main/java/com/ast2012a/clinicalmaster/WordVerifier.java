@@ -26,6 +26,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  *                 والنسبة مذكّرًا ومؤنثًا (كهربائية <-> كهربائي) - بشروط صارمة تمنع التخمين.
  *   5) CLITIC     سوابق (و/ف) + (ب/ك/ل) + "ال"/"لل" + جذع موجود، مع تطبيق قواعد النطق (شدّة الشمسية، سكون القمرية).
  *   6) SUFFIX     جذع موجود + ضمير متصل (ها/هم/هما/هن/كم/كما/نا) مع استرجاع التاء المربوطة (عضلة -> عضلتها) والألف المقصورة (مرضى -> مرضاهم).
+ *   7) PREDICTED  (الملاذ الأخير) كلمة غير موجودة بأي صورة: LetterModel (الذكاء المحلي الذي تعلّم القاموس حرفًا حرفًا) يتنبأ
+ *                 بتشكيلها، لكن فقط بثقة عالية على الكلمة كلها وبعد اجتياز قواعد النطق؛ وإلا تبقى بلا تشكيل كما كانت. اختياري ومتوقف
+ *                 افتراضيًا: يفعّله المستخدم من إعدادات مكتبات الكلمات. لا يُحسب هذا النوع "موجودًا في القاموس" في تقرير التغطية.
  *
  * التدقيق (لا تُقبل أي نتيجة إلا بعد اجتيازه):
  *   - نفس هيكل الحروف تمامًا بين الكلمة الأصلية والمشكولة (مع تسامح الهمزات فقط) فلا يضيع حرف ولا يُضاف حرف.
@@ -40,7 +43,7 @@ final class WordVerifier {
     private WordVerifier() {
     }
 
-    enum Kind {LEARNED, EXACT, NORMALIZED, DERIVED, CLITIC, SUFFIX, NONE}
+    enum Kind {LEARNED, EXACT, NORMALIZED, DERIVED, CLITIC, SUFFIX, PREDICTED, NONE}
 
     /** نتيجة مطابقة: الصيغة المشكولة، نوع المطابقة، والجذع الذي استُخدم من القاموس. */
     static final class Match {
@@ -86,12 +89,12 @@ final class WordVerifier {
         int miss = C_MISS.get();
         int hit = look - miss;
         return String.format(Locale.ROOT,
-                "dict=%d | lookups=%d hit=%d (%.0f%%) [learned=%d exact=%d norm=%d derived=%d clitic=%d suffix=%d] miss=%d",
+                "dict=%d | lookups=%d hit=%d (%.0f%%) [learned=%d exact=%d norm=%d derived=%d clitic=%d suffix=%d predicted=%d] miss=%d",
                 TashkeelDict.size(), look, hit, look == 0 ? 0.0 : 100.0 * hit / look,
                 C_KIND[Kind.LEARNED.ordinal()].get(), C_KIND[Kind.EXACT.ordinal()].get(),
                 C_KIND[Kind.NORMALIZED.ordinal()].get(), C_KIND[Kind.DERIVED.ordinal()].get(),
                 C_KIND[Kind.CLITIC.ordinal()].get(),
-                C_KIND[Kind.SUFFIX.ordinal()].get(), miss);
+                C_KIND[Kind.SUFFIX.ordinal()].get(), C_KIND[Kind.PREDICTED.ordinal()].get(), miss);
     }
 
     // ------------------------------------------------------------------ مفتاح التوحيد
@@ -499,6 +502,12 @@ final class WordVerifier {
                 }
             }
         }
+        // الملاذ الأخير: الذكاء المحلي يتنبأ حرفًا حرفًا مما تعلّمه من القاموس (بثقة عالية وقواعد نطق، وإلا لا شيء)
+        try {
+            String guess = LetterModel.predict(plain);
+            if (guess != null && accept(plain, guess)) return new Match(guess, Kind.PREDICTED, null);
+        } catch (RuntimeException ignored) {
+        }
         return NONE;
     }
 
@@ -528,8 +537,9 @@ final class WordVerifier {
         final int[] byKind = new int[Kind.values().length];
         final Map<String, Integer> unknown = new HashMap<>();
 
+        /** كلمات وُجدت فعلًا في المكتبات (المتنبَّأ بها لا تُحسب). */
         int known() {
-            return words - byKind[Kind.NONE.ordinal()];
+            return words - byKind[Kind.NONE.ordinal()] - byKind[Kind.PREDICTED.ordinal()];
         }
 
         double coverage() {
@@ -553,9 +563,10 @@ final class WordVerifier {
                     "كلمات عربية: %d | موجودة في القاموس: %d (%.0f%%) | مشكولة أصلًا: %d | قصيرة: %d",
                     words, known(), coverage(), voweled, shortWords));
             sb.append(String.format(Locale.ROOT,
-                    "\nمطابقة: متعلَّمة %d، حرفية %d، موحَّدة %d، مشتقة %d، بسوابق %d، بضمائر %d",
+                    "\nمطابقة: متعلَّمة %d، حرفية %d، موحَّدة %d، مشتقة %d، بسوابق %d، بضمائر %d | متنبَّأ بها %d",
                     byKind[Kind.LEARNED.ordinal()], byKind[Kind.EXACT.ordinal()], byKind[Kind.NORMALIZED.ordinal()],
-                    byKind[Kind.DERIVED.ordinal()], byKind[Kind.CLITIC.ordinal()], byKind[Kind.SUFFIX.ordinal()]));
+                    byKind[Kind.DERIVED.ordinal()], byKind[Kind.CLITIC.ordinal()], byKind[Kind.SUFFIX.ordinal()],
+                    byKind[Kind.PREDICTED.ordinal()]));
             List<Map.Entry<String, Integer>> top = topUnknown(10);
             if (!top.isEmpty()) {
                 sb.append("\nغير موجودة (الأكثر تكرارًا): ");
@@ -601,7 +612,7 @@ final class WordVerifier {
                     r.words++;
                     Match m = match(w);
                     r.byKind[m.kind.ordinal()]++;
-                    if (!m.found()) {
+                    if (!m.found() || m.kind == Kind.PREDICTED) {
                         Integer k = r.unknown.get(w);
                         r.unknown.put(w, k == null ? 1 : k + 1);
                     }

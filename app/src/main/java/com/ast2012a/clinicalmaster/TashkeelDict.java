@@ -2,9 +2,6 @@ package com.ast2012a.clinicalmaster;
 
 import android.content.Context;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -28,10 +25,13 @@ import java.util.concurrent.TimeUnit;
  *    حرف، كلمة بلا أي علامة).
  *  - awaitReady(): يمكن للقارئ انتظار اكتمال التحميل بدل أن تُنطق الجملة الأولى بلا قاموس.
  *  - الفهارس تُبنى مرة واحدة ثم تُنشر دفعة واحدة (لا قراءة لنصف محمَّل).
+ *
+ * مكتبات الكلمات (DictionaryPacks): لم يعد القاموس ملفًا واحدًا؛ يُدمج فيه كل ما فعّله المستخدم من مكتبات (الأساسية +
+ * مدمجة إضافية + مستورَدة). عند تعارض كلمة بين مكتبتين تفوز الأعلى أولوية. بعد الدمج يتدرّب LetterModel (الذكاء المحلي
+ * الذي يفهم القاموس حرفًا حرفًا) على كل الكلمات المشكولة. reload()/reloadAsync() يعيدان الدمج بعد تغيير اختيارات المستخدم.
  */
 final class TashkeelDict {
 
-    private static final String ASSET = "tashkeel_dict.txt";
     /** قيمة في الفهرس الموحّد تعني: أكثر من كلمة تشترك في هذا المفتاح (لا نخمّن). */
     private static final String AMBIGUOUS = "\u0000";
     private static final Object LOCK = new Object();
@@ -44,41 +44,99 @@ final class TashkeelDict {
     private TashkeelDict() {
     }
 
-    /** يحمّل القاموس من assets (مرة واحدة). يمكن استدعاؤه من أكثر من خيط؛ اللاحق ينتظر السابق. */
+    /** يحمّل القاموس ومكتبات المستخدم المفعّلة (مرة واحدة). يمكن استدعاؤه من أكثر من خيط؛ اللاحق ينتظر السابق. */
     static void load(Context ctx) {
         if (map != null) return;
         synchronized (LOCK) {
             if (map != null) return;
-            Map<String, String> m = new HashMap<>(1 << 18);
-            Map<String, String> nm = new HashMap<>(1 << 17);
-            int bad = 0;
-            try (BufferedReader r = new BufferedReader(
-                    new InputStreamReader(ctx.getAssets().open(ASSET), StandardCharsets.UTF_8), 1 << 16)) {
-                String line;
-                while ((line = r.readLine()) != null) {
-                    int t = line.indexOf('\t');
-                    if (t <= 0 || t >= line.length() - 1) continue;
-                    String plain = line.substring(0, t);
-                    String shaped = line.substring(t + 1).trim();
-                    if (!WordVerifier.acceptEntry(plain, shaped)) {
-                        bad++;
-                        continue;
-                    }
-                    m.put(plain, shaped);
-                    String nk = WordVerifier.normKey(plain);
-                    if (!nk.equals(plain)) {
-                        String old = nm.put(nk, shaped);
-                        if (old != null && !old.equals(shaped)) nm.put(nk, AMBIGUOUS);
-                    }
-                }
-            } catch (Throwable ignored) {
-                // الملف غير موجود أو تالف: يبقى ما حُمِّل (أو فارغ) ولا يتأثر أي شيء
-            }
-            rejected = bad;
-            norm = nm;
-            map = m;
-            READY.countDown();
+            build(ctx);
         }
+        trainLetterModel();
+    }
+
+    /** يعيد بناء القاموس من المكتبات المفعّلة الآن (بعد تغيير المستخدم لاختياراته). القاموس القديم يبقى صالحًا حتى يجهز الجديد. */
+    static void reload(Context ctx) {
+        synchronized (LOCK) {
+            build(ctx);
+        }
+        trainLetterModel();
+    }
+
+    /** reload في خيط خلفي؛ done يُنادى (من الخيط الخلفي) بعد انتهاء الدمج والتدريب. */
+    static void reloadAsync(final Context ctx, final Runnable done) {
+        final Context app = ctx.getApplicationContext();
+        new Thread(() -> {
+            try {
+                reload(app);
+            } catch (Throwable ignored) {
+            }
+            if (done != null) done.run();
+        }, "tashkeel-dict-reload").start();
+    }
+
+    private static void trainLetterModel() {
+        try {
+            Map<String, String> m = map;
+            if (m == null) return;
+            // التنبؤ اختياري ومتوقف افتراضيًا: لا نُدرّب (ولا نستهلك ذاكرة) إلا لو فعّله المستخدم
+            if (LetterModel.isEnabled()) LetterModel.train(m.values());
+            else LetterModel.releaseBase();
+        } catch (Throwable ignored) {
+            // فشل التدريب (ذاكرة مثلًا): يبقى القاموس يعمل بالبحث المباشر كما كان
+        }
+    }
+
+    /** الدمج الفعلي. يُنادى داخل LOCK فقط. المكتبات تُقرأ من الأقل أولوية إلى الأعلى فيتغلّب الأعلى عند التعارض. */
+    private static void build(Context ctx) {
+        try {
+            DictionaryPacks.applyPrefs(ctx);
+        } catch (Throwable ignored) {
+        }
+        Map<String, String> m = new HashMap<>(1 << 18);
+        Map<String, String> nm = new HashMap<>(1 << 17);
+        final int[] bad = {0};
+        java.util.List<DictionaryPacks.Pack> packs;
+        try {
+            packs = DictionaryPacks.enabledInMergeOrder(ctx);
+        } catch (Throwable t) {
+            packs = java.util.Collections.emptyList();
+        }
+        for (DictionaryPacks.Pack pack : packs) {
+            final int[] st = new int[4]; // أسطر، مقبولة، مرفوضة، تجاوزات
+            final Map<String, String> fm = m;
+            final Map<String, String> fnm = nm;
+            try {
+                DictionaryPacks.read(ctx, pack, (plain, shaped) -> {
+                    st[0]++;
+                    if (!WordVerifier.acceptEntry(plain, shaped)) {
+                        st[2]++;
+                        bad[0]++;
+                        return;
+                    }
+                    String before = fm.put(plain, shaped);
+                    st[1]++;
+                    String nk = WordVerifier.normKey(plain);
+                    boolean replaced = before != null && !before.equals(shaped);
+                    if (replaced) st[3]++;
+                    if (!nk.equals(plain)) {
+                        String cur = fnm.get(nk);
+                        if (replaced && cur != null && cur.equals(before)) {
+                            fnm.put(nk, shaped); // نفس الكلمة بتشكيل مكتبة أعلى أولوية: استبدال لا التباس
+                        } else {
+                            String old = fnm.put(nk, shaped);
+                            if (old != null && !old.equals(shaped)) fnm.put(nk, AMBIGUOUS);
+                        }
+                    }
+                });
+            } catch (Throwable ignored) {
+                // مكتبة غير موجودة أو تالفة: نتجاوزها ويبقى ما حُمِّل من غيرها
+            }
+            DictionaryPacks.recordStats(pack.id, st[0], st[1], st[2], st[3]);
+        }
+        rejected = bad[0];
+        norm = nm;
+        map = m;
+        READY.countDown();
     }
 
     /** هل اكتمل التحميل (ولو كان القاموس فارغًا لغياب الملف)؟ */

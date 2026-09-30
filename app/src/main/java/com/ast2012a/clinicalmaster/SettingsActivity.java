@@ -5,8 +5,11 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.provider.OpenableColumns;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.TextView;
@@ -49,6 +52,8 @@ public class SettingsActivity extends AppCompatActivity {
     private TextView updateStatus;
     private TextView instructionsStatus;
     private TextView builtinOverridesStatus;
+    private TextView dictPacksStatus;
+    private ActivityResultLauncher<String[]> dictImportPicker;
     private MaterialSwitch notifSwitch;
     private MaterialSwitch cloudAutoBackupSwitch;
     private TextView cloudStatus;
@@ -102,6 +107,13 @@ public class SettingsActivity extends AppCompatActivity {
         builtinOverridesStatus = findViewById(R.id.builtin_overrides_status);
         findViewById(R.id.btn_manage_builtin_cases).setOnClickListener(v -> showManageBuiltinCasesDialog());
 
+        // مكتبات الكلمات (قاموس النطق)
+        dictPacksStatus = findViewById(R.id.dict_packs_status);
+        dictImportPicker = registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> {
+            if (uri != null) importDictPackFromUri(uri);
+        });
+        findViewById(R.id.btn_dict_packs).setOnClickListener(v -> showDictPacksDialog());
+
         // النسخ السحابي
         cloudAutoBackupSwitch = findViewById(R.id.switch_cloud_auto_backup);
         cloudStatus = findViewById(R.id.cloud_status);
@@ -135,6 +147,7 @@ public class SettingsActivity extends AppCompatActivity {
         refreshInstructionsRow();
         refreshCloudRows();
         refreshBuiltinOverridesRow();
+        refreshDictPacksRow();
     }
 
     // -----------------------------------------------------------------
@@ -396,6 +409,187 @@ public class SettingsActivity extends AppCompatActivity {
                     Toast.makeText(this, "تم استعادة كل حالات الجهاز الأساسية.", Toast.LENGTH_SHORT).show();
                 })
                 .setNegativeButton("إلغاء", null)
+                .show();
+    }
+
+    // -----------------------------------------------------------------
+    // مكتبات الكلمات (قاموس النطق): تفعيل/إيقاف، استيراد، حذف، وتنبؤ الذكاء المحلي
+    // -----------------------------------------------------------------
+
+    private void refreshDictPacksRow() {
+        if (dictPacksStatus != null) dictPacksStatus.setText(DictionaryPacks.summary(this));
+    }
+
+    private boolean uiAlive() {
+        return !isFinishing() && !isDestroyed();
+    }
+
+    private void showDictPacksDialog() {
+        final List<DictionaryPacks.Pack> packs = DictionaryPacks.list(this);
+        final int n = packs.size();
+        final String[] items = new String[n + 1];
+        for (int i = 0; i < n; i++) {
+            DictionaryPacks.Pack p = packs.get(i);
+            String count = p.accepted > 0 ? "  (" + p.accepted + " كلمة)" : "";
+            items[i] = (p.enabled ? "\u2713  " : "\u25CB  ") + p.title + count;
+        }
+        final boolean predict = DictionaryPacks.isPredictEnabled(this);
+        items[n] = (predict ? "\u2713  " : "\u25CB  ") + "تنبؤ الذكاء المحلي بالكلمات غير الموجودة (تجريبي)";
+
+        new ClaudeDialog(this)
+                .setTitle("مكتبات الكلمات")
+                .setMessage("اضغط على مكتبة لتفعيلها أو إيقافها ويُعاد دمج القاموس تلقائيًا. الأعلى في القائمة يتقدّم عند تعارض كلمة بين مكتبتين. "
+                        + "التنبؤ يشكّل كلمات ليست في أي مكتبة بحسب أنماط الحروف؛ دقته نحو 87% فقط، فهو متوقف ما لم تفعّله.")
+                .setItems(items, (dialog, which) -> {
+                    if (which == n) {
+                        DictionaryPacks.setPredictEnabled(this, !predict);
+                    } else {
+                        DictionaryPacks.Pack p = packs.get(which);
+                        DictionaryPacks.setEnabled(this, p.id, !p.enabled);
+                    }
+                    applyDictChanges(null);
+                    showDictPacksDialog();
+                })
+                .setPositiveButton("استيراد مكتبة", (dialog, which) -> showDictImportChoiceDialog())
+                .setNeutralButton("حذف مكتبة", (dialog, which) -> showDeleteDictPackDialog())
+                .setNegativeButton("إغلاق", null)
+                .show();
+    }
+
+    /** يعيد دمج القاموس في الخلفية بعد أي تغيير، ثم يحدّث سطر الإعدادات. */
+    private void applyDictChanges(final String toastWhenDone) {
+        TashkeelDict.reloadAsync(getApplicationContext(), () -> runOnUiThread(() -> {
+            if (!uiAlive()) return;
+            refreshDictPacksRow();
+            if (toastWhenDone != null) Toast.makeText(this, toastWhenDone, Toast.LENGTH_LONG).show();
+        }));
+    }
+
+    private void showDictImportChoiceDialog() {
+        final String[] items = {"من ملف على الجهاز", "من رابط (https)"};
+        new ClaudeDialog(this)
+                .setTitle("استيراد مكتبة كلمات")
+                .setMessage("ملف نصي UTF-8 فيه كلمات عربية مشكولة. الصيغة المفضلة: في كل سطر الكلمة بلا تشكيل ثم Tab ثم الكلمة مشكولة. "
+                        + "الأسطر الفاسدة (حروف مختلفة أو تشكيل خاطئ) تُتجاهل تلقائيًا.")
+                .setItems(items, (dialog, which) -> {
+                    if (which == 0) dictImportPicker.launch(new String[]{"*/*"});
+                    else showDictImportUrlDialog();
+                })
+                .setNegativeButton("إلغاء", null)
+                .show();
+    }
+
+    private void showDictImportUrlDialog() {
+        TextInputEditText input = new TextInputEditText(this);
+        input.setBackgroundResource(R.drawable.bg_input_field);
+        input.setPadding(Ui.dp(this, 16), Ui.dp(this, 14), Ui.dp(this, 16), Ui.dp(this, 14));
+        input.setSingleLine(true);
+        input.setTextDirection(View.TEXT_DIRECTION_LTR);
+        input.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+        input.setTextSize(15f);
+        input.setTextColor(getColor(R.color.text_primary));
+        input.setHintTextColor(getColor(R.color.text_tertiary));
+        input.setHint("https://example.com/words.txt");
+        new ClaudeDialog(this)
+                .setTitle("استيراد من رابط")
+                .setMessage("الرابط لازم يبدأ بـ https وحجم الملف حتى 60 ميجابايت.")
+                .setView(input)
+                .setPositiveButton("تحميل", (dialog, which) -> {
+                    String url = input.getText() == null ? "" : input.getText().toString().trim();
+                    if (url.isEmpty()) return;
+                    importDictPackFromUrl(url);
+                })
+                .setNegativeButton("إلغاء", null)
+                .show();
+    }
+
+    private String displayNameOf(Uri uri) {
+        try (Cursor c = getContentResolver().query(uri, new String[]{OpenableColumns.DISPLAY_NAME}, null, null, null)) {
+            if (c != null && c.moveToFirst()) {
+                String n = c.getString(0);
+                if (n != null && !n.trim().isEmpty()) return n;
+            }
+        } catch (RuntimeException ignored) {
+        }
+        String last = uri.getLastPathSegment();
+        return last == null ? "مكتبة مستوردة" : last;
+    }
+
+    private void importDictPackFromUri(final Uri uri) {
+        final String name = displayNameOf(uri);
+        Toast.makeText(this, "جارٍ استيراد المكتبة...", Toast.LENGTH_SHORT).show();
+        final android.content.Context app = getApplicationContext();
+        executor.execute(() -> {
+            try {
+                DictionaryPacks.Pack p = DictionaryPacks.importFromUri(app, uri, name);
+                TashkeelDict.reload(app);
+                runOnUiThread(() -> onDictPackImported(p));
+            } catch (IOException | RuntimeException e) {
+                runOnUiThread(() -> onDictImportFailed(e.getMessage()));
+            }
+        });
+    }
+
+    private void importDictPackFromUrl(final String url) {
+        Toast.makeText(this, "جارٍ تحميل المكتبة...", Toast.LENGTH_SHORT).show();
+        final android.content.Context app = getApplicationContext();
+        executor.execute(() -> {
+            try {
+                DictionaryPacks.Pack p = DictionaryPacks.importFromUrl(app, url, null);
+                TashkeelDict.reload(app);
+                runOnUiThread(() -> onDictPackImported(p));
+            } catch (IOException | RuntimeException e) {
+                runOnUiThread(() -> onDictImportFailed(e.getMessage()));
+            }
+        });
+    }
+
+    private void onDictPackImported(DictionaryPacks.Pack p) {
+        if (!uiAlive()) return;
+        refreshDictPacksRow();
+        String rejected = p.rejected > 0 ? " وتم تجاهل " + p.rejected + " سطرًا فاسدًا" : "";
+        Toast.makeText(this, "تمت إضافة \"" + p.title + "\": " + p.accepted + " كلمة" + rejected + ".", Toast.LENGTH_LONG).show();
+        showDictPacksDialog();
+    }
+
+    private void onDictImportFailed(String message) {
+        if (!uiAlive()) return;
+        new ClaudeDialog(this)
+                .setTitle("تعذّر الاستيراد")
+                .setMessage(message == null || message.isEmpty() ? "حدث خطأ غير متوقع." : message)
+                .setPositiveButton("حسنًا", null)
+                .show();
+    }
+
+    private void showDeleteDictPackDialog() {
+        final List<DictionaryPacks.Pack> mine = new java.util.ArrayList<>();
+        for (DictionaryPacks.Pack p : DictionaryPacks.list(this)) if (p.isUser()) mine.add(p);
+        if (mine.isEmpty()) {
+            new ClaudeDialog(this)
+                    .setTitle("حذف مكتبة")
+                    .setMessage("لا توجد مكتبات مستوردة لحذفها. المكتبات المدمجة مع التطبيق لا تُحذف، لكن يمكنك إيقافها من القائمة.")
+                    .setPositiveButton("حسنًا", null)
+                    .show();
+            return;
+        }
+        final String[] items = new String[mine.size()];
+        for (int i = 0; i < items.length; i++) items[i] = mine.get(i).title;
+        new ClaudeDialog(this)
+                .setTitle("حذف مكتبة مستوردة")
+                .setItems(items, (dialog, which) -> {
+                    final DictionaryPacks.Pack p = mine.get(which);
+                    new ClaudeDialog(this)
+                            .setTitle("حذف المكتبة")
+                            .setMessage("حذف \"" + p.title + "\" نهائيًا من الجهاز؟")
+                            .setPositiveButton("حذف", (d2, w2) -> {
+                                DictionaryPacks.remove(this, p.id);
+                                applyDictChanges("تم حذف المكتبة.");
+                                refreshDictPacksRow();
+                            })
+                            .setNegativeButton("إلغاء", null)
+                            .show();
+                })
+                .setNegativeButton("إغلاق", null)
                 .show();
     }
 
