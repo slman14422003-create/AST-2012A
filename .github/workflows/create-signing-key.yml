@@ -1,0 +1,77 @@
+name: Create Signing Key (مرة واحدة فقط)
+
+# ينشئ مفتاح توقيع ثابت للتطبيق ويحفظه مباشرة في أسرار المستودع
+# (KEYSTORE_BASE64 / KEYSTORE_PASSWORD / KEY_ALIAS / KEY_PASSWORD)، فتُوقَّع كل الإصدارات القادمة بنفس المفتاح.
+#
+# لماذا؟ بدون هذه الأسرار يُبنى التطبيق بمفتاح Debug يولّده خادم GitHub من جديد في كل تشغيل،
+# فيكون توقيع كل نسخة مختلفًا: لا يمكن تسجيله كمطوّر موثّق، ولا يبني سمعة عند Play Protect،
+# ولا يُثبَّت فوق النسخة السابقة.
+#
+# قبل التشغيل: أنشئ Fine-grained personal access token لهذا المستودع بصلاحية
+# Repository permissions -> Secrets: Read and write، وأضفه كسر باسم SECRETS_PAT.
+# (GITHUB_TOKEN العادي لا يملك صلاحية كتابة الأسرار). احذف الـ token بعد نجاح التشغيل.
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'استبدال المفتاح الموجود (خطر: لن تُثبَّت النسخ الجديدة فوق النسخة المثبّتة حاليًا)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  create:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ secrets.SECRETS_PAT }}
+      FORCE: ${{ inputs.force }}
+    steps:
+      - name: التحقق من وجود SECRETS_PAT
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error title=SECRETS_PAT::أضف سرًا باسم SECRETS_PAT (Fine-grained token بصلاحية Secrets: Read and write) ثم أعد التشغيل."
+            exit 1
+          fi
+
+      - name: منع استبدال مفتاح موجود بالخطأ
+        run: |
+          if gh secret list --repo "$GITHUB_REPOSITORY" | grep -q '^KEYSTORE_BASE64'; then
+            if [ "$FORCE" != "true" ]; then
+              echo "::error title=المفتاح موجود::يوجد مفتاح توقيع محفوظ بالفعل. استبداله يعني أن النسخة المثبّتة على الهواتف لن تقبل التحديث. إن كنت متأكدًا شغّل الـ workflow مع خيار force."
+              exit 1
+            fi
+          fi
+
+      - name: إنشاء المفتاح وحفظه في الأسرار
+        run: |
+          set -euo pipefail
+          PASS="$(openssl rand -hex 24)"
+          echo "::add-mask::$PASS"
+          ALIAS="phizyo"
+          keytool -genkeypair -keystore release.jks -storetype PKCS12 \
+            -alias "$ALIAS" -keyalg RSA -keysize 4096 -validity 36500 \
+            -storepass "$PASS" -keypass "$PASS" \
+            -dname "CN=Phizyo Studio" >/dev/null
+
+          base64 -w0 release.jks | gh secret set KEYSTORE_BASE64 --repo "$GITHUB_REPOSITORY"
+          printf '%s' "$PASS" | gh secret set KEYSTORE_PASSWORD --repo "$GITHUB_REPOSITORY"
+          printf '%s' "$PASS" | gh secret set KEY_PASSWORD --repo "$GITHUB_REPOSITORY"
+          printf '%s' "$ALIAS" | gh secret set KEY_ALIAS --repo "$GITHUB_REPOSITORY"
+
+          FP="$(keytool -list -v -keystore release.jks -storepass "$PASS" -alias "$ALIAS" | grep 'SHA256:' | head -n 1 | sed 's/^ *//')"
+          {
+            echo "## ✅ تم إنشاء مفتاح التوقيع وحفظه في الأسرار"
+            echo ""
+            echo "بصمة الشهادة (عامة، تُستخدم عند تسجيل التطبيق):"
+            echo ""
+            echo "\`$FP\`"
+            echo ""
+            echo "- الأسرار الأربعة (KEYSTORE_BASE64 / KEYSTORE_PASSWORD / KEY_ALIAS / KEY_PASSWORD) محفوظة ولا يمكن قراءتها لاحقًا."
+            echo "- احذف الـ token المسمّى SECRETS_PAT الآن."
+            echo "- الإصدار القادم سيكون موقّعًا بهذا المفتاح، وسيُبنى بدون نسخة Debug."
+          } >> "$GITHUB_STEP_SUMMARY"
+          shred -u release.jks 2>/dev/null || rm -f release.jks
