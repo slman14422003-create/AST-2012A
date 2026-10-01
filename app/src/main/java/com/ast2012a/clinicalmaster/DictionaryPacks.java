@@ -12,10 +12,15 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.io.OutputStreamWriter;
+import java.io.Reader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.charset.Charset;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
+import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -38,8 +43,12 @@ import java.util.concurrent.ConcurrentHashMap;
  *   كلمة_بلا_تشكيل = كلمة_مشكولة
  *   كلمة_بلا_تشكيل , كلمة_مشكولة         (CSV بعمودين)
  *   كلمة_مشكولة                          (تُستنتج منها الكلمة المجرّدة)
- *   نص عربي مشكول متصل                    (تُستخرج منه الكلمات المشكولة)
- * والأسطر التي تبدأ بـ # تعليق. كل سطر يمرّ على WordVerifier.acceptEntry فلا تدخل القاموسَ كلمةٌ بحروف مختلفة أو تشكيل فاسد.
+ *   كلمة_عادية_بلا_تشكيل                 (كلمة في كل سطر: قائمة كلمات)
+ *   نص عربي متصل، مشكول أو غير مشكول     (تُستخرج منه كل الكلمات العربية)
+ * والأسطر التي تبدأ بـ # تعليق. المدخلات المشكولة تمرّ على WordVerifier.acceptEntry فلا تدخل القاموسَ كلمةٌ بحروف مختلفة أو
+ * تشكيل فاسد. الكلمات غير المشكولة تُحفظ كمفردات، ويستخرج منها TashkeelDict (في خطوة ثانية بعد دمج كل المكتبات) كل كلمة
+ * يمكن تشكيلها بيقين من كلمات القاموس (سوابق، لواحق، جمع مؤنث سالم...) فتُضاف للقاموس وتُدرّب عليها نماذج النطق.
+ * الملف .txt بأي ترميز شائع: UTF-8 (مع BOM أو بدونه) أو UTF-16 أو Windows-1256 (يُكتشف تلقائيًا).
  *
  * ترتيب الأولوية عند تعارض كلمة بين مكتبتين: المستورَدة (الأحدث أولًا) ثم المدمجة الإضافية ثم الأساسية.
  * اختيار المستخدم (تفعيل/إيقاف كل مكتبة) محفوظ في SharedPreferences، والمكتبة الجديدة تكون مفعّلة افتراضيًا.
@@ -68,10 +77,13 @@ final class DictionaryPacks {
     private static final int MAX_USER_PACKS = 12;
     private static final Object LOCK = new Object();
 
-    /** إحصاءات آخر دمج لكل مكتبة: {أسطر، مقبولة، مرفوضة، تجاوزت كلمات من مكتبة أقل أولوية}. */
+    /** إحصاءات آخر دمج لكل مكتبة: {أسطر، مشكولة مقبولة، مرفوضة، تجاوزت كلمات من مكتبة أقل أولوية، كلمات عادية، مشتقة منها}. */
     private static final Map<String, int[]> STATS = new ConcurrentHashMap<>();
 
-    /** مستقبِل للكلمات المقروءة من مكتبة. */
+    /**
+     * مستقبِل للكلمات المقروءة من مكتبة. لو كانت plain تساوي shaped فالكلمة عادية (بلا تشكيل)؛ وإلا فهي مدخل مشكول
+     * (plain هي الكلمة بلا تشكيل، وshaped المشكولة).
+     */
     interface EntrySink {
         void accept(String plain, String shaped);
     }
@@ -89,6 +101,8 @@ final class DictionaryPacks {
         int accepted;
         int rejected;
         int overrides;
+        int plain;   // كلمات عادية (بلا تشكيل) في المكتبة
+        int derived; // كلمات عادية أمكن تشكيلها من القاموس فأُضيفت إليه وتدرّبت عليها نماذج النطق
         long bytes;
 
         Pack(String id, String title, int kind, String assetPath, File file) {
@@ -190,6 +204,10 @@ final class DictionaryPacks {
                 k.accepted = st[1];
                 k.rejected = st[2];
                 k.overrides = st[3];
+                if (st.length > 5) {
+                    k.plain = st[4];
+                    k.derived = st[5];
+                }
             }
         }
         return out;
@@ -234,8 +252,26 @@ final class DictionaryPacks {
     }
 
     /** يسجّل إحصاءات دمج مكتبة (من TashkeelDict). */
-    static void recordStats(String id, int lines, int accepted, int rejected, int overrides) {
-        STATS.put(id, new int[]{lines, accepted, rejected, overrides});
+    static void recordStats(String id, int lines, int accepted, int rejected, int overrides, int plain, int derived) {
+        STATS.put(id, new int[]{lines, accepted, rejected, overrides, plain, derived});
+    }
+
+    /** مكتبة بعينها بإحصاءاتها الحالية (أو null). */
+    static Pack find(Context ctx, String id) {
+        for (Pack k : list(ctx)) if (k.id.equals(id)) return k;
+        return null;
+    }
+
+    /** وصف قصير لمحتوى المكتبة للقائمة: كم كلمة مشكولة وكم كلمة عادية. */
+    static String describe(Pack p) {
+        if (p.accepted <= 0 && p.plain <= 0) return "";
+        StringBuilder sb = new StringBuilder("  (");
+        if (p.accepted > 0) sb.append(p.accepted).append(" مشكولة");
+        if (p.plain > 0) {
+            if (p.accepted > 0) sb.append(" + ");
+            sb.append(p.plain).append(" عادية");
+        }
+        return sb.append(")").toString();
     }
 
     /** سطر ملخّص للإعدادات: كم مكتبة مفعّلة وكم كلمة. */
@@ -243,15 +279,18 @@ final class DictionaryPacks {
         List<Pack> all = list(ctx);
         int on = 0;
         int words = 0;
+        int plain = 0;
         for (Pack k : all) {
             if (k.enabled) {
                 on++;
                 words += k.accepted;
+                plain += k.plain;
             }
         }
         if (all.isEmpty()) return "لا توجد مكتبات";
         String s = on + " من " + all.size() + " مفعّلة";
-        if (words > 0) s += " - " + words + " كلمة";
+        if (words > 0) s += " - " + words + " كلمة مشكولة";
+        if (plain > 0) s += " + " + plain + " عادية";
         return s;
     }
 
@@ -298,8 +337,9 @@ final class DictionaryPacks {
     private static String wordOf(String s) {
         int a = 0;
         int b = s.length();
-        while (a < b && !isLetter(s.charAt(a))) a++;
-        while (b > a && !isLetter(s.charAt(b - 1)) && !isJoin(s.charAt(b - 1))) b--;
+        // نقصّ الترقيم والأرقام فقط: أي حرف آخر (لاتيني، فارسي...) يوقف القص فتُرفض الكلمة بدل أن تُبتر إلى كلمة عربية مزيّفة
+        while (a < b && !Character.isLetter(s.charAt(a))) a++;
+        while (b > a && !Character.isLetter(s.charAt(b - 1)) && !isJoin(s.charAt(b - 1))) b--;
         if (a >= b) return "";
         String w = s.substring(a, b);
         boolean any = false;
@@ -311,12 +351,45 @@ final class DictionaryPacks {
         return any ? w : "";
     }
 
-    /** يحلّل سطرًا بأي من الصيغ المقبولة ويمرّر ما فيه من (مجرّدة، مشكولة) للمستقبِل. */
+    /** يحذف التطويل فقط (يُبقي التشكيل). */
+    private static String dropTatweel(String s) {
+        if (s.indexOf('\u0640') < 0) return s;
+        StringBuilder sb = new StringBuilder(s.length());
+        for (int i = 0; i < s.length(); i++) if (s.charAt(i) != '\u0640') sb.append(s.charAt(i));
+        return sb.toString();
+    }
+
+    /** هل في السطر أشكال عرض عربية (ملفات منسوخة من PDF)؟ تُوحَّد إلى الحروف الأصلية بـ NFKC. */
+    private static boolean hasPresentationForms(String s) {
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if ((c >= '\uFB50' && c <= '\uFDFF') || (c >= '\uFE70' && c <= '\uFEFF')) return true;
+        }
+        return false;
+    }
+
+    private static boolean isWordChar(char c) {
+        return isLetter(c) || isJoin(c) || Character.isLetterOrDigit(c);
+    }
+
+    /** يمرّر للمستقبِل كلمة واحدة: مشكولة (مجرّدة + مشكولة) أو عادية (مجرّدة مرتين). */
+    private static void emitWord(String w, EntrySink sink) {
+        String clean = dropTatweel(w);
+        String plain = stripMarks(clean);
+        if (plain.isEmpty()) return;
+        sink.accept(plain, hasMark(clean) ? clean : plain);
+    }
+
+    /**
+     * يحلّل سطرًا بأي من الصيغ المقبولة ويمرّر ما فيه للمستقبِل: أزواج (مجرّدة، مشكولة)، أو كلمات مشكولة، أو كلمات عادية
+     * بلا تشكيل (كل كلمة عربية في السطر، وما فيها حروف أجنبية أو أرقام يُتجاوز).
+     */
     static void parseLine(String line, EntrySink sink) {
         if (line == null || line.isEmpty()) return;
         String s = line.charAt(0) == '\uFEFF' ? line.substring(1) : line;
         s = s.trim();
         if (s.isEmpty() || s.charAt(0) == '#') return;
+        if (hasPresentationForms(s)) s = Normalizer.normalize(s, Normalizer.Form.NFKC);
 
         int sep = s.indexOf('\t');
         if (sep < 0) sep = s.indexOf('=');
@@ -330,30 +403,24 @@ final class DictionaryPacks {
             int t2 = rest.indexOf('\t');
             if (t2 > 0) rest = rest.substring(0, t2);
             String right = wordOf(rest.trim());
-            if (!left.isEmpty() && !right.isEmpty()) {
-                String plain;
-                String shaped;
-                if (hasMark(left) && !hasMark(right)) {
-                    shaped = left;
-                    plain = right;
-                } else {
-                    plain = left;
-                    shaped = right;
-                }
-                sink.accept(stripMarks(plain), shaped);
+            // زوج (مجرّدة، مشكولة): أحد الطرفين مشكول والآخر لا. غير ذلك يُقرأ كل طرف كلمة مستقلة بالمسح التالي.
+            if (!left.isEmpty() && !right.isEmpty() && hasMark(left) != hasMark(right)) {
+                String shaped = hasMark(left) ? left : right;
+                String plain = hasMark(left) ? right : left;
+                sink.accept(stripMarks(plain), dropTatweel(shaped));
                 return;
             }
         }
-        // كلمات مشكولة (كلمة في السطر أو نص متصل)
+        // كلمات (كلمة في السطر أو نص متصل): مشكولة أو عادية
         int n = s.length();
         int i = 0;
         while (i < n) {
-            while (i < n && Character.isWhitespace(s.charAt(i))) i++;
+            while (i < n && !isWordChar(s.charAt(i))) i++;
             int st = i;
-            while (i < n && !Character.isWhitespace(s.charAt(i))) i++;
+            while (i < n && isWordChar(s.charAt(i))) i++;
             if (i <= st) break;
             String w = wordOf(s.substring(st, i));
-            if (!w.isEmpty() && hasMark(w)) sink.accept(stripMarks(w), w);
+            if (!w.isEmpty()) emitWord(w, sink);
         }
     }
 
@@ -404,9 +471,128 @@ final class DictionaryPacks {
         return t.isEmpty() ? "مكتبة مستوردة" : t;
     }
 
+    /** مجموعة قيم 64 بت مضغوطة لإسقاط التكرار أثناء الاستيراد دون ذاكرة كبيرة (حتى max عنصر ثم يتوقف الإسقاط). */
+    private static final class LongSet {
+        private long[] t = new long[1 << 16];
+        private int size;
+        private final int max;
+
+        LongSet(int max) {
+            this.max = max;
+        }
+
+        private static int slot(long v, int mask) {
+            return (int) (v ^ (v >>> 32)) & mask;
+        }
+
+        /** true لو العنصر جديد (أو امتلأت المجموعة فلا يمكن الحكم)، false لو سبق ظهوره. */
+        boolean add(long h) {
+            if (h == 0L) h = 1L;
+            if (size >= max) return true;
+            if ((size + 1) * 2 > t.length) grow();
+            int mask = t.length - 1;
+            int i = slot(h, mask);
+            while (t[i] != 0L) {
+                if (t[i] == h) return false;
+                i = (i + 1) & mask;
+            }
+            t[i] = h;
+            size++;
+            return true;
+        }
+
+        private void grow() {
+            long[] old = t;
+            t = new long[old.length << 1];
+            int mask = t.length - 1;
+            for (long v : old) {
+                if (v == 0L) continue;
+                int i = slot(v, mask);
+                while (t[i] != 0L) i = (i + 1) & mask;
+                t[i] = v;
+            }
+        }
+    }
+
+    private static long hash64(String s) {
+        long h = 0xcbf29ce484222325L;
+        for (int i = 0; i < s.length(); i++) {
+            h ^= s.charAt(i);
+            h *= 0x100000001b3L;
+        }
+        return h;
+    }
+
+    private static void copyLimited(InputStream in, File dst) throws IOException {
+        byte[] buf = new byte[1 << 16];
+        long total = 0;
+        try (OutputStream os = new FileOutputStream(dst)) {
+            int n;
+            while ((n = in.read(buf)) != -1) {
+                total += n;
+                if (total > MAX_PACK_BYTES) throw new IOException("الملف كبير جدًا (الحد 60 ميجابايت).");
+                os.write(buf, 0, n);
+            }
+        }
+        if (total == 0) throw new IOException("الملف فارغ.");
+    }
+
+    /** يرفض الملفات الثنائية (PDF، Word، Excel، ZIP...) برسالة واضحة بدل أن يخرج \"لا كلمات\" بلا تفسير. */
+    private static void checkLooksLikeText(File f) throws IOException {
+        byte[] h = new byte[4096];
+        int n;
+        try (InputStream is = new FileInputStream(f)) {
+            n = is.read(h);
+        }
+        String msg = "هذا ليس ملفًا نصيًا. اختر ملف .txt (من Word أو Notepad: حفظ باسم > نص عادي، ترميز UTF-8).";
+        if (n >= 4 && h[0] == '%' && h[1] == 'P' && h[2] == 'D' && h[3] == 'F') throw new IOException(msg);
+        if (n >= 4 && h[0] == 'P' && h[1] == 'K' && h[2] == 3 && h[3] == 4) throw new IOException(msg);
+        boolean bom16 = n >= 2 && (((h[0] & 0xFF) == 0xFF && (h[1] & 0xFF) == 0xFE)
+                || ((h[0] & 0xFF) == 0xFE && (h[1] & 0xFF) == 0xFF));
+        if (!bom16) for (int i = 0; i < n; i++) if (h[i] == 0) throw new IOException(msg);
+    }
+
+    private static boolean isValidUtf8(File f) {
+        try (Reader r = new InputStreamReader(new FileInputStream(f),
+                StandardCharsets.UTF_8.newDecoder()
+                        .onMalformedInput(CodingErrorAction.REPORT)
+                        .onUnmappableCharacter(CodingErrorAction.REPORT))) {
+            char[] buf = new char[1 << 14];
+            while (r.read(buf) != -1) {
+                // مجرّد تحقق
+            }
+            return true;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    /** ترميز ملف .txt: UTF-16 بحسب BOM، وإلا UTF-8 لو سليم، وإلا Windows-1256 (ملفات عربية قديمة من Notepad). */
+    private static Charset detectCharset(File f) throws IOException {
+        byte[] h = new byte[2];
+        int n;
+        try (InputStream is = new FileInputStream(f)) {
+            n = is.read(h);
+        }
+        if (n == 2 && (((h[0] & 0xFF) == 0xFF && (h[1] & 0xFF) == 0xFE) || ((h[0] & 0xFF) == 0xFE && (h[1] & 0xFF) == 0xFF))) {
+            return StandardCharsets.UTF_16; // يقرأ الـ BOM ويحدّد الترتيب بنفسه
+        }
+        if (isValidUtf8(f)) return StandardCharsets.UTF_8;
+        try {
+            return Charset.forName("windows-1256");
+        } catch (RuntimeException e) {
+            try {
+                return Charset.forName("ISO-8859-6");
+            } catch (RuntimeException e2) {
+                return StandardCharsets.UTF_8;
+            }
+        }
+    }
+
     /**
-     * ينسخ المكتبة بعد تنظيفها: كل مدخل صالح يُكتب بصيغة (مجرّدة TAB مشكولة) فقط، فيصغر الملف ويسرع تحميله،
-     * ولا تصل أي كلمة فاسدة. لو لم يوجد مدخل صالح واحد تُرفض المكتبة برسالة واضحة.
+     * ينسخ المكتبة بعد تنظيفها: كل مدخل مشكول صالح يُكتب بصيغة (مجرّدة TAB مشكولة)، وكل كلمة عادية (بلا تشكيل) تُكتب
+     * وحدها في سطر؛ والمكرّر يُسقَط. فيصغر الملف ويسرع تحميله ولا تصل أي كلمة فاسدة. ملف بلا أي كلمة عربية يُرفض برسالة واضحة.
+     * تُمرَّر الكلمات العادية لاحقًا (في TashkeelDict) لتشكيل ما يمكن تشكيله منها بيقين وتدريب نماذج النطق عليه.
      */
     private static Pack importStream(Context ctx, InputStream in, String title) throws IOException {
         Context app = ctx.getApplicationContext();
@@ -419,47 +605,60 @@ final class DictionaryPacks {
         final String id = "u" + Long.toHexString(System.nanoTime());
         final File out = new File(dir(app), id + ".txt");
         final File tmp = new File(dir(app), id + ".tmp");
-        final int[] cnt = new int[3]; // قُبلت، رُفضت، حروف استبدال (ترميز خاطئ)
-        final long[] bytes = {0L};
+        final File raw = new File(dir(app), id + ".raw");
+        final int[] cnt = new int[3]; // مشكولة قُبلت، مشكولة رُفضت، كلمات عادية
         boolean ok = false;
-        try (BufferedReader r = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8), 1 << 16);
-             final BufferedWriter w = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(tmp), StandardCharsets.UTF_8), 1 << 16)) {
-            String line;
-            EntrySink sink = (plain, shaped) -> {
-                if (!WordVerifier.acceptEntry(plain, shaped)) {
-                    cnt[1]++;
-                    return;
-                }
-                try {
-                    w.write(plain);
-                    w.write('\t');
-                    w.write(shaped);
-                    w.write('\n');
-                } catch (IOException e) {
-                    throw new IllegalStateException(e);
-                }
-                cnt[0]++;
-            };
-            while ((line = r.readLine()) != null) {
-                bytes[0] += line.length() * 2L;
-                if (bytes[0] > MAX_PACK_BYTES * 2) throw new IOException("الملف كبير جدًا (الحد 60 ميجابايت).");
-                if (line.indexOf('\uFFFD') >= 0) cnt[2]++;
-                parseLine(line, sink);
+        try {
+            copyLimited(in, raw);
+            checkLooksLikeText(raw);
+            Charset cs = detectCharset(raw);
+            final LongSet seen = new LongSet(1_000_000);
+            try (BufferedReader r = new BufferedReader(new InputStreamReader(new FileInputStream(raw), cs), 1 << 16);
+                 final BufferedWriter w = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(tmp), StandardCharsets.UTF_8), 1 << 16)) {
+                EntrySink sink = (plain, shaped) -> {
+                    try {
+                        if (plain.equals(shaped)) { // كلمة عادية
+                            if (!WordVerifier.acceptPlain(plain)) return;
+                            if (!seen.add(hash64(plain))) return;
+                            w.write(plain);
+                            w.write('\n');
+                            cnt[2]++;
+                            return;
+                        }
+                        if (!WordVerifier.acceptEntry(plain, shaped)) {
+                            cnt[1]++;
+                            return;
+                        }
+                        if (!seen.add(hash64(shaped))) return;
+                        w.write(plain);
+                        w.write('\t');
+                        w.write(shaped);
+                        w.write('\n');
+                        cnt[0]++;
+                    } catch (IOException e) {
+                        throw new IllegalStateException(e);
+                    }
+                };
+                String line;
+                while ((line = r.readLine()) != null) parseLine(line, sink);
             }
             ok = true;
         } catch (IllegalStateException e) {
-            tmp.delete();
             throw new IOException("تعذّر حفظ المكتبة.", e.getCause() == null ? e : e.getCause());
         } finally {
-            if (!ok) tmp.delete();
+            //noinspection ResultOfMethodCallIgnored
+            raw.delete();
+            if (!ok) //noinspection ResultOfMethodCallIgnored
+                tmp.delete();
         }
-        if (cnt[0] == 0) {
+        if (cnt[0] == 0 && cnt[2] == 0) {
+            //noinspection ResultOfMethodCallIgnored
             tmp.delete();
-            throw new IOException(cnt[2] > 0
-                    ? "الملف ليس بترميز UTF-8. احفظه بترميز UTF-8 وأعد المحاولة."
-                    : "لم أجد في الملف كلمات عربية مشكولة صالحة. الصيغة: كلمة بلا تشكيل (Tab) كلمة مشكولة.");
+            throw new IOException("لم أجد في الملف كلمات عربية. تأكد أنه ملف نصي (.txt) بترميز UTF-8 وفيه كلمات عربية "
+                    + "(كلمة في كل سطر، أو نص عادي، أو كلمة بلا تشكيل ثم Tab ثم الكلمة مشكولة).");
         }
         if (!tmp.renameTo(out)) {
+            //noinspection ResultOfMethodCallIgnored
             tmp.delete();
             throw new IOException("تعذّر حفظ المكتبة.");
         }
@@ -476,6 +675,7 @@ final class DictionaryPacks {
         k.bytes = out.length();
         k.accepted = cnt[0];
         k.rejected = cnt[1];
+        k.plain = cnt[2];
         return k;
     }
 

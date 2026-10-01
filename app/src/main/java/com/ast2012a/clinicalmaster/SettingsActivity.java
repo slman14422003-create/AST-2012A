@@ -437,8 +437,7 @@ public class SettingsActivity extends AppCompatActivity {
         final String[] items = new String[n + 1];
         for (int i = 0; i < n; i++) {
             DictionaryPacks.Pack p = packs.get(i);
-            String count = p.accepted > 0 ? "  (" + p.accepted + " كلمة)" : "";
-            items[i] = (p.enabled ? "\u2713  " : "\u25CB  ") + p.title + count;
+            items[i] = (p.enabled ? "\u2713  " : "\u25CB  ") + p.title + DictionaryPacks.describe(p);
         }
         final boolean predict = DictionaryPacks.isPredictEnabled(this);
         items[n] = (predict ? "\u2713  " : "\u25CB  ") + "تنبؤ الذكاء المحلي بالكلمات غير الموجودة (تجريبي)";
@@ -476,8 +475,11 @@ public class SettingsActivity extends AppCompatActivity {
         final String[] items = {"من ملف على الجهاز", "من رابط (https)"};
         new ClaudeDialog(this)
                 .setTitle("استيراد مكتبة كلمات")
-                .setMessage("ملف نصي UTF-8 فيه كلمات عربية مشكولة. الصيغة المفضلة: في كل سطر الكلمة بلا تشكيل ثم Tab ثم الكلمة مشكولة. "
-                        + "الأسطر الفاسدة (حروف مختلفة أو تشكيل خاطئ) تُتجاهل تلقائيًا.")
+                .setMessage("ملف نصي .txt فيه كلمات عربية، مشكولة أو غير مشكولة، كلمة في كل سطر أو نص عادي. "
+                        + "لو أردت إضافة تشكيل بنفسك اكتب في السطر: الكلمة بلا تشكيل ثم Tab ثم الكلمة مشكولة. "
+                        + "الكلمات المشكولة تدخل القاموس وتدرّب نموذج النطق، والكلمات العادية يُشكَّل منها كل ما أمكن تشكيله بيقين "
+                        + "من القاموس (سوابق، ضمائر، جمع...) ويتدرّب عليه النموذج أيضًا. "
+                        + "الأسطر الفاسدة تُتجاهل تلقائيًا، والترميز (UTF-8 أو Windows-1256 أو UTF-16) يُكتشف تلقائيًا.")
                 .setItems(items, (dialog, which) -> {
                     if (which == 0) dictImportPicker.launch(new String[]{"*/*"});
                     else showDictImportUrlDialog();
@@ -524,12 +526,14 @@ public class SettingsActivity extends AppCompatActivity {
 
     private void importDictPackFromUri(final Uri uri) {
         final String name = displayNameOf(uri);
-        Toast.makeText(this, "جارٍ استيراد المكتبة...", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "جارٍ استيراد المكتبة وتدريب النطق عليها... قد يستغرق دقيقة للمكتبات الكبيرة.", Toast.LENGTH_LONG).show();
         final android.content.Context app = getApplicationContext();
         executor.execute(() -> {
             try {
-                DictionaryPacks.Pack p = DictionaryPacks.importFromUri(app, uri, name);
+                DictionaryPacks.Pack imported = DictionaryPacks.importFromUri(app, uri, name);
                 TashkeelDict.reload(app);
+                DictionaryPacks.Pack fresh = DictionaryPacks.find(app, imported.id);
+                final DictionaryPacks.Pack p = fresh != null ? fresh : imported;
                 runOnUiThread(() -> onDictPackImported(p));
             } catch (IOException | RuntimeException e) {
                 runOnUiThread(() -> onDictImportFailed(e.getMessage()));
@@ -538,12 +542,14 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     private void importDictPackFromUrl(final String url) {
-        Toast.makeText(this, "جارٍ تحميل المكتبة...", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "جارٍ تحميل المكتبة وتدريب النطق عليها... قد يستغرق دقيقة للمكتبات الكبيرة.", Toast.LENGTH_LONG).show();
         final android.content.Context app = getApplicationContext();
         executor.execute(() -> {
             try {
-                DictionaryPacks.Pack p = DictionaryPacks.importFromUrl(app, url, null);
+                DictionaryPacks.Pack imported = DictionaryPacks.importFromUrl(app, url, null);
                 TashkeelDict.reload(app);
+                DictionaryPacks.Pack fresh = DictionaryPacks.find(app, imported.id);
+                final DictionaryPacks.Pack p = fresh != null ? fresh : imported;
                 runOnUiThread(() -> onDictPackImported(p));
             } catch (IOException | RuntimeException e) {
                 runOnUiThread(() -> onDictImportFailed(e.getMessage()));
@@ -554,8 +560,15 @@ public class SettingsActivity extends AppCompatActivity {
     private void onDictPackImported(DictionaryPacks.Pack p) {
         if (!uiAlive()) return;
         refreshDictPacksRow();
-        String rejected = p.rejected > 0 ? " وتم تجاهل " + p.rejected + " سطرًا فاسدًا" : "";
-        Toast.makeText(this, "تمت إضافة \"" + p.title + "\": " + p.accepted + " كلمة" + rejected + ".", Toast.LENGTH_LONG).show();
+        StringBuilder msg = new StringBuilder("تمت إضافة \"").append(p.title).append("\": ");
+        if (p.accepted > 0) msg.append(p.accepted).append(" كلمة مشكولة");
+        if (p.plain > 0) {
+            if (p.accepted > 0) msg.append(" + ");
+            msg.append(p.plain).append(" كلمة عادية");
+            if (p.derived > 0) msg.append(" (شُكِّلت منها ").append(p.derived).append(" وتدرّب عليها النطق)");
+        }
+        if (p.rejected > 0) msg.append(" - تم تجاهل ").append(p.rejected).append(" سطرًا فاسدًا");
+        Toast.makeText(this, msg.append(".").toString(), Toast.LENGTH_LONG).show();
         showDictPacksDialog();
     }
 

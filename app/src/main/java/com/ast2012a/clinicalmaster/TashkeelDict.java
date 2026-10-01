@@ -3,8 +3,10 @@ package com.ast2012a.clinicalmaster;
 import android.content.Context;
 
 import java.util.Collection;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -105,13 +107,23 @@ final class TashkeelDict {
         } catch (Throwable t) {
             packs = java.util.Collections.emptyList();
         }
+        final Map<String, int[]> statsById = new HashMap<>();
+        final List<DictionaryPacks.Pack> withPlain = new ArrayList<>();
         for (DictionaryPacks.Pack pack : packs) {
-            final int[] st = new int[4]; // أسطر، مقبولة، مرفوضة، تجاوزات
+            final int[] st = new int[6]; // أسطر، مشكولة مقبولة، مرفوضة، تجاوزات، كلمات عادية، مشتقة منها
             final Map<String, String> fm = m;
             final Map<String, String> fnm = nm;
             try {
                 DictionaryPacks.read(ctx, pack, (plain, shaped) -> {
                     st[0]++;
+                    if (plain.equals(shaped)) { // كلمة عادية: تُعالَج في الخطوة الثانية بعد اكتمال كل المكتبات المشكولة
+                        if (WordVerifier.acceptPlain(plain)) st[4]++;
+                        else {
+                            st[2]++;
+                            bad[0]++;
+                        }
+                        return;
+                    }
                     if (!WordVerifier.acceptEntry(plain, shaped)) {
                         st[2]++;
                         bad[0]++;
@@ -135,12 +147,58 @@ final class TashkeelDict {
             } catch (Throwable ignored) {
                 // مكتبة غير موجودة أو تالفة: نتجاوزها ويبقى ما حُمِّل من غيرها
             }
-            DictionaryPacks.recordStats(pack.id, st[0], st[1], st[2], st[3]);
+            statsById.put(pack.id, st);
+            if (st[4] > 0) withPlain.add(pack);
+            DictionaryPacks.recordStats(pack.id, st[0], st[1], st[2], st[3], st[4], st[5]);
         }
         rejected = bad[0];
         norm = nm;
         map = m;
         READY.countDown();
+        // الخطوة الثانية: الكلمات العادية المستوردة. القاموس المشكول صار منشورًا، فنشتق منه تشكيل كل كلمة عادية يمكن تشكيلها بيقين
+        if (!withPlain.isEmpty()) expandPlainWords(ctx, withPlain, statsById, m);
+    }
+
+    /** أقصى زمن لاشتقاق الكلمات العادية في كل دمج (حماية لقوائم ضخمة جدًا؛ ما لم يُعالَج يبقى كلمات عادية). */
+    private static final long EXPAND_BUDGET_NANOS = 120L * 1_000_000_000L;
+
+    /**
+     * يمرّ على الكلمات العادية في المكتبات المفعّلة ويضيف للقاموس ما أمكن تشكيله بيقين من كلمات القاموس المشكولة
+     * (WordVerifier.deriveForDictionary: جمع، مثنى، نسبة، سوابق، ضمائر). لا يستبدل أبدًا كلمة مشكولة موجودة.
+     * ما يُضاف يدخل تدريب LetterModel (نموذج النطق) مع باقي القاموس. يُنادى داخل LOCK فقط.
+     */
+    private static void expandPlainWords(Context ctx, List<DictionaryPacks.Pack> packs,
+                                         Map<String, int[]> statsById, final Map<String, String> base) {
+        final Map<String, String> extra = new HashMap<>();
+        final long deadline = System.nanoTime() + EXPAND_BUDGET_NANOS;
+        for (DictionaryPacks.Pack pack : packs) {
+            final int[] st = statsById.get(pack.id);
+            if (st == null) continue;
+            try {
+                DictionaryPacks.read(ctx, pack, (plain, shaped) -> {
+                    if (!plain.equals(shaped)) return;
+                    if (System.nanoTime() > deadline) return;
+                    if (base.containsKey(plain) || extra.containsKey(plain)) return;
+                    String d;
+                    try {
+                        d = WordVerifier.deriveForDictionary(plain);
+                    } catch (RuntimeException e) {
+                        d = null;
+                    }
+                    if (d != null && WordVerifier.acceptEntry(plain, d)) {
+                        extra.put(plain, d);
+                        st[5]++;
+                    }
+                });
+            } catch (Throwable ignored) {
+            }
+            DictionaryPacks.recordStats(pack.id, st[0], st[1], st[2], st[3], st[4], st[5]);
+        }
+        if (extra.isEmpty()) return;
+        Map<String, String> merged = new HashMap<>(Math.max(16, (int) ((base.size() + extra.size()) / 0.75f) + 16));
+        merged.putAll(base);
+        merged.putAll(extra);
+        map = merged; // نشر دفعة واحدة؛ القاموس السابق يبقى صالحًا لمن يقرأ منه الآن
     }
 
     /** هل اكتمل التحميل (ولو كان القاموس فارغًا لغياب الملف)؟ */
