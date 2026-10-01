@@ -79,11 +79,59 @@ final class DocumentTextExtractor {
 
     private static String extractPdf(Context ctx, File file) throws IOException {
         ensurePdfBoxInitialized(ctx);
+        // المسار الأدق: نفس مستخرج القارئ الصوتي (مواضع الأحرف الفعلية، ترتيب القراءة عربيًا من اليمين، أعمدة وجداول،
+        // حذف الرأس/التذييل، التعرّف الضوئي للصفحات الممسوحة أو ذات الحروف التالفة). صفحة بصفحة حتى نصل حدّ الطول.
+        String accurate = null;
+        try {
+            accurate = extractPdfAccurate(ctx, file);
+        } catch (Throwable ignored) {
+        }
+        if (accurate != null) return truncate(accurate);
+        // احتياطي: المستخرج العادي لكن بترتيب المواضع، مع تنظيف أشكال العرض العربية والأحرف الخفية
         try (PDDocument doc = PDDocument.load(file)) {
             PDFTextStripper stripper = new PDFTextStripper();
-            String text = stripper.getText(doc);
-            return truncate(text);
+            stripper.setSortByPosition(true);
+            return truncate(cleanExtracted(stripper.getText(doc)));
         }
+    }
+
+    private static String extractPdfAccurate(Context ctx, File file) throws IOException {
+        try (PdfSpeechText.Source src = PdfSpeechText.Source.open(ctx, file)) {
+            int pages = src.pageCount();
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < pages && sb.length() < MAX_EXTRACTED_CHARS; i++) {
+                PdfSpeechText.PageText pt = src.page(i, true);
+                if (pt == null || pt.text == null || pt.text.trim().isEmpty()) continue;
+                if (sb.length() > 0) sb.append("\n\n");
+                sb.append(pt.text.trim());
+            }
+            return sb.length() == 0 ? null : sb.toString();
+        }
+    }
+
+    /** أشكال العرض العربية (ﻻ ﻣ ﷲ) -> حروفها الأصلية، وحذف التطويل والأحرف الخفية، وضبط الفراغات. */
+    private static String cleanExtracted(String raw) {
+        if (raw == null) return null;
+        String t = raw;
+        boolean presentation = false;
+        for (int i = 0; i < t.length(); i++) {
+            char c = t.charAt(i);
+            if ((c >= 0xFB50 && c <= 0xFDFF) || (c >= 0xFE70 && c <= 0xFEFF) || (c >= 0xFB00 && c <= 0xFB06)) {
+                presentation = true;
+                break;
+            }
+        }
+        if (presentation) t = java.text.Normalizer.normalize(t, java.text.Normalizer.Form.NFKC);
+        StringBuilder sb = new StringBuilder(t.length());
+        for (int i = 0; i < t.length(); i++) {
+            char c = t.charAt(i);
+            if ((c >= 0x200B && c <= 0x200F) || (c >= 0x202A && c <= 0x202E) || (c >= 0x2066 && c <= 0x2069)
+                    || c == 0xFEFF || c == 0x00AD || c == 0x0640 || (c >= 0xE000 && c <= 0xF8FF)) {
+                continue;
+            }
+            sb.append(c);
+        }
+        return sb.toString().replaceAll("[ \\t]+", " ").replaceAll("\\n{3,}", "\n\n");
     }
 
     private static String extractPlainText(File file) throws IOException {

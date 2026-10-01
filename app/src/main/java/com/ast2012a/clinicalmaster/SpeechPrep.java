@@ -715,7 +715,8 @@ final class SpeechPrep {
     }
 
     private static boolean isSpace(char c) {
-        return Character.isWhitespace(c) || c == '\u00A0' || c == '\u202F' || c == '\u2007';
+        // \u200C (ZWNJ): كثيرًا ما يفصل بين كلمتين في ملفات الـ PDF؛ حذفه بصمت كان يلصق الكلمتين فيفوتهما القاموس
+        return Character.isWhitespace(c) || c == '\u00A0' || c == '\u202F' || c == '\u2007' || c == '\u200C';
     }
 
     // ------------------------------------------------------------------ الكلمة الواحدة
@@ -1834,18 +1835,89 @@ final class SpeechPrep {
     }
 
     private static String diacritize(String p) {
-        if (p.length() < 2 || !isPlainArabicWord(p)) return p;
+        if (p.length() < 2) return p;
+        if (!isPlainArabicWord(p)) return completePartlyVoweled(p); // كلمة فيها شدّة/تنوين وحدهما: كانت تتجاوز القاموس كليًّا
         String r = p.length() <= 14 ? diacritizeCore(p) : p;
         if (assist && r.equals(p)) {
-            String lx = ArabicPhonetics.lookup(p); // مصطلحات طبية/علاجية بتشكيل كامل
-            if (lx != null) {
-                r = lx;
-            } else {
-                String td = TashkeelDict.lookup(p); // قاموس تشكيل محلي مبني من مدوّنة عربية (اختياري)
-                if (td != null) r = td;
-            }
+            String full = dictForm(p);
+            if (full != null) r = full;
         }
         return hamzaAfterAl(r);
+    }
+
+    /** صيغة الكلمة المجرّدة من القواميس (مصطلحات طبية ثم القاموس المحلي)، أو null لو لا توجد. */
+    private static String dictForm(String plain) {
+        String lx = ArabicPhonetics.lookup(plain); // مصطلحات طبية/علاجية بتشكيل كامل
+        if (lx != null) return lx;
+        return TashkeelDict.lookup(plain); // قاموس تشكيل محلي مبني من مدوّنة عربية (اختياري)
+    }
+
+    /**
+     * كلمة عربية فيها علامات قليلة فقط (شدّة وحدها، كسرة وحدها، تنوين...) كما تخرج من كثير من ملفات الـ PDF.
+     * كانت تُترك كما هي لأنها "ليست مجرّدة" فلا يُستعمل القاموس معها أبدًا. الآن نبحث عن صيغتها الكاملة بلا علاماتها،
+     * ولا نقبل صيغة القاموس إلا لو احتوت كل علامة موجودة في مكانها (فلا نخالف الملف). الكلمة المشكولة بكثافة تبقى كما هي.
+     */
+    private static String completePartlyVoweled(String p) {
+        if (!assist) return p;
+        int marks = 0;
+        StringBuilder bare = new StringBuilder(p.length());
+        for (int i = 0; i < p.length(); i++) {
+            char c = p.charAt(i);
+            if (ArabicPhonetics.isMark(c)) {
+                marks++;
+            } else if (c >= 0x0621 && c <= 0x064A) {
+                bare.append(c);
+            } else {
+                return p; // رقم أو رمز أو حرف غير عربي: لا نمسّها
+            }
+        }
+        if (marks == 0 || marks > 2 || bare.length() < 3) return p;
+        String b = bare.toString();
+        String full = p.length() <= 14 ? diacritizeCore(b) : b;
+        if (full.equals(b)) {
+            String f = dictForm(b);
+            if (f == null) return p;
+            full = f;
+        }
+        if (!marksFitIn(p, full)) return p;
+        return hamzaAfterAl(full);
+    }
+
+    /** كل علامة في "part" موجودة على نفس الحرف في "full"، وحروفهما واحدة (الهمزات متسامح فيها). */
+    private static boolean marksFitIn(String part, String full) {
+        List<String> a = letterMarks(part);
+        List<String> b = letterMarks(full);
+        if (a.size() != b.size()) return false;
+        for (int i = 0; i < a.size(); i++) {
+            String x = a.get(i);
+            String y = b.get(i);
+            if (alefLike(x.charAt(0)) != alefLike(y.charAt(0))) return false;
+            if (!alefLike(x.charAt(0)) && x.charAt(0) != y.charAt(0)) return false;
+            for (int k = 1; k < x.length(); k++) if (y.indexOf(x.charAt(k)) < 0) return false;
+        }
+        return true;
+    }
+
+    private static boolean alefLike(char c) {
+        return c == '\u0627' || c == '\u0623' || c == '\u0625' || c == '\u0622' || c == '\u0671';
+    }
+
+    /** [حرف + علاماته] لكل حرف في الكلمة. */
+    private static List<String> letterMarks(String w) {
+        List<String> out = new ArrayList<>();
+        StringBuilder cur = null;
+        for (int i = 0; i < w.length(); i++) {
+            char c = w.charAt(i);
+            if (ArabicPhonetics.isMark(c)) {
+                if (cur != null) cur.append(c);
+            } else {
+                if (cur != null) out.add(cur.toString());
+                cur = new StringBuilder();
+                cur.append(c);
+            }
+        }
+        if (cur != null) out.add(cur.toString());
+        return out;
     }
 
     /** الأعصاب / الإصابة / بالألم: سكون على لام "ال" ليُنطق الهمز بوضوح (الْأعصاب) لا "ال أ" مفصولة. */

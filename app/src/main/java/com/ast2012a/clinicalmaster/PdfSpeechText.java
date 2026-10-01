@@ -156,8 +156,10 @@ final class PdfSpeechText {
                 }
                 if (mode != PdfOcr.MODE_OFF) {
                     final boolean garbled = looksGarbled(words);
+                    // طبقة نص "سليمة الشكل" لكن حروفها خاطئة (خط بلا ترميز Unicode صحيح): القاموس يكشفها
+                    final boolean dictBad = !garbled && !words.isEmpty() && dictionaryRejects(words);
                     final boolean need;
-                    if (mode == PdfOcr.MODE_ALWAYS || garbled) need = true;
+                    if (mode == PdfOcr.MODE_ALWAYS || garbled || dictBad) need = true;
                     else if (words.isEmpty()) need = PdfOcr.pageLooksScanned(doc, pageIndex);
                     else need = words.size() < MIN_BODY_WORDS_FOR_TEXT_LAYER && PdfOcr.pageLooksScanned(doc, pageIndex);
                     if (need) {
@@ -165,7 +167,8 @@ final class PdfSpeechText {
                         if (ocr != null && !ocr.isEmpty()) {
                             List<Word> filtered = dropRunningHeadersFooters(ocr);
                             if (words.isEmpty() || garbled || mode == PdfOcr.MODE_ALWAYS
-                                    || letterCount(filtered) > letterCount(words) * 3 / 2) {
+                                    || letterCount(filtered) > letterCount(words) * 3 / 2
+                                    || (dictBad && dictionaryKnownRatio(filtered) > dictionaryKnownRatio(words) + 0.15)) {
                                 words = filtered;
                             }
                             // الصفحات المجاورة لصفحة ممسوحة غالبًا ممسوحة أيضًا: نجهّز التالية في الخلفية
@@ -207,6 +210,46 @@ final class PdfSpeechText {
             }
         }
         return total > 0 && bad * 100 / total >= 8;
+    }
+
+    /** كلمة عربية خالصة (3 أحرف فأكثر) بلا تشكيل ولا ترقيم على أطرافها، أو null لو فيها رقم/حرف لاتيني/رمز. */
+    private static String arabicBare(String t) {
+        if (t == null) return null;
+        StringBuilder sb = new StringBuilder(t.length());
+        int n = t.length();
+        int a = 0;
+        int b = n;
+        while (a < b && !Character.isLetter(t.charAt(a))) a++;
+        while (b > a && !Character.isLetter(t.charAt(b - 1)) && !ArabicPhonetics.isMark(t.charAt(b - 1))) b--;
+        for (int i = a; i < b; i++) {
+            char c = t.charAt(i);
+            if (ArabicPhonetics.isMark(c)) continue;
+            char u = SpeechAuditor.unifyLetter(c);
+            if (u < 0x0621 || u > 0x064A) return null;
+            sb.append(u);
+        }
+        return sb.length() >= 3 ? sb.toString() : null;
+    }
+
+    /** نسبة الكلمات العربية الموجودة في القاموس (0..1)، أو -1 لو العيّنة قليلة أو القاموس غير جاهز. لا يحجب الخيط. */
+    private static double dictionaryKnownRatio(List<Word> words) {
+        if (!TashkeelDict.isReady() || TashkeelDict.size() < 5000) return -1;
+        int total = 0;
+        int known = 0;
+        for (Word w : words) {
+            String b = arabicBare(w.text);
+            if (b == null) continue;
+            total++;
+            if (WordVerifier.isKnown(b)) known++;
+            if (total >= 250) break;
+        }
+        return total < 25 ? -1 : (double) known / total;
+    }
+
+    /** الصفحة عربية بما يكفي لكن أقل من 12% من كلماتها معروفة للقاموس: غالبًا حروف مشوَّهة، لا مصطلحات نادرة. */
+    private static boolean dictionaryRejects(List<Word> words) {
+        double r = dictionaryKnownRatio(words);
+        return r >= 0 && r < 0.12;
     }
 
     private static int letterCount(List<Word> words) {

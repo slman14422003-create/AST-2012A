@@ -626,7 +626,7 @@ final class PdfSpeaker {
                 // قاموس التشكيل يُحمَّل في الخلفية؛ ننتظره (على خيط io لا الرئيسي) قبل تجهيز أول جملة،
                 // وإلا تُنطق الجمل الأولى (وتُخزَّن أصواتها المجهّزة مسبقًا) بلا تشكيل القاموس.
                 try {
-                    if (!TashkeelDict.isReady()) TashkeelDict.awaitReady(4000);
+                    if (!TashkeelDict.isReady()) TashkeelDict.awaitReady(20000); // الهواتف الأبطأ تحتاج أكثر من 4 ثوانٍ لدمج 214 ألف كلمة
                 } catch (Throwable ignored) {
                 }
                 loadPageOnIo(startPage, sess, 0, 0);

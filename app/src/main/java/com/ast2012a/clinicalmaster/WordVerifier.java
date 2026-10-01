@@ -477,6 +477,19 @@ final class WordVerifier {
 
     /** يطابق كلمة عربية مجرّدة (حروف فقط بلا تشكيل) ويُعيد أفضل تشكيل مدقَّق، أو NONE. لا يحدّث العدّادات. */
     static Match match(String plain) {
+        return match(plain, true);
+    }
+
+    /**
+     * هل الكلمة (مجرّدة، 3 أحرف فأكثر) موجودة في القاموس بأي صورة مدقَّقة (متعلَّمة/حرفية/موحَّدة/مشتقة/بسوابق/بلواحق)؟
+     * لا تحدّث العدّادات ولا تحسب تنبّؤ LetterModel "وجودًا". تُستعمل للحكم على جودة النص المستخرج من الـ PDF.
+     */
+    static boolean isKnown(String plain) {
+        Match m = match(plain, false);
+        return m.found() && m.kind != Kind.PREDICTED;
+    }
+
+    private static Match match(String plain, boolean allowPredict) {
         if (plain == null || plain.length() < 3) return NONE;
         Hit h = lookupStem(plain);
         if (h != null) return new Match(h.shaped, h.kind, plain);
@@ -503,6 +516,7 @@ final class WordVerifier {
             }
         }
         // الملاذ الأخير: الذكاء المحلي يتنبأ حرفًا حرفًا مما تعلّمه من القاموس (بثقة عالية وقواعد نطق، وإلا لا شيء)
+        if (!allowPredict) return NONE;
         try {
             String guess = LetterModel.predict(plain);
             if (guess != null && accept(plain, guess)) return new Match(guess, Kind.PREDICTED, null);
