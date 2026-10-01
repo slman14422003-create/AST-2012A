@@ -7,6 +7,7 @@ import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -19,6 +20,10 @@ import java.util.List;
  * الحركات، أمثلة، وتنبيه لمنع الخلط)، ثم الحركات والعلامات والحالات الخاصة (شدّة، تنوين، مدود، تاء مربوطة...).
  * زرّا "استمع" و"اقرأ الشرح" يقرآن الدرس بنفس صوت القارئ (الصوت العصبي الأونلاين).
  * البيانات كلها من {@link ArabicLetters}، وهو نفسه ما تعتمد عليه القراءة الصوتية لنطق الحروف المنفردة.
+ *
+ * "مختبر النطق": يربط القاموس بالذكاء المحلي. يكتب المستخدم كلمة أو جملة فيحلّلها {@link SentenceShaper} و{@link LetterModel}
+ * بالطريقة نفسها التي يحلّل بها القارئ نص الـ PDF قبل النطق (ويبيّن مصدر كل قرار)، ثم يستمع، ويصحّح ما أخطأ فيه فيتعلّم النظام
+ * من تصحيحه (بحسب موقع الكلمة في الجملة). وفي تفاصيل كل حرف يظهر ما تعلّمه النموذج عن هذا الحرف من آلاف الكلمات المشكولة.
  */
 final class LetterDictionaryDialog {
 
@@ -55,6 +60,8 @@ final class LetterDictionaryDialog {
         LinearLayout content = vbox();
         content.addView(text("اضغط على أي حرف لتفاصيل مخرجه وصفاته وطريقة نطقه الصحيحة، ثم استمع إليه.",
                 13f, R.color.text_secondary, false));
+
+        content.addView(labCard());
 
         content.addView(sectionTitle("الحروف من الألف إلى الياء"));
         final int perRow = 4;
@@ -149,6 +156,7 @@ final class LetterDictionaryDialog {
         }
         field(c, "أمثلة", ex.toString());
         field(c, "تنبيه للنطق الصحيح", l.tip);
+        field(c, "ما تعلّمه الذكاء المحلي عن هذا الحرف", LetterModel.profile(l.ch));
 
         present("حرف " + stripMarks(l.name), wrapScroll(c),
                 "التالي", () -> showLetter(i + 1),
@@ -185,6 +193,194 @@ final class LetterDictionaryDialog {
         present(s.title, wrapScroll(c),
                 "التالي", () -> showSpecial(i + 1),
                 "السابق", () -> showSpecial(i - 1), "القائمة", this::showIndex);
+    }
+
+    // ------------------------------------------------------------------ مختبر النطق
+
+    private String labText = "";
+
+    private View labCard() {
+        LinearLayout card = new LinearLayout(act);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(14), dp(12), dp(14), dp(12));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius(dp(14));
+        bg.setColor(act.getColor(R.color.glass_fill));
+        bg.setStroke(dp(1), act.getColor(R.color.primary_cyan));
+        card.setBackground(bg);
+        card.addView(text("مختبر النطق", 16f, R.color.primary_cyan, true));
+        card.addView(text("جرّب كلمة أو جملة: ترى كيف يحلّلها القارئ قبل النطق، وتصحّح ما أخطأ فيه ليتعلّم.",
+                12.5f, R.color.text_secondary, false));
+        card.setClickable(true);
+        card.setOnClickListener(v -> showLab());
+        Ui.applyPressFeedback(card);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = dp(14);
+        card.setLayoutParams(lp);
+        return card;
+    }
+
+    private EditText input(String hint, boolean multi, String initial) {
+        EditText e = new EditText(act);
+        e.setBackgroundResource(R.drawable.bg_input_field);
+        e.setHint(hint);
+        e.setHintTextColor(act.getColor(R.color.text_tertiary));
+        e.setTextColor(act.getColor(R.color.text_primary));
+        e.setTextSize(16f);
+        e.setTextDirection(View.TEXT_DIRECTION_RTL);
+        e.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+        if (multi) {
+            e.setMinLines(2);
+            e.setGravity(Gravity.TOP | Gravity.START);
+        } else {
+            e.setSingleLine(true);
+        }
+        e.setPadding(dp(14), dp(12), dp(14), dp(12));
+        if (initial != null && !initial.isEmpty()) e.setText(initial);
+        return e;
+    }
+
+    private LinearLayout buttonRow(View... views) {
+        LinearLayout btns = new LinearLayout(act);
+        btns.setOrientation(LinearLayout.HORIZONTAL);
+        btns.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+        btns.setGravity(Gravity.CENTER);
+        for (View v : views) {
+            LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            bp.leftMargin = dp(6);
+            bp.rightMargin = dp(6);
+            btns.addView(v, bp);
+        }
+        return btns;
+    }
+
+    private void showLab() {
+        if (act.isFinishing() || act.isDestroyed()) return;
+        LinearLayout c = vbox();
+        c.addView(text("اكتب كلمة أو جملة بلا تشكيل (أو بتشكيل ناقص). يحلّلها الذكاء المحلي بالطريقة نفسها التي يحلّل بها "
+                + "القارئ نص الـ PDF قبل النطق، ويبيّن مصدر كل قرار.", 13f, R.color.text_secondary, false));
+
+        final EditText in = input("مثال: هو علم الأمر، وقرأت في علم الطب", true, labText);
+        LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        ilp.topMargin = dp(12);
+        c.addView(in, ilp);
+
+        final TextView result = text("", 14f, R.color.text_primary, false);
+        result.setLineSpacing(0f, 1.25f);
+        result.setTextIsSelectable(true);
+
+        c.addView(buttonRow(
+                pill("حلّل", true, () -> {
+                    labText = in.getText().toString();
+                    analyze(labText, result);
+                }),
+                pill("استمع", false, () -> {
+                    labText = in.getText().toString();
+                    if (!labText.trim().isEmpty()) play(labText.trim());
+                })), topMargin(12));
+
+        LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        rlp.topMargin = dp(12);
+        c.addView(result, rlp);
+
+        c.addView(sectionTitle("علّمه النطق الصحيح"));
+        c.addView(text("اكتب الكلمة التي أخطأ فيها بتشكيلها الصحيح (مثل: عَلِمَ). تُحفظ لموضعها في الجملة (اسم بعد حرف جر "
+                + "أو فعل بعد ضمير...) ويتعلّم منها نموذج الحروف.", 12.5f, R.color.text_secondary, false));
+        final EditText fix = input("الكلمة بتشكيلها الصحيح", false, "");
+        LinearLayout.LayoutParams flp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        flp.topMargin = dp(10);
+        c.addView(fix, flp);
+        c.addView(buttonRow(pill("علّمه", true, () -> {
+            labText = in.getText().toString();
+            String shaped = fix.getText().toString().trim();
+            String done = shaped.isEmpty() ? null : SentenceShaper.teach(labText, shaped);
+            if (done == null) {
+                Toast.makeText(act, "اكتب الكلمة بتشكيلها الصحيح وتأكد أنها موجودة في الجملة أعلاه.",
+                        Toast.LENGTH_LONG).show();
+                return;
+            }
+            Toast.makeText(act, done, Toast.LENGTH_LONG).show();
+            fix.setText("");
+            analyze(labText, result);
+        })), topMargin(10));
+
+        c.addView(sectionTitle("نموذج الحروف"));
+        final boolean on = DictionaryPacks.isPredictEnabled(act);
+        c.addView(text(on
+                ? "التنبؤ الحرفي مفعّل: كلمة غير موجودة في أي مكتبة يشكّلها النموذج حرفًا حرفًا مما تعلّمه (بثقة عالية فقط)."
+                : "التنبؤ الحرفي متوقف: تعمل ذاكرة السياق وتعلّمك دائمًا، أما تشكيل الكلمات الجديدة حرفًا حرفًا فيحتاج تفعيله "
+                + "(دقته المقيسة نحو 83% على ما يجرؤ على تشكيله، فهو اختياري).", 12.5f, R.color.text_secondary, false));
+        c.addView(buttonRow(pill(on ? "إيقاف التنبؤ الحرفي" : "تفعيل التنبؤ الحرفي", false, () -> {
+            DictionaryPacks.setPredictEnabled(act, !on);
+            Toast.makeText(act, "جارٍ تحديث النموذج...", Toast.LENGTH_SHORT).show();
+            TashkeelDict.reloadAsync(act, () -> act.runOnUiThread(() -> {
+                if (!act.isFinishing() && !act.isDestroyed()) showLab();
+            }));
+        })), topMargin(10));
+        c.addView(text(SentenceShaper.stats() + "\n" + LetterModel.stats(), 11f, R.color.text_tertiary, false),
+                topMargin(14));
+
+        present("مختبر النطق", wrapScroll(c), null, null, null, null, "القائمة", this::showIndex);
+        if (!labText.trim().isEmpty()) analyze(labText, result);
+    }
+
+    private LinearLayout.LayoutParams topMargin(int dpValue) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = dp(dpValue);
+        return lp;
+    }
+
+    /** يحلّل النص في خيط خلفي بنفس مسار القارئ ويعرض النتيجة. */
+    private void analyze(final String text, final TextView result) {
+        final String t = text == null ? "" : text.trim();
+        if (t.isEmpty()) {
+            Toast.makeText(act, "اكتب كلمة أو جملة أولًا.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        result.setText("جارٍ التحليل...");
+        new Thread(() -> {
+            String report;
+            try {
+                report = buildReport(t);
+            } catch (Throwable e) {
+                report = "تعذّر التحليل.";
+            }
+            final String r = report;
+            act.runOnUiThread(() -> {
+                if (!act.isFinishing() && !act.isDestroyed()) result.setText(r);
+            });
+        }, "letter-lab").start();
+    }
+
+    private static String buildReport(String text) {
+        List<String[]> rows;
+        String spoken;
+        SentenceShaper.beginCapture();
+        try {
+            spoken = SpeechPrep.prepare(EdgeTtsClient.sanitize(text), "ar", "en", false).text;
+        } finally {
+            rows = SentenceShaper.endCapture();
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append("ما سيقرؤه:\n").append(spoken).append("\n\nكيف قرّر لكل كلمة:\n");
+        String unknown = null;
+        for (String[] r : rows) {
+            sb.append("• ").append(r[0]);
+            if (!r[0].equals(r[1])) sb.append("  ←  ").append(r[1]);
+            sb.append("\n   ").append(r[2]).append('\n');
+            if (unknown == null && r[2].startsWith("بلا تشكيل")) unknown = stripMarks(r[0]);
+        }
+        if (unknown != null && unknown.length() >= 3 && LetterModel.isTrained()) {
+            sb.append("\nكيف يفهم النموذج «").append(unknown).append("» حرفًا حرفًا:\n")
+                    .append(LetterModel.describe(unknown));
+        }
+        return sb.toString().trim();
     }
 
     // ------------------------------------------------------------------ الصوت

@@ -79,8 +79,12 @@ final class TashkeelDict {
             Map<String, String> m = map;
             if (m == null) return;
             // التنبؤ اختياري ومتوقف افتراضيًا: لا نُدرّب (ولا نستهلك ذاكرة) إلا لو فعّله المستخدم
-            if (LetterModel.isEnabled()) LetterModel.train(m.values());
-            else LetterModel.releaseBase();
+            if (LetterModel.isEnabled()) {
+                LetterModel.train(m.values());
+            } else {
+                LetterModel.releaseBase();
+                LetterModel.trainStatsOnly(m.values()); // إحصاء الحروف فقط (لقاموس الحروف) بلا جداول التنبؤ
+            }
         } catch (Throwable ignored) {
             // فشل التدريب (ذاكرة مثلًا): يبقى القاموس يعمل بالبحث المباشر كما كان
         }

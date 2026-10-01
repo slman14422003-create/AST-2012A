@@ -287,6 +287,15 @@ final class SpeechLearner {
         if (key(bare(v)).equals(k)) feedLetterModel(v, 6);
     }
 
+    /** هل علّم المستخدم هذه الكلمة نطقًا بعينه؟ (لا يتدخل التحليل السياقي في الكلمات المعلَّمة.) */
+    static boolean isTaught(String word) {
+        String k = key(bare(word == null ? "" : word));
+        if (k.isEmpty()) return false;
+        synchronized (LOCK) {
+            return taught.containsKey(k);
+        }
+    }
+
     static void forget(String word) {
         String k = key(bare(word == null ? "" : word));
         synchronized (LOCK) {

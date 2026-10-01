@@ -90,6 +90,12 @@ final class LetterModel {
     private static final Map<Integer, int[]> user = new HashMap<>();
     private static int userWords = 0;
     private static volatile int predictions = 0;
+    /** عدد الحروف المرمَّزة (1..42) + صفر. */
+    private static final int NLETTER = 43;
+    /** إحصاء ما يتبع كل حرف في القاموس (للعرض في قاموس الحروف). */
+    private static volatile long[][] letterStats = null;
+    /** إحصاء ما تعلّمه المستخدم (بوزن التعليم). */
+    private static final long[][] userLetterStats = new long[NLETTER][NCLASS];
     private static volatile int rejectedByPhonotactics = 0;
 
     static void setEnabled(boolean on) {
@@ -374,7 +380,7 @@ final class LetterModel {
 
     // ------------------------------------------------------------------ التدريب من القاموس
 
-    private static void addSample(Table t, Sample s) {
+    private static void addSample(Table t, Sample s, long[][] ls) {
         int[] ks = new int[NCTX];
         int c1 = C_START;
         int c2 = C_START;
@@ -382,6 +388,7 @@ final class LetterModel {
         for (int i = 0; i < s.n - 1; i++) {
             keys(s.l, s.n, i, c1, c2, ks);
             for (int k = 0; k < NCTX; k++) t.add(ks[k], s.c[i]);
+            if (ls != null && s.l[i] > 0 && s.l[i] < NLETTER) ls[s.l[i]][s.c[i]]++;
             c2 = c1;
             c1 = s.c[i];
         }
@@ -394,15 +401,34 @@ final class LetterModel {
     static void train(Iterable<String> shapedWords) {
         if (shapedWords == null) return;
         Tables t = new Tables();
+        long[][] ls = new long[NLETTER][NCLASS];
         int words = 0;
         for (String w : shapedWords) {
             Sample s = parse(w, true);
             if (s == null || s.n > MAX_LEN + 2) continue;
-            addSample(t.t, s);
+            addSample(t.t, s, ls);
             words++;
         }
         trainedWords = words;
+        letterStats = ls;
         base = t;
+    }
+
+    /**
+     * يبني إحصاء ما يتبع كل حرف فقط (لعرضه في قاموس الحروف) بلا جداول التنبؤ، فلا يستهلك ذاكرة التنبؤ المتوقف افتراضيًا.
+     * خفيف: مرور واحد على الكلمات المشكولة.
+     */
+    static void trainStatsOnly(Iterable<String> shapedWords) {
+        if (shapedWords == null) return;
+        long[][] ls = new long[NLETTER][NCLASS];
+        for (String w : shapedWords) {
+            Sample s = parse(w, true);
+            if (s == null || s.n > MAX_LEN + 2) continue;
+            for (int i = 0; i < s.n - 1; i++) {
+                if (s.l[i] > 0 && s.l[i] < NLETTER) ls[s.l[i]][s.c[i]]++;
+            }
+        }
+        letterStats = ls;
     }
 
     // ------------------------------------------------------------------ طبقة المستخدم (تكيّف)
@@ -419,6 +445,7 @@ final class LetterModel {
             for (int i = 0; i < s.n - 1; i++) {
                 keys(s.l, s.n, i, c1, c2, ks);
                 for (int k = 0; k < NCTX; k++) addUser(ks[k], s.c[i], w);
+                if (s.l[i] > 0 && s.l[i] < NLETTER) userLetterStats[s.l[i]][s.c[i]] += w;
                 c2 = c1;
                 c1 = s.c[i];
             }
@@ -440,6 +467,7 @@ final class LetterModel {
         synchronized (USER_LOCK) {
             user.clear();
             userWords = 0;
+            for (long[] r : userLetterStats) java.util.Arrays.fill(r, 0L);
         }
     }
 
@@ -500,6 +528,14 @@ final class LetterModel {
 
     /** أفضل مسارات الأصناف لكلمة (أحرفها l) بعد تطبيق قواعد النطق، مرتبة تنازليًا. null لو لا دعم. */
     private static List<Path> search(Tables t, int[] l, int m) {
+        return search(t, l, m, null);
+    }
+
+    /**
+     * بحث شعاعي مع قيود: allowed[i] = قناع أصناف مسموحة للحرف i (-1 = حرّ). حرف له صنف واحد مسموح هو علامة مثبَّتة
+     * من الملف: لا يدخل في ثقة المسار ولا يُقصى بقلّة الدعم.
+     */
+    private static List<Path> search(Tables t, int[] l, int m, int[] allowed) {
         List<Path> beam = new ArrayList<>();
         Path start = new Path(m);
         start.lp = 0;
@@ -512,13 +548,18 @@ final class LetterModel {
                 int c1 = i >= 1 ? p.c[i - 1] : C_START;
                 int c2 = i >= 2 ? p.c[i - 2] : C_START;
                 keys(l, m, i, c1, c2, ks);
-                if (!dist(t, ks, d)) continue;
+                int mask = allowed == null ? -1 : allowed[i];
+                boolean pinned = mask != -1 && Integer.bitCount(mask) == 1;
+                boolean has = dist(t, ks, d);
+                if (!has && !pinned) continue;
                 for (int c = 0; c < NCLASS; c++) {
-                    if (d.p[c] < 0.04f) continue;
+                    if ((mask & (1 << c)) == 0) continue;
+                    float pc = has ? d.p[c] : 0.5f;
+                    if (!pinned && pc < 0.04f) continue;
                     Path q = new Path(m);
                     System.arraycopy(p.c, 0, q.c, 0, i);
                     q.c[i] = c;
-                    q.lp = p.lp + Math.log(d.p[c]);
+                    q.lp = p.lp + (pinned ? 0.0 : Math.log(pc));
                     next.add(q);
                 }
             }
@@ -655,6 +696,150 @@ final class LetterModel {
         if (!WordVerifier.sameLetters(plain, out) || !WordVerifier.wellFormed(out)) return null;
         predictions++;
         return new Prediction(out, conf);
+    }
+
+    // ------------------------------------------------------------------ إكمال كلمة مشكولة جزئيًا
+
+    /** ثقة الإكمال: أقل من ثقة التنبؤ المجرّد لأن علامات الملف المثبّتة تقيّد الاحتمالات. */
+    private static final float COMPLETE_CONF = 0.70f;
+
+    /**
+     * كلمة مشكولة جزئيًا (كما تخرج من كثير من ملفات الـ PDF): يكمل العلامات الناقصة وحدها ويحترم كل علامة موجودة
+     * (تبقى كما هي على حرفها). null لو النموذج غير جاهز أو غير واثق أو كان الناتج مستحيلًا نطقًا.
+     * مثل التنبؤ: متوقف ما لم يفعّله المستخدم، ولا يلمس آخر الكلمة.
+     */
+    static String complete(String partial) {
+        if (!enabled || partial == null) return null;
+        Tables t = base;
+        if (t == null) return null;
+        int cap = partial.length();
+        int[] all = new int[cap];
+        char[] raw = new char[cap];
+        boolean[] sh = new boolean[cap];
+        char[] vw = new char[cap];
+        int n = -1;
+        for (int i = 0; i < partial.length(); i++) {
+            char ch = partial.charAt(i);
+            if (ArabicPhonetics.isMark(ch)) {
+                if (n < 0) return null;
+                if (ch == SHADDA) sh[n] = true;
+                else if (ch == FATHA || ch == DAMMA || ch == KASRA || ch == SUKUN || (ch >= FATHATAN && ch <= KASRATAN)) vw[n] = ch;
+                else return null; // علامة أخرى (ألف خنجرية، مدّة...): لا نخمّن حولها
+                continue;
+            }
+            if (ch == '\u0640') continue;
+            int k = idx(ch);
+            if (k <= 0) return null;
+            raw[++n] = ch;
+            all[n] = k;
+        }
+        n++;
+        if (n < MIN_LEN || n > MAX_LEN + 2) return null;
+        int from = 0;
+        boolean article = false;
+        if (n >= 5 && letterOf(all[0]) == ALEF && letterOf(all[1]) == LAM) {
+            from = 2;
+            article = true;
+        }
+        int m = n - from;
+        if (m < MIN_LEN) return null;
+        int[] l = new int[m];
+        int[] allowed = new int[m];
+        System.arraycopy(all, from, l, 0, m);
+        for (int i = 0; i < m; i++) {
+            int j = from + i;
+            boolean shadda = sh[j];
+            // شدّة الإدغام بعد \"ال\" الشمسية ليست من الجذر (كما في التدريب)
+            if (i == 0 && article && ArabicLetters.isSun(raw[j]) && shadda) shadda = false;
+            if (vw[j] != 0) {
+                allowed[i] = 1 << classOf(shadda, vw[j]);
+            } else if (shadda) {
+                allowed[i] = (1 << C_SH_FATHA) | (1 << C_SH_DAMMA) | (1 << C_SH_KASRA);
+            } else {
+                allowed[i] = -1;
+            }
+        }
+        List<Path> beam = search(t, l, m, allowed);
+        if (beam == null || beam.isEmpty()) return null;
+        Path best = beam.get(0);
+        float conf = (float) Math.exp(best.lp);
+        if (conf < COMPLETE_CONF) return null;
+        int[] cls = best.c.clone();
+        int last = from + m - 1;
+        cls[m - 1] = (vw[last] != 0 || sh[last]) ? classOf(sh[last], vw[last]) : C_NONE;
+        if (!phonotacticsOk(l, cls, m)) {
+            rejectedByPhonotactics++;
+            return null;
+        }
+        StringBuilder sb = new StringBuilder(n * 3);
+        if (article) {
+            boolean sun = ArabicLetters.isSun(letterOf(l[0]));
+            sb.append(raw[0]);
+            if (vw[0] != 0) sb.append(vw[0]);
+            sb.append(raw[1]);
+            if (sun) {
+                if (cls[0] >= C_FATHA && cls[0] <= C_KASRA) cls[0] += 5;
+            } else if (vw[1] == 0 && !sh[1]) {
+                sb.append(SUKUN);
+            } else {
+                if (sh[1]) sb.append(SHADDA);
+                if (vw[1] != 0) sb.append(vw[1]);
+            }
+        }
+        for (int i = 0; i < m; i++) sb.append(raw[from + i]).append(MARKS[cls[i]]);
+        String out = sb.toString();
+        if (!WordVerifier.sameLetters(partial, out) || !WordVerifier.wellFormed(out)) return null;
+        predictions++;
+        return out;
+    }
+
+    // ------------------------------------------------------------------ ما تعلّمه النموذج عن حرف
+
+    private static final String[] CLASS_NAMES = {"بلا علامة", "فتحة", "ضمة", "كسرة", "سكون", "شدّة",
+            "شدّة وفتحة", "شدّة وضمة", "شدّة وكسرة", "تنوين فتح", "تنوين ضم", "تنوين كسر"};
+
+    /**
+     * ملخص ما تعلّمه النموذج عن حرف: ما يتبعه في كلمات القاموس (وما أضافه المستخدم)، لعرضه في قاموس الحروف.
+     * null لو لم يُدرَّب النموذج بعد ولا تعلّم المستخدم شيئًا عنه. يُحسب على الحرف في غير آخر الكلمة (حيث تتغير الحركة بالإعراب).
+     */
+    static String profile(char letter) {
+        int k = idx(letter);
+        if (k <= 0 || k >= NLETTER) return null;
+        long[] row = new long[NCLASS];
+        long baseTotal = 0;
+        long[][] ls = letterStats;
+        if (ls != null) {
+            for (int c = 0; c < NCLASS; c++) {
+                row[c] = ls[k][c];
+                baseTotal += ls[k][c];
+            }
+        }
+        long userTotal = 0;
+        synchronized (USER_LOCK) {
+            for (int c = 0; c < NCLASS; c++) {
+                row[c] += userLetterStats[k][c];
+                userTotal += userLetterStats[k][c];
+            }
+        }
+        long total = baseTotal + userTotal;
+        if (total < 20) return null;
+        Integer[] order = new Integer[NCLASS];
+        for (int c = 0; c < NCLASS; c++) order[c] = c;
+        final long[] r = row;
+        java.util.Arrays.sort(order, (a, b) -> Long.compare(r[b], r[a]));
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format(Locale.ROOT, "رأى النموذج هذا الحرف %d مرة في كلمات مشكولة", baseTotal));
+        if (userTotal > 0) sb.append(String.format(Locale.ROOT, "، وأضفتَ أنت %d من ملفاتك وتعليمك", userTotal));
+        sb.append(". ما يتبعه غالبًا: ");
+        int shown = 0;
+        for (int i = 0; i < NCLASS && shown < 4; i++) {
+            int c = order[i];
+            if (row[c] * 100 < total) break; // أقل من 1%
+            if (shown > 0) sb.append(" · ");
+            sb.append(CLASS_NAMES[c]).append(String.format(Locale.ROOT, " %d%%", Math.round(100f * row[c] / total)));
+            shown++;
+        }
+        return sb.toString();
     }
 
     // ------------------------------------------------------------------ شرح حرفًا حرفًا (للتشخيص وشاشة القاموس)

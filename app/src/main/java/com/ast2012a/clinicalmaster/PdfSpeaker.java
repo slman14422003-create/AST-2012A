@@ -293,6 +293,7 @@ final class PdfSpeaker {
         SpeechPrep.setNoIrab(isNoIrab());
         try {
             SpeechLearner.init(app.getFilesDir()); // ذاكرة النطق المتعلَّمة
+            SentenceShaper.init(app.getFilesDir()); // ذاكرة السياق (تشكيل بحسب موقع الكلمة في الجملة)
         } catch (Throwable ignored) {
         }
         try {
@@ -1866,6 +1867,7 @@ final class PdfSpeaker {
     private void finishAll() {
         try {
             SpeechLearner.flush();
+            SentenceShaper.flush();
             LocalVoiceModel.flush();
         } catch (Throwable ignored) {
         }
@@ -2441,6 +2443,7 @@ final class PdfSpeaker {
     void shutdown() {
         try {
             SpeechLearner.flush();
+            SentenceShaper.flush();
             LocalVoiceModel.flush();
         } catch (Throwable ignored) {
         }

@@ -179,6 +179,7 @@ final class SpeechPrep {
         // 3-أ) الصيغة المنطوقة لكل كلمة أولًا (بلا تجميع) كي نعرف الكلمة التالية عند ضبط أواخر الكلمات
         //      (التاء المربوطة: تاء داخل الجملة وهاء عند الوقف)
         final String[] sps = new String[toks.size()];
+        final boolean[] userLocked = new boolean[toks.size()];
         {
             String pb = "";
             boolean pn = false;
@@ -200,6 +201,7 @@ final class SpeechPrep {
                 // تدقيق: لا يجوز أن يضيع حرف عربي (ك وغيرها) بين الأصل والمنطوق؛ والكاف المنفردة تُنطق باسمها
                 if (ar && !sp.isEmpty()) {
                     String ctk = clean(tok);
+                    userLocked[t] = userLex.containsKey(lexKey(bareOf(ctk))) || SpeechLearner.isTaught(ctk);
                     if (SpeechAuditor.lostLetters(ctk, sp) && !userLex.containsKey(lexKey(bareOf(ctk)))) {
                         String safe = SpeechAuditor.safeForm(ctk);
                         if (!safe.isEmpty()) sp = safe;
@@ -227,6 +229,13 @@ final class SpeechPrep {
                 pn = NUMBER.matcher(bare).matches();
                 pb = bare;
                 if (!sp.isEmpty()) fst = false;
+            }
+            // تحليل الجملة كاملة: تشكيل بحسب السياق، وإصلاح/إكمال تشكيل الـ PDF، وتعلّم من الملفات المشكولة
+            if (ar && assist) {
+                try {
+                    SentenceShaper.refine(toks, sps, userLocked);
+                } catch (RuntimeException ignored) {
+                }
             }
             if (ar && (taaMode != ArabicPhonetics.TAA_AUTO || noIrab)) shapeEndingsAll(sps, toks);
             // تدقيق: أواخر الكلمات الانفجارية (ك ق ط ب د ت ج ض) تُطلَق بسكون كي لا يبتلعها المحرك
