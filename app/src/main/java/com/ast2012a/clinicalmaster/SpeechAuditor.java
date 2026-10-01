@@ -164,6 +164,27 @@ final class SpeechAuditor {
         }
     }
 
+    /** يحذف علامات الترقيم/الأقواس من طرفي الرمز (يُبقي الحروف والتشكيل). */
+    private static String stripEdgePunct(String t) {
+        int a = 0, b = t.length();
+        while (a < b && !isWordChar(t.charAt(a)) && t.charAt(a) != TATWEEL) a++;
+        while (b > a && !isWordChar(t.charAt(b - 1)) && t.charAt(b - 1) != TATWEEL) b--;
+        return t.substring(a, b);
+    }
+
+    /**
+     * الكلمة تدل أن ما بعدها حرف/رمز يُذكر بذاته (النقطة ك، حرف ب، والنقطة ب): لا نلصقه بالكلمة التالية.
+     * يتجاوز حرف عطف/جر ملتصقًا في أولها (والنقطة).
+     */
+    static boolean isLetterContext(String tok) {
+        if (tok == null || tok.isEmpty()) return false;
+        String sk = skeleton(tok);
+        if (sk.isEmpty()) return false;
+        if (LETTER_CONTEXT.contains(sk)) return true;
+        return sk.length() > 2 && "\u0648\u0641\u0628\u0644\u0643".indexOf(sk.charAt(0)) >= 0
+                && LETTER_CONTEXT.contains(sk.substring(1));
+    }
+
     /** الرمز حرف واحد فقط (مع علامات/تطويل اختياريًا) - مثل: ك / كـ / ـك / كَ */
     private static boolean isLoneLetter(String tok) {
         return isPureArabic(tok) && skeleton(tok).length() == 1;
@@ -201,8 +222,10 @@ final class SpeechAuditor {
                     boolean leadT = cur.charAt(0) == TATWEEL;
                     boolean trailT = cur.charAt(cur.length() - 1) == TATWEEL;
                     String nextTok = k + 1 < n ? toks.get(k + 1) : null;
-                    boolean nextWord = nextTok != null && isPureArabic(nextTok) && startsWithArabicLetter(nextTok)
-                            && skeleton(nextTok).length() >= 2;
+                    // الكلمة التالية قد تلتصق بها علامة ترقيم (المعلم؟ / الجامعة،): كانت تُعدّ "ليست كلمة" فتلتصق الكاف بما قبلها خطأً
+                    String nextCore = nextTok == null ? null : stripEdgePunct(nextTok);
+                    boolean nextWord = nextCore != null && isPureArabic(nextCore) && startsWithArabicLetter(nextCore)
+                            && skeleton(nextCore).length() >= 2;
                     String pk = skeleton(prev);
                     boolean known = KAF_WORDS.contains(pk + KAF);
                     boolean back;

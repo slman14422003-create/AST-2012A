@@ -137,6 +137,7 @@ final class SpeechPrep {
         }
         // 1-ب) فواصل ملتصقة/مقلوبة وعلامات تشكيل منفصلة (تخرج هكذا من بعض ملفات الـ PDF)
         repairPunctuation(starts, toks);
+        mergeBracketCitations(starts, toks);
         // 1-ج) تدقيق: كاف/"ال" منفصلة عن كلمتها (ذل ك / ـك / ال ك تاب) تُوصل قبل النطق فلا تضيع
         if (ar) SpeechAuditor.mergeDetached(starts, toks);
 
@@ -153,6 +154,12 @@ final class SpeechPrep {
                     String nx = toks.get(k + 1);
                     int mode = glueMode(clean(cur), clean(nx), run);
                     if (mode == 0) break;
+                    // حرف منفرد (ب/ل/ك) بعد كلمة تدل أنه رمز بذاته (النقطة ب، والنقطة ك): ليس حرف جر منفصلًا فلا يُلصق بما بعده
+                    if (mode == 1 && k == firstIdx && firstIdx > 0 && clean(cur).length() == 1
+                            && "\u0628\u0644\u0643".indexOf(clean(cur).charAt(0)) >= 0
+                            && SpeechAuditor.isLetterContext(toks.get(firstIdx - 1))) {
+                        break;
+                    }
                     if (mode == 2) run = true;
                     cur = cur + nx;
                     k++;
@@ -377,6 +384,36 @@ final class SpeechPrep {
     }
 
     /**
+     * مرجع بين قوسين مربعين انقسم على كلمتين أو أكثر بسبب المسافة ("[1," + "2]") يُدمج في كلمة واحدة كي يُتجاهل كله
+     * (كان يُقرأ "واحد، اثنان"). الدمج لا يغيّر مواضع بقية الكلمات الأصلية.
+     */
+    private static void mergeBracketCitations(List<Integer> starts, List<String> toks) {
+        for (int k = 0; k < toks.size(); k++) {
+            String t = toks.get(k);
+            int o = t.indexOf('[');
+            if (o < 0 || o != 0 && !(o == 1 && t.charAt(0) == '(')) continue;
+            if (o + 1 >= t.length() || !Character.isDigit(t.charAt(o + 1)) || t.indexOf(']', o) >= 0) continue;
+            int end = -1;
+            for (int j = k + 1; j < toks.size() && j <= k + 6; j++) {
+                String u = toks.get(j);
+                if (!CIT_PART.matcher(u).matches()) break;
+                if (u.indexOf(']') >= 0) {
+                    end = j;
+                    break;
+                }
+            }
+            if (end < 0) continue;
+            StringBuilder sb = new StringBuilder(t);
+            for (int j = k + 1; j <= end; j++) sb.append(toks.get(j));
+            toks.set(k, sb.toString());
+            for (int j = end; j > k; j--) {
+                toks.remove(j);
+                starts.remove(j);
+            }
+        }
+    }
+
+    /**
      * يضبط أواخر الكلمات العربية (ة/ه وسكون الأواخر) بمعرفة الكلمة التالية لكل كلمة.
      * الوقف (هاء) عند: علامة ترقيم، قوس يفتح بعد الكلمة أو يغلق عليها، كلمة غير عربية.
      * الوصل (تاء) عند: كلمة عربية تالية، أو رقم تالٍ (\"لمدة 15 دقيقة\" لا \"لمدهْ 15\").
@@ -477,7 +514,8 @@ final class SpeechPrep {
                     String fixedY = null;
                     String cj = "";
                     if (bareTok.length() == 4 && (bareTok.charAt(0) == '\u0648' || bareTok.charAt(0) == '\u0641')
-                            && (bareTok.endsWith("\u0639\u0644\u064A") || bareTok.endsWith("\u0627\u0644\u064A"))) {
+                            && (bareTok.endsWith("\u0639\u0644\u064A") || bareTok.endsWith("\u0627\u0644\u064A")
+                            || bareTok.endsWith("\u062D\u062A\u064A") || bareTok.endsWith("\u0645\u062A\u064A"))) {
                         cj = bareTok.substring(0, 1);
                         bareTok = bareTok.substring(1);
                     }
@@ -683,7 +721,11 @@ final class SpeechPrep {
     // ------------------------------------------------------------------ الكلمة الواحدة
 
     private static final Pattern NUMBER = Pattern.compile("^\\d[\\d.,]*(?:[-\u2212\u2013\u2014]\\d[\\d.,]*)?$");
-    private static final Pattern CITATION = Pattern.compile("^\\[\\d+(?:[,;\\-\u2013]\\s?\\d+)*\\][.,;:!?\u060C\u061B\u061F]*$");
+    private static final Pattern CITATION = Pattern.compile(
+            "^\\(?\\[\\d+(?:[,;\\-\u2013\u2212]\\s?\\d+)*\\](?:[\\-\u2013\u2212,]?\\[\\d+(?:[,;\\-\u2013\u2212]\\s?\\d+)*\\])*"
+                    + "[.,;:!?\u060C\u061B\u061F)\\]\"'\u00BB\u201D]*$");
+    /** جزء من مرجع مقسوم على أكثر من كلمة: [1, 2] -> "[1," + "2]". */
+    private static final Pattern CIT_PART = Pattern.compile("^[\\d,;\\-\u2013\u2212]*\\]?[.,;:!?\u060C\u061B\u061F)\\]]*$");
     private static final Pattern EMAIL = Pattern.compile("^[\\w.+\\-]+@[\\w\\-]+(?:\\.[\\w\\-]+)+$");
     private static final Pattern LIST_MARK = Pattern.compile("^[(\\[]?(\\d{1,3})[)\\].\\-\u2013\u2014:]$");
     private static final Pattern SECTION = Pattern.compile("^\\d{1,3}(?:\\.\\d{1,3}){2,4}$");
@@ -740,7 +782,7 @@ final class SpeechPrep {
         String t = clean(raw);
         if (t.isEmpty()) return "";
         String low = t.toLowerCase(Locale.ROOT);
-        if (CITATION.matcher(t).matches()) return lastPunctIn(t);
+        if (CITATION.matcher(t).matches()) return citationSpeech(t, lang);
         if (low.startsWith("http://") || low.startsWith("https://") || low.startsWith("www.")
                 || EMAIL.matcher(bareOf(t)).matches()) {
             return lastPunctIn(t); // الروابط والبريد لا تُقرأ حرفًا حرفًا
@@ -1255,7 +1297,7 @@ final class SpeechPrep {
         String low = t.toLowerCase(Locale.ROOT);
 
         // مراجع رقمية [12] [3-5]: لا تُقرأ
-        if (CITATION.matcher(t).matches()) return lastPunctIn(t);
+        if (CITATION.matcher(t).matches()) return citationSpeech(t, lang);
         // روابط وبريد
         if (low.startsWith("http://") || low.startsWith("https://") || low.startsWith("www.")) {
             return linkWord(lang) + lastPunctIn(t);
@@ -1859,6 +1901,13 @@ final class SpeechPrep {
     }
 
     /** آخر علامة ترقيم في ذيل الكلمة (تُحفظ لتبقى وقفة الجملة). */
+    /** مرجع [n] لا يُقرأ: يبقى منه علامة الترقيم التي بعده، ولو أُغلق به قوس تفسيري نترك وقفة. */
+    private static String citationSpeech(String t, String lang) {
+        String p = lastPunctIn(t);
+        if (p.isEmpty() && (t.endsWith(")"))) return pause(lang);
+        return p;
+    }
+
     private static String lastPunctIn(String s) {
         for (int i = s.length() - 1; i >= 0; i--) {
             char c = s.charAt(i);
