@@ -489,6 +489,40 @@ final class WordVerifier {
         return m.found() && m.kind != Kind.PREDICTED;
     }
 
+    /**
+     * هل هذه كلمة عادية (بلا تشكيل) صالحة كسطر في مكتبة كلمات؟ عربية خالصة من 3 إلى 24 حرفًا، بلا علامات ولا تطويل
+     * ولا رموز ولا أرقام، ولا حرف مكرر 3 مرات متتالية (حشو). تُستعمل عند دمج المكتبات المستوردة وتصديرها.
+     */
+    static boolean acceptPlain(String plain) {
+        if (plain == null) return false;
+        int n = plain.length();
+        if (n < 3 || n > 24) return false;
+        int run = 1;
+        for (int i = 0; i < n; i++) {
+            char c = plain.charAt(i);
+            if (c < 0x0621 || c > 0x064A) return false; // علامة أو تطويل أو غير عربي
+            if (i > 0 && c == plain.charAt(i - 1)) {
+                if (++run >= 3) return false;
+            } else {
+                run = 1;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * يشتق تشكيل كلمة عادية من كلمات القاموس المشكولة بيقين، أو null لو لا يمكن: جمع المؤنث السالم والمثنى والنسبة
+     * (DERIVED)، السوابق (CLITIC)، الضمائر المتصلة (SUFFIX). لا يستعمل تنبؤ LetterModel ولا ما تعلّمه SpeechLearner
+     * (تعلّم المستخدم لا يُخبَّأ في القاموس). كل نتيجة تمرّ بنفس تدقيق match (الحروف مطابقة وبنية التشكيل سليمة).
+     */
+    static String deriveForDictionary(String plain) {
+        if (!acceptPlain(plain)) return null;
+        Match m = match(plain, false);
+        if (!m.found()) return null;
+        if (m.kind != Kind.DERIVED && m.kind != Kind.CLITIC && m.kind != Kind.SUFFIX) return null;
+        return m.shaped;
+    }
+
     private static Match match(String plain, boolean allowPredict) {
         if (plain == null || plain.length() < 3) return NONE;
         Hit h = lookupStem(plain);

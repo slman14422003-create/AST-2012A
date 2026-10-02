@@ -231,6 +231,18 @@ final class SpeechPrep {
                 pb = bare;
                 if (!sp.isEmpty()) fst = false;
             }
+            // محلّل الجملة: يرى الجملة كاملة فيصلح التشكيل الفاسد/الناقص ويحسم الكلمات الملتبسة بحسب جيرانها
+            if (ar && assist) {
+                try {
+                    boolean[] locked = new boolean[toks.size()];
+                    for (int q = 0; q < locked.length; q++) {
+                        locked[q] = userLex.containsKey(lexKey(bareOf(clean(toks.get(q)))));
+                    }
+                    SentenceShaper.refine(toks, sps, locked);
+                } catch (RuntimeException ignored) {
+                    // أي خطأ: تبقى الكلمات كما جُهّزت
+                }
+            }
             if (ar && (taaMode != ArabicPhonetics.TAA_AUTO || noIrab)) shapeEndingsAll(sps, toks);
             // تدقيق: أواخر الكلمات الانفجارية (ك ق ط ب د ت ج ض) تُطلَق بسكون كي لا يبتلعها المحرك
             if (ar) {
