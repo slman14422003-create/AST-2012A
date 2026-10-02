@@ -753,8 +753,8 @@ final class ArabicPhonetics {
      * كلمة تنتهي بـ ة (بلا حركة عليها) -> نطق واضح بحسب الأسلوب:
      *  وقف : "عضلة" -> "عَضَلَهْ"   (الهاء الخفيفة كما في تجويد الوقف على تاء التأنيث)
      *  وصل : "عضلة" -> "عَضَلَتْ"   (تاء ساكنة داخل الجملة: عضلةُ الفخذ)
-     * الكلمات المشكولة صراحةً (عَضَلَةُ) لا نمسّها. وما قبل التاء إن كان واوًا/ياءً بلا شدّة نتركه للمحرك
-     * (علاجية، دعوة) حتى لا نغيّر مدّ الحرف.
+     * الكلمات المشكولة صراحةً (عَضَلَةُ) لا نمسّها. وما قبل التاء إن كان واوًا/ياءً فله معالجة موحّدة في الوصل والوقف:
+     *  علاجية -> عِلَاجِيَّتْ / عِلَاجِيَّهْ ، بداية -> بِدَايَتْ / بِدَايَهْ ، دعوة -> دَعْوَتْ / دَعْوَهْ.
      */
     static String shapeTaa(String w, boolean connected, int mode) {
         if (mode == TAA_AUTO || w == null) return w;
@@ -771,31 +771,25 @@ final class ArabicPhonetics {
             char m = prevMarks.charAt(i);
             if (m >= FATHATAN && m <= SUKUN && m != SHADDA) hasVowel = true;
         }
+        if (prev == '\u0649') return w; // ى + ة لا تجتمعان في كلمة سليمة: نتركها للمحرك
         final boolean alif = prev == '\u0627';
-        final boolean semi = prev == '\u0648' || prev == '\u064A' || prev == '\u0649';
         final boolean waqf = !connected || mode == TAA_HAA;
-        StringBuilder sb = new StringBuilder(w.length() + 2);
+        StringBuilder sb = new StringBuilder(w.length() + 3);
         sb.append(w, 0, p).append(prev).append(prevMarks);
-        if (waqf) {
-            if (semi) return w;
-            if (!alif && !hasVowel) sb.append(FATHA);
-            return sb.append(HAA).append(SUKUN).toString();
+        if (!alif) {
+            // ـية بعد حرف صامت (علاجية، سريرية): ياء النسب مشدّدة -> ـيَّتْ / ـيَّهْ.
+            // ـاية (بداية، نهاية): ياء واحدة مفتوحة. ـوة (دعوة): واو مفتوحة. والحرف قبل ة مفتوح دائمًا.
+            // نفس المعالجة في الوصل والوقف: كانت الكلمات المنتهية بـ ـية/ـوة تُترك للمحرك عند الوقف فقط
+            // فتُقرأ ة مرة وه مرة (خربطة) بينما غيرها يُضبط.
+            if (prev == '\u064A' && !hasShadda && !hasVowel) {
+                int q = p - 1;
+                while (q >= 0 && isMark(w.charAt(q))) q--;
+                boolean afterAlif = q >= 0 && w.charAt(q) == '\u0627';
+                if (!afterAlif && plainLen(w) >= 5) sb.append(SHADDA);
+            }
+            if (!hasVowel) sb.append(FATHA);
         }
-        if (semi && !hasShadda) {
-            // "طبيعية جدًا": كانت تُترك للمحرك فيقرؤها هاءً بينما غيرها تاء (خربطة). نجعلها تاءً مثل بقية الكلمات.
-            //  ـاية (بداية، نهاية): ياء واحدة مفتوحة  ->  ـايَتْ
-            //  ـية بعد حرف صامت (علاجية، سريرية): ياء النسب مشدّدة  ->  ـيَّتْ
-            //  ـوة (دعوة): واو مفتوحة  ->  ـوَتْ
-            if (prev == '\u0649' || hasVowel) return w;
-            int q = p - 1;
-            while (q >= 0 && isMark(w.charAt(q))) q--;
-            boolean afterAlif = q >= 0 && w.charAt(q) == '\u0627';
-            if (prev == '\u064A' && !afterAlif && plainLen(w) >= 5) sb.append(SHADDA);
-            sb.append(FATHA);
-            return sb.append(TAA).append(SUKUN).toString();
-        }
-        if (!alif && !semi && !hasVowel) sb.append(FATHA);
-        return sb.append(TAA).append(SUKUN).toString();
+        return sb.append(waqf ? HAA : TAA).append(SUKUN).toString();
     }
 
     private static int plainLen(String w) {
@@ -843,15 +837,45 @@ final class ArabicPhonetics {
             "\u0627\u0644\u062A\u0648\u062C\u064A\u0647", "\u0627\u0644\u062A\u0648\u0628\u064A\u0647", "\u0627\u0644\u062A\u0645\u0647\u064A\u062F"));
 
     /**
-     * كلمة مجرّدة معرّفة بـ "ال" وتنتهي بـ ه وهي في الحقيقة مؤنث بتاء مربوطة كُتب بالهاء (خطأ إملائي شائع في
-     * النصوص المكتوبة سريعًا أو الممسوحة ضوئيًا): "الحركه" -> "الحركة". تُترك الكلمة كما هي لو لم نتأكد.
+     * تصحيح إملاء ة/ه قبل التشكيل والنطق (يحافظ على علامات الترقيم حول الكلمة: "الحركه." -> "الحركة."):
+     *  1) ة بدل ه في كلمات وظيفية: "هذة" -> "هذه"، "اللة" -> "الله" (من قاموس التاء/الهاء).
+     *  2) ه بدل ة بعد "ال": "الحركه" -> "الحركة" (انظر {@link #fixHaaAfterAl}).
+     * الكلمة المشكولة أو التي فيها حروف غريبة لا تُمسّ.
      */
-    static String fixTaaTypo(String plain) {
-        if (plain == null || plain.length() < 5 || plain.charAt(plain.length() - 1) != HAA) return plain;
+    static String fixTaaTypo(String word) {
+        if (word == null || word.length() < 2) return word;
+        int a = 0;
+        int b = word.length();
+        while (a < b && !isArabicLetter(word.charAt(a))) a++;
+        while (b > a && !isArabicLetter(word.charAt(b - 1)) && !isMark(word.charAt(b - 1))) b--;
+        if (a >= b) return word;
+        String core = word.substring(a, b);
+        String fixed = fixTaaCore(core);
+        if (fixed.equals(core)) return word;
+        return word.substring(0, a) + fixed + word.substring(b);
+    }
+
+    private static String fixTaaCore(String plain) {
         for (int i = 0; i < plain.length(); i++) {
             char c = plain.charAt(i);
             if (c < 0x0621 || c > 0x064A) return plain; // مجرّدة من العلامات والحروف الغريبة فقط
         }
+        char last = plain.charAt(plain.length() - 1);
+        if (last == TAA_MARBUTA) {
+            String h = TaaLexicon.fixTaaToHaa(plain);
+            return h != null ? h : plain;
+        }
+        if (last == HAA) return fixHaaAfterAl(plain);
+        return plain;
+    }
+
+    /**
+     * كلمة مجرّدة معرّفة بـ "ال" وتنتهي بـ ه وهي في الحقيقة مؤنث بتاء مربوطة كُتب بالهاء (خطأ إملائي شائع في
+     * النصوص المكتوبة سريعًا أو الممسوحة ضوئيًا): "الحركه" -> "الحركة". تُترك الكلمة كما هي لو لم نتأكد.
+     * بعد "ال" يستحيل الضمير المتصل، فالخطر الوحيد كلمات هاؤها أصلية (الوجه، الفقه، التنبيه): يحميها قاموس الهاء.
+     */
+    static String fixHaaAfterAl(String plain) {
+        if (plain == null || plain.length() < 5 || plain.charAt(plain.length() - 1) != HAA) return plain;
         // السابقة (و/ف) ثم (ب/ك/ل) ثم "ال" - لازم "ال" ليستحيل الضمير المتصل
         String r = plain;
         if ((r.startsWith("\u0648") || r.startsWith("\u0641")) && r.length() > 5) r = r.substring(1);
@@ -862,8 +886,9 @@ final class ArabicPhonetics {
         if (core == null || core.length() < 5) return plain;
         if (HAA_KEEP.contains(core) || core.contains("\u0644\u0644\u0647")) return plain; // الله، الوجه...
         String stem = core.substring(2, core.length() - 1); // بلا ال وبلا ه
+        if (TaaLexicon.isHaa(stem + HAA) || TaaLexicon.isHaa(core)) return plain; // هاؤها أصلية: الوجه، الفقه، التنبيه
         String withTaa = stem + TAA_MARBUTA;
-        boolean known = TAA_NOUNS.contains(withTaa) || LEX.containsKey(withTaa);
+        boolean known = TAA_NOUNS.contains(withTaa) || LEX.containsKey(withTaa) || TaaLexicon.isTaa(withTaa);
         // نسبة طويلة (علاجي، وظيفي): 5 أحرف فأكثر؛ الأقصر قد تكون فعيلًا هاؤه أصلية (الفقيه، السفيه، النبيه)
         boolean nisba = stem.length() >= 5 && stem.endsWith("\u064A");
         if (!known && !nisba) return plain;

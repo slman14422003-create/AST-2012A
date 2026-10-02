@@ -48,6 +48,10 @@ final class TashkeelDict {
 
     /** يحمّل القاموس ومكتبات المستخدم المفعّلة (مرة واحدة). يمكن استدعاؤه من أكثر من خيط؛ اللاحق ينتظر السابق. */
     static void load(Context ctx) {
+        try {
+            TaaLexicon.load(ctx); // قاموس التاء المربوطة/الهاء (صغير وسريع): يُحمَّل قبل القاموس الكبير
+        } catch (Throwable ignored) {
+        }
         if (map != null) return;
         synchronized (LOCK) {
             if (map != null) return;
