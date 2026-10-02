@@ -179,7 +179,6 @@ final class SpeechPrep {
         // 3-أ) الصيغة المنطوقة لكل كلمة أولًا (بلا تجميع) كي نعرف الكلمة التالية عند ضبط أواخر الكلمات
         //      (التاء المربوطة: تاء داخل الجملة وهاء عند الوقف)
         final String[] sps = new String[toks.size()];
-        final boolean[] userLocked = new boolean[toks.size()];
         {
             String pb = "";
             boolean pn = false;
@@ -188,6 +187,7 @@ final class SpeechPrep {
                 String tok = toks.get(t);
                 String sp;
                 try {
+                    CTX_FORM.set(ar && assist && ContextDict.isReady() ? contextFor(toks, t) : null);
                     sp = speakToken(tok, lang, fst, pb, pn);
                     // "بال" / "وال" منفصلة قبل كلمة لاتينية (بالـ TENS): تُنطق al لا "با ل"
                     if (t + 1 < toks.size() && startsLatin(clean(toks.get(t + 1)))) {
@@ -197,11 +197,12 @@ final class SpeechPrep {
                     }
                 } catch (RuntimeException e) {
                     sp = tok; // أي خطأ غير متوقع: ننطق الكلمة كما هي
+                } finally {
+                    CTX_FORM.remove();
                 }
                 // تدقيق: لا يجوز أن يضيع حرف عربي (ك وغيرها) بين الأصل والمنطوق؛ والكاف المنفردة تُنطق باسمها
                 if (ar && !sp.isEmpty()) {
                     String ctk = clean(tok);
-                    userLocked[t] = userLex.containsKey(lexKey(bareOf(ctk))) || SpeechLearner.isTaught(ctk);
                     if (SpeechAuditor.lostLetters(ctk, sp) && !userLex.containsKey(lexKey(bareOf(ctk)))) {
                         String safe = SpeechAuditor.safeForm(ctk);
                         if (!safe.isEmpty()) sp = safe;
@@ -229,13 +230,6 @@ final class SpeechPrep {
                 pn = NUMBER.matcher(bare).matches();
                 pb = bare;
                 if (!sp.isEmpty()) fst = false;
-            }
-            // تحليل الجملة كاملة: تشكيل بحسب السياق، وإصلاح/إكمال تشكيل الـ PDF، وتعلّم من الملفات المشكولة
-            if (ar && assist) {
-                try {
-                    SentenceShaper.refine(toks, sps, userLocked);
-                } catch (RuntimeException ignored) {
-                }
             }
             if (ar && (taaMode != ArabicPhonetics.TAA_AUTO || noIrab)) shapeEndingsAll(sps, toks);
             // تدقيق: أواخر الكلمات الانفجارية (ك ق ط ب د ت ج ض) تُطلَق بسكون كي لا يبتلعها المحرك
@@ -828,6 +822,35 @@ final class SpeechPrep {
     // ------------------------------------------------------------------ خيارات قابلة للتعديل (من إعدادات القراءة)
 
     /** تشكيل ذكي للكلمات العربية غير المشكولة (قاموس + وقف بالسكون للنص المشكول). */
+    /** شكل الكلمة الحالية بحسب سياق الجملة (مفتاحها، الشكل) من ContextDict؛ يضعه حلقة الكلمات قبل speakToken. */
+    private static final ThreadLocal<String[]> CTX_FORM = new ThreadLocal<>();
+
+    /**
+     * فهم الجملة قبل النطق: للكلمة غير المشكولة يُسأل جدول السياق عن الشكل الأغلب مع الكلمة السابقة والتالية.
+     * null لو لا سياق محفوظ، أو الكلمة مشكولة أصلًا (لا نخالف الملف)، أو علّم المستخدم نطقها.
+     */
+    private static String[] contextFor(List<String> toks, int t) {
+        String bare = bareOf(clean(toks.get(t)));
+        if (!isPlainArabicWord(bare)) return null;
+        if (userLex.containsKey(lexKey(bare))) return null;
+        String k = ContextDict.key(bare);
+        if (k == null) return null;
+        String pk;
+        if (t == 0 || endsWithStop(toks.get(t - 1))) {
+            pk = "^";
+        } else {
+            pk = ContextDict.key(bareOf(clean(toks.get(t - 1))));
+        }
+        String nk;
+        if (t + 1 >= toks.size() || endsWithStop(toks.get(t))) {
+            nk = "$";
+        } else {
+            nk = ContextDict.key(bareOf(clean(toks.get(t + 1))));
+        }
+        String f = ContextDict.lookup(pk == null ? "" : pk, k, nk == null ? "" : nk);
+        return f == null ? null : new String[]{k, f};
+    }
+
     private static volatile boolean assist = true;
     /** نطق الاختصارات اللاتينية (EMG, MRI...) حرفًا حرفًا. */
     private static volatile boolean spellAcronyms = true;
@@ -1846,6 +1869,10 @@ final class SpeechPrep {
     private static String diacritize(String p) {
         if (p.length() < 2) return p;
         if (!isPlainArabicWord(p)) return completePartlyVoweled(p); // كلمة فيها شدّة/تنوين وحدهما: كانت تتجاوز القاموس كليًّا
+        String[] cx = CTX_FORM.get();
+        if (assist && cx != null && p.length() >= 3 && cx[0].equals(ContextDict.key(p))) {
+            return hamzaAfterAl(cx[1]); // شكل أغلب مع هذه الجيران في المدوّنة (يتقدّم على القاموس العام)
+        }
         String r = p.length() <= 14 ? diacritizeCore(p) : p;
         if (assist && r.equals(p)) {
             String full = dictForm(p);

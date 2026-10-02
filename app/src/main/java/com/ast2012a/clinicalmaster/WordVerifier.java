@@ -182,17 +182,6 @@ final class WordVerifier {
         return wellFormed(shaped);
     }
 
-    /** كلمة عادية صالحة للاستيراد: 3 حروف عربية فأكثر بلا أي علامة تشكيل ولا تطويل ولا رموز. */
-    static boolean acceptPlain(String plain) {
-        if (plain == null || plain.length() < 3 || plain.length() > 40) return false;
-        for (int i = 0; i < plain.length(); i++) {
-            char c = plain.charAt(i);
-            boolean letter = (c >= '\u0621' && c <= '\u064A') || c == '\u0671';
-            if (!letter) return false;
-        }
-        return true;
-    }
-
     /** لا نستبدل همزة الكلمة الأصلية (أ إ آ) بألف عارية من القاموس: هذا يُضعف نطق الهمز. */
     private static boolean keepsHamza(String plain, String shaped) {
         int j = 0;
@@ -233,18 +222,13 @@ final class WordVerifier {
         }
     }
 
-    /** يُضبط أثناء بناء القاموس من كلمات عادية: لا نُدخل تشكيلًا متعلَّمًا من الملفات في القاموس الدائم. */
-    private static final ThreadLocal<Boolean> BAKING = new ThreadLocal<>();
-
     /** بحث في المصادر فقط: متعلَّم، ثم حرفي، ثم موحَّد. */
     private static Hit dictHit(String s) {
         if (s == null || s.length() < 3) return null;
-        if (BAKING.get() == null) {
-            try {
-                String l = SpeechLearner.learnedForm(s);
-                if (l != null && accept(s, l)) return new Hit(l, Kind.LEARNED);
-            } catch (RuntimeException ignored) {
-            }
+        try {
+            String l = SpeechLearner.learnedForm(s);
+            if (l != null && accept(s, l)) return new Hit(l, Kind.LEARNED);
+        } catch (RuntimeException ignored) {
         }
         String e = TashkeelDict.exact(s);
         if (e != null) return new Hit(e, Kind.EXACT);
@@ -494,24 +478,6 @@ final class WordVerifier {
     /** يطابق كلمة عربية مجرّدة (حروف فقط بلا تشكيل) ويُعيد أفضل تشكيل مدقَّق، أو NONE. لا يحدّث العدّادات. */
     static Match match(String plain) {
         return match(plain, true);
-    }
-
-    /**
-     * تشكيل كلمة عادية مستوردة اعتمادًا على كلمات القاموس المشكولة فقط (اشتقاق، سوابق، لواحق)، أو null.
-     * لا يُرجع شيئًا لو الكلمة موجودة حرفيًا أو بتوحيد الهمزة (فالبحث الحي يجدها أصلًا)، ولا يستعمل التشكيل المتعلَّم من
-     * الملفات ولا تنبؤ LetterModel: ما يُرجَع يدخل القاموس الدائم ويتدرّب عليه نموذج النطق، فلا نُدخل فيه تخمينًا.
-     */
-    static String deriveForDictionary(String plain) {
-        if (plain == null || plain.length() < 3 || plain.length() > 24) return null;
-        BAKING.set(Boolean.TRUE);
-        try {
-            Match m = match(plain, false);
-            if (!m.found()) return null;
-            if (m.kind == Kind.DERIVED || m.kind == Kind.CLITIC || m.kind == Kind.SUFFIX) return m.shaped;
-            return null;
-        } finally {
-            BAKING.remove();
-        }
     }
 
     /**

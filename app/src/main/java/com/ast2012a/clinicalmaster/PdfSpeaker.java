@@ -293,7 +293,6 @@ final class PdfSpeaker {
         SpeechPrep.setNoIrab(isNoIrab());
         try {
             SpeechLearner.init(app.getFilesDir()); // ذاكرة النطق المتعلَّمة
-            SentenceShaper.init(app.getFilesDir()); // ذاكرة السياق (تشكيل بحسب موقع الكلمة في الجملة)
         } catch (Throwable ignored) {
         }
         try {
@@ -306,6 +305,7 @@ final class PdfSpeaker {
             final Context appCtx = app;
             new Thread(() -> TashkeelDict.load(appCtx), "tashkeel-dict-load").start();
         }
+        ContextDict.loadAsync(app); // جدول سياق الجمل (اختياري: لو لم يوجد الملف لا يتغيّر شيء)
         initTts();
     }
 
@@ -731,7 +731,7 @@ final class PdfSpeaker {
     }
 
     String learnerStats() {
-        return SpeechLearner.stats() + "\n" + WordVerifier.stats() + "\n" + LocalVoiceModel.stats();
+        return SpeechLearner.stats() + "\n" + WordVerifier.stats() + "\n" + ContextDict.stats() + "\n" + LocalVoiceModel.stats();
     }
 
     /** تقرير تغطية القاموس لنص الصفحة الحالية (كم كلمة وُجدت، وما أكثر الكلمات غير الموجودة) - للتشخيص. */
@@ -1867,7 +1867,6 @@ final class PdfSpeaker {
     private void finishAll() {
         try {
             SpeechLearner.flush();
-            SentenceShaper.flush();
             LocalVoiceModel.flush();
         } catch (Throwable ignored) {
         }
@@ -2443,7 +2442,6 @@ final class PdfSpeaker {
     void shutdown() {
         try {
             SpeechLearner.flush();
-            SentenceShaper.flush();
             LocalVoiceModel.flush();
         } catch (Throwable ignored) {
         }
