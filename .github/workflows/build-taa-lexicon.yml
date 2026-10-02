@@ -1,0 +1,19 @@
+name: Build Taa Lexicon
+on: workflow_dispatch
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: >
+          python3 tools/build_taa_lexicon.py
+          --spell tools/dict/ar_SA.dic
+          --tashkeel app/src/main/assets/tashkeel_dict.txt
+          --out app/src/main/assets/taa_haa_lexicon.txt
+      - run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add app/src/main/assets/taa_haa_lexicon.txt
+          git diff --cached --quiet || git commit -m "Rebuild taa_haa_lexicon" && git push
