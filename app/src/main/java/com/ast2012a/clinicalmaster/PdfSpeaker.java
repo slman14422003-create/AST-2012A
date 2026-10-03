@@ -302,6 +302,11 @@ final class PdfSpeaker {
             LocalVoiceModel.init(app.getFilesDir()); // النموذج الصوتي المحلي (إيقاع/صحة الأصوات)
         } catch (Throwable ignored) {
         }
+        try {
+            VoiceEngineConfig.init(app);   // إعدادات محرك الصوت البشري (إيقاع الجمل)
+            VoiceBehaviorLearner.init(app); // تعلّم سلوك الاستماع والكلمات المشتبه بها
+        } catch (Throwable ignored) {
+        }
         // قاموس التشكيل: يبدأ تحميله الآن (مرة واحدة وفي الخلفية) كي يكون جاهزًا قبل أول جملة تُنطق؛
         // لو كان التطبيق بدأه من ClinicalMasterApp فهذا الاستدعاء ينتظر انتهاءه ولا يكرّر العمل.
         if (!TashkeelDict.isReady()) {
@@ -754,6 +759,7 @@ final class PdfSpeaker {
         if (sourceFile == null || state == State.IDLE) return;
         try {
             SpeechLearner.noteRewind(currentChunkRaw()); // رجوع = إشارة أن المقطع لم يكن واضحًا
+            VoiceBehaviorLearner.noteRewind(currentChunkRaw());
         } catch (Throwable ignored) {
         }
         boolean wasPaused = state == State.PAUSED;
@@ -1136,7 +1142,7 @@ final class PdfSpeaker {
         releasePreview();
         final String voice = cloudVoiceFor("ar");
         final SpeechPrep.Spoken spoken = SpeechPrep.prepare(EdgeTtsClient.sanitize(sample), "ar", "en", false);
-        final EdgeTtsClient.Style style = cloudStyle();
+        final EdgeTtsClient.Style style = HumanProsody.shape(sample, "ar", false, cloudStyle());
         final int gen = ++previewGen;
         try {
             synthPool.execute(() -> {
@@ -1855,6 +1861,7 @@ final class PdfSpeaker {
         if (currentText == null) return;
         try {
             SpeechLearner.noteHeard(currentChunkRaw()); // سُمع المقطع كاملًا
+            VoiceBehaviorLearner.noteHeard(currentChunkRaw());
         } catch (Throwable ignored) {
         }
         int next = currentChunk + 1;
@@ -1883,6 +1890,7 @@ final class PdfSpeaker {
             SpeechLearner.flush();
             SentenceShaper.flush();
             LocalVoiceModel.flush();
+            VoiceBehaviorLearner.flush();
         } catch (Throwable ignored) {
         }
         session++;
@@ -1920,7 +1928,7 @@ final class PdfSpeaker {
     // ------------------------------------------------------------------ الصوت الأونلاين
 
     private String cloudKey(String voice, int page, int chunk) {
-        return voice + "#" + page + "#" + chunk;
+        return voice + "#" + page + "#" + chunk + "@v" + VoiceEngineConfig.version();
     }
 
     /** يطلب تجهيز صوت المقطع (لو لم يكن جاهزًا أو قيد التجهيز) ويرجّع مفتاحه. */
@@ -1933,7 +1941,9 @@ final class PdfSpeaker {
         final SpeechPrep.Spoken spoken = SpeechPrep.prepare(
                 EdgeTtsClient.sanitize(pt.text.substring(c.start, c.end)), c.lang, pt.latin, mix, c.cont);
         final String sent = spoken.text;
-        final EdgeTtsClient.Style style = cloudStyle();
+        // طبقة الإيقاع البشري: نغمة/سرعة/وقفات كل جملة بحسب نوعها (سؤال، عنوان، أقواس...) وإعدادات المستخدم
+        final EdgeTtsClient.Style style = HumanProsody.shape(
+                pt.text.substring(c.start, c.end), c.lang, c.cont, cloudStyle());
         List<EdgeTtsClient.Run> runList = null;
         if (mix && spoken.isMixed()) {
             runList = new ArrayList<>();
@@ -2459,6 +2469,7 @@ final class PdfSpeaker {
             SpeechLearner.flush();
             SentenceShaper.flush();
             LocalVoiceModel.flush();
+            VoiceBehaviorLearner.flush();
         } catch (Throwable ignored) {
         }
         session++;

@@ -117,6 +117,10 @@ public class SettingsActivity extends AppCompatActivity {
         });
         findViewById(R.id.btn_dict_packs).setOnClickListener(v -> showDictPacksDialog());
 
+        // محرك الصوت البشري (إيقاع، تعلّم، مدرّب ذكي)
+        findViewById(R.id.btn_voice_engine).setOnClickListener(
+                v -> startActivity(new Intent(this, VoiceEngineSettingsActivity.class)));
+
         // النسخ السحابي
         cloudAutoBackupSwitch = findViewById(R.id.switch_cloud_auto_backup);
         cloudStatus = findViewById(R.id.cloud_status);
@@ -155,6 +159,9 @@ public class SettingsActivity extends AppCompatActivity {
         refreshCloudRows();
         refreshBuiltinOverridesRow();
         refreshDictPacksRow();
+
+        // يُفتح من شاشة محرك الصوت البشري (صف "القواميس المدمجة ومكتبات الكلمات")
+        if (getIntent().getBooleanExtra("open_dict_packs", false)) showDictPacksDialog();
     }
 
     // -----------------------------------------------------------------
