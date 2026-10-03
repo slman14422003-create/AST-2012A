@@ -169,6 +169,8 @@ final class SpeechPrep {
             }
             starts = ms;
             toks = mt;
+            // 2-أ) كلمتان التصقتا بلا مسافة (فيالمرحلة): تُفصلان لو كانت الثانية كلمة صحيحة في القاموس
+            if (wordRepair) WordGlue.splitGlued(starts, toks);
         }
 
         // 2-ب) تهيئة الكلمات بحسب سياقها: د. -> دكتور، دقيقه بعد رقم -> دقيقة، 120/80 mmHg، e.g. / et al. ...
@@ -713,6 +715,8 @@ final class SpeechPrep {
         if (a.length() == 1 && "\u0648\u0641\u0628\u0644\u0643".indexOf(a.charAt(0)) >= 0 && b.length() >= 2) return 1;
         // حروف متباعدة: ع ض ل ة
         if (b.length() == 1 && (inRun || (a.length() == 1 && a.charAt(0) != '\u0648'))) return 2;
+        // كلمة مقطوعة في الـ PDF (عضل ات، الت مارين، ا لمفصل): نصلها لو كانت الكلمة الناتجة موجودة في القاموس
+        if (wordRepair && WordGlue.shouldMerge(a, b)) return 1;
         return 0;
     }
 
@@ -889,6 +893,14 @@ final class SpeechPrep {
 
     static void setTaaTypoFix(boolean v) {
         taaFix = v;
+    }
+
+    /** إصلاح الكلمات المتقطعة (عضل ات) والملتصقة (فيالمرحلة) بالقاموس قبل النطق. */
+    private static volatile boolean wordRepair = true;
+
+    static void setWordRepair(boolean v) {
+        wordRepair = v;
+        WordGlue.setEnabled(v);
     }
 
     static void setNoIrab(boolean v) {

@@ -1794,6 +1794,8 @@ public class PdfViewerActivity extends AppCompatActivity {
         addVoiceRow(g3, "نطق التاء المربوطة (ة)", null, speaker.getTaaLabel(), false, () -> { speaker.cycleTaaMode(); refresh.run(); });
         addVoiceSwitch(g3, "تصحيح إملاء ة/ه تلقائيًا", "الحركه ← الحركة", speaker.isTaaFix(),
                 () -> { speaker.setTaaFix(!speaker.isTaaFix()); refresh.run(); });
+        addVoiceSwitch(g3, "إصلاح الكلمات المقطوعة والملتصقة", "عضل ات ← عضلات، فيالمرحلة ← في المرحلة", speaker.isWordRepair(),
+                () -> { speaker.setWordRepair(!speaker.isWordRepair()); refresh.run(); });
         addVoiceSwitch(g3, "تشكيل ذكي للعربي", "شدّة وحركات وتنوين ومصطلحات", speaker.isArabicAssist(),
                 () -> { speaker.setArabicAssist(!speaker.isArabicAssist()); refresh.run(); });
         addVoiceSwitch(g3, "قراءة بلا إعراب", "تسكين أواخر الكلمات (تجريبي)", speaker.isNoIrab(),

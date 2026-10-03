@@ -50,6 +50,7 @@ final class TashkeelDict {
     static void load(Context ctx) {
         try {
             TaaLexicon.load(ctx); // قاموس التاء المربوطة/الهاء (صغير وسريع): يُحمَّل قبل القاموس الكبير
+            WordLexicon.load(ctx); // قاموس صحة الكلمات (لوصل المقطوع وفصل الملتصق قبل النطق)
         } catch (Throwable ignored) {
         }
         if (map != null) return;

@@ -99,6 +99,7 @@ final class PdfSpeaker {
     private static final String KEY_GAIN = "voice_gain";      // تعزيز مستوى الصوت (LoudnessEnhancer)
     private static final String KEY_TAA = "taa_mode";         // نطق التاء المربوطة
     private static final String KEY_TAAFIX = "taa_fix";       // تصحيح إملاء ة/ه
+    private static final String KEY_WORDFIX = "word_repair";  // وصل الكلمات المتقطعة وفصل الملتصقة
     private static final String KEY_NOIRAB = "no_irab";       // قراءة بلا إعراب
     private static final String KEY_DEV_ENGINE = "dev_engine";        // حزمة محرك النطق المحلي (null = افتراضي النظام)
     private static final String KEY_DEV_OFFLINE = "dev_offline_only"; // أصوات الجهاز التي لا تحتاج إنترنت فقط
@@ -290,6 +291,7 @@ final class PdfSpeaker {
         SpeechPrep.setUserLexicon(getUserLexicon());
         SpeechPrep.setTaaMode(getTaaMode());
         SpeechPrep.setTaaTypoFix(isTaaFix());
+        SpeechPrep.setWordRepair(isWordRepair());
         SpeechPrep.setNoIrab(isNoIrab());
         try {
             SpeechLearner.init(app.getFilesDir()); // ذاكرة النطق المتعلَّمة
@@ -937,6 +939,16 @@ final class PdfSpeaker {
     void setTaaFix(boolean v) {
         prefs.edit().putBoolean(KEY_TAAFIX, v).apply();
         SpeechPrep.setTaaTypoFix(v);
+        onSpeechSettingChanged();
+    }
+
+    boolean isWordRepair() {
+        return prefs.getBoolean(KEY_WORDFIX, true);
+    }
+
+    void setWordRepair(boolean v) {
+        prefs.edit().putBoolean(KEY_WORDFIX, v).apply();
+        SpeechPrep.setWordRepair(v);
         onSpeechSettingChanged();
     }
 
