@@ -1,15 +1,7 @@
 *.iml
-.gradle/
-build/
-app/build/
-local.properties
-.idea/
+.gradle
+/local.properties
+/.idea
+/build
+/app/build
 .DS_Store
-captures/
-.externalNativeBuild/
-.cxx/
-*.apk
-
-# مفاتيح التوقيع - لا تُرفع أبدًا
-*.jks
-*.keystore

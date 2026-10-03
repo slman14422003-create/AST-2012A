@@ -1,232 +1,59 @@
-<resources xmlns:tools="http://schemas.android.com/tools">
-    <style name="Theme.ClinicalMaster" parent="Theme.Material3.Light.NoActionBar">
-        <item name="colorPrimary">@color/primary_cyan</item>
-        <item name="colorPrimaryVariant">@color/primary_cyan_dark</item>
-        <item name="colorOnPrimary">@color/white</item>
-        <item name="colorPrimaryContainer">@color/m3_primary_container</item>
-        <item name="colorOnPrimaryContainer">@color/m3_on_primary_container</item>
-        <item name="colorSecondary">@color/accent_violet</item>
-        <item name="colorSecondaryVariant">@color/accent_violet_dark</item>
-        <item name="colorOnSecondary">@color/white</item>
-        <item name="colorSecondaryContainer">@color/m3_secondary_container</item>
-        <item name="colorOnSecondaryContainer">@color/m3_on_secondary_container</item>
-        <item name="colorTertiary">@color/m3_tertiary</item>
-        <item name="colorOnTertiary">@color/m3_on_tertiary</item>
-        <item name="colorTertiaryContainer">@color/m3_tertiary_container</item>
-        <item name="colorOnTertiaryContainer">@color/m3_on_tertiary_container</item>
-        <item name="android:colorBackground">@color/bg_dark</item>
-        <item name="colorSurface">@color/surface_dark</item>
-        <item name="colorOnSurface">@color/text_primary</item>
-        <item name="colorSurfaceVariant">@color/m3_surface_variant</item>
-        <item name="colorOnSurfaceVariant">@color/m3_on_surface_variant</item>
-        <item name="colorSurfaceContainer">@color/m3_surface_container</item>
-        <item name="colorSurfaceContainerHigh">@color/m3_surface_container_high</item>
-        <item name="colorOutline">@color/m3_outline</item>
-        <item name="colorOutlineVariant">@color/m3_outline_variant</item>
-        <item name="colorError">@color/m3_error</item>
-        <item name="colorOnError">@color/m3_on_error</item>
-        <item name="colorErrorContainer">@color/m3_error_container</item>
-        <item name="colorOnErrorContainer">@color/m3_on_error_container</item>
-        <item name="android:statusBarColor">@color/bg_deep_1</item>
-        <item name="android:navigationBarColor">@color/bg_deep_1</item>
-        <item name="android:windowLightStatusBar" tools:targetApi="m">true</item>
-        <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item>
-        <item name="fontFamily">sans-serif</item>
-        <item name="android:windowActionModeOverlay">true</item>
-        <item name="android:windowNoTitle">true</item>
-        <item name="android:textColorHint">@color/text_tertiary</item>
-        <!-- التطبيق عربي بالكامل بمحتوى RTL؛ نفرض اتجاه التخطيط من اليمين
-             لليسار بغض النظر عن لغة/لوكيل الجهاز، بدل الاعتماد على لوكيل
-             النظام (اللي لو كان إنجليزي بيخلي الشريط السفلي وأيقونة البحث
-             وترتيب العناصر الأفقية كلها بترتيب معكوس/مقطوع). -->
-        <item name="android:layoutDirection">rtl</item>
-        <!-- شكل زوايا Material 3 موحّد (Shape System): بطاقات متوسطة
-             الاستدارة، وأزرار/رقائق كاملة الاستدارة (Stadium/Pill) - نفس
-             نظام M3 القياسي بدل نصف قطر ثابت واحد للجميع. -->
-        <item name="shapeAppearanceCornerExtraSmall">@style/ShapeAppearance.M3.Corner.ExtraSmall</item>
-        <item name="shapeAppearanceCornerSmall">@style/ShapeAppearance.M3.Corner.Small</item>
-        <item name="shapeAppearanceCornerMedium">@style/ShapeAppearance.M3.Corner.Medium</item>
-        <item name="shapeAppearanceCornerLarge">@style/ShapeAppearance.M3.Corner.Large</item>
-        <item name="materialAlertDialogTheme">@style/ThemeOverlay.ClinicalMaster.Dialog</item>
-        <!-- انتقالات افتراضية سلسة لكل الشاشات (بما فيها زر الرجوع بالنظام)،
-             بدل الاعتماد على overridePendingTransition فقط. -->
-        <item name="android:windowAnimationStyle">@style/Animation.ClinicalMaster.Activity</item>
-        <item name="android:colorControlHighlight">@color/glass_highlight</item>
-        <item name="colorControlHighlight">@color/glass_highlight</item>
-        <item name="android:colorEdgeEffect" tools:targetApi="lollipop">@color/primary_cyan_light</item>
-        <item name="android:textColorHighlight">@color/m3_primary_container</item>
-        <item name="android:textColorLink">@color/primary_cyan_dark</item>
-        <item name="android:textCursorDrawable" tools:targetApi="q">@drawable/cursor_brand</item>
-    </style>
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
 
-    <!-- انتقالات الشاشات الافتراضية: للأمام ينزلق من اليمين، وللخلف يعود بسلاسة -->
-    <style name="Animation.ClinicalMaster.Activity" parent="@android:style/Animation.Activity">
-        <item name="android:activityOpenEnterAnimation">@anim/slide_in_right</item>
-        <item name="android:activityOpenExitAnimation">@anim/slide_out_left</item>
-        <item name="android:activityCloseEnterAnimation">@anim/slide_in_left</item>
-        <item name="android:activityCloseExitAnimation">@anim/slide_out_right</item>
-    </style>
-
-    <!-- حركة ظهور/اختفاء مربعات الحوار: تكبير ناعم بدل الظهور المفاجئ -->
-    <style name="Animation.ClinicalMaster.Dialog" parent="@android:style/Animation.Dialog">
-        <item name="android:windowEnterAnimation">@anim/dialog_enter</item>
-        <item name="android:windowExitAnimation">@anim/dialog_exit</item>
-    </style>
-
-    <!-- شاشة splash بأسلوب Claude: خلفية بلون خلفية التطبيق (كريمية في النهاري،
-         ومقابلها الداكن في values-night/themes.xml). شريطا الحالة والتنقل بنفس اللون. -->
-    <style name="Theme.ClinicalMaster.Splash" parent="Theme.Material3.Light.NoActionBar">
-        <item name="android:windowBackground">@color/bg_deep_1</item>
-        <item name="android:statusBarColor">@color/bg_deep_1</item>
-        <item name="android:navigationBarColor">@color/bg_deep_1</item>
-        <item name="android:windowLightStatusBar" tools:targetApi="m">true</item>
-        <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item>
-        <item name="android:layoutDirection">rtl</item>
-    </style>
-
-    <!-- نظام الأشكال (Shape System) الخاص بـ M3 -->
-    <style name="ShapeAppearance.M3.Corner.ExtraSmall" parent="ShapeAppearance.Material3.Corner.ExtraSmall">
-        <item name="cornerSize">10dp</item>
-    </style>
-    <style name="ShapeAppearance.M3.Corner.Small" parent="ShapeAppearance.Material3.Corner.Small">
-        <item name="cornerSize">14dp</item>
-    </style>
-    <style name="ShapeAppearance.M3.Corner.Medium" parent="ShapeAppearance.Material3.Corner.Medium">
-        <item name="cornerSize">18dp</item>
-    </style>
-    <style name="ShapeAppearance.M3.Corner.Large" parent="ShapeAppearance.Material3.Corner.Large">
-        <item name="cornerSize">26dp</item>
-    </style>
-
-    <!-- تخصيص مربعات حوار Material 3 (MaterialAlertDialogBuilder) بنفس
-         هوية التطبيق (خلفية بطاقة + زوايا كبيرة + ألوان الأزرار الطوبية) -->
-    <style name="ThemeOverlay.ClinicalMaster.Dialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
-        <item name="colorSurface">@color/glass_fill_strong</item>
-        <item name="colorSurfaceContainerHigh">@color/glass_fill_strong</item>
-        <item name="colorSurfaceContainerHighest">@color/glass_fill_strong</item>
-        <item name="colorOnSurface">@color/text_primary</item>
-        <item name="materialAlertDialogTitleTextStyle">@style/MaterialAlertDialog.ClinicalMaster.Title</item>
-        <item name="shapeAppearanceOverlay">@style/ShapeAppearance.M3.Corner.Large</item>
-        <item name="android:windowAnimationStyle">@style/Animation.ClinicalMaster.Dialog</item>
-    </style>
-
-    <style name="MaterialAlertDialog.ClinicalMaster.Title" parent="MaterialAlertDialog.Material3.Title.Text">
-        <item name="android:textDirection">rtl</item>
-        <item name="android:gravity">end</item>
-    </style>
-
-    <!-- قوائم منبثقة (Toolbar overflow / PopupMenu) بأسلوب بطاقات التطبيق الزجاجية
-         بدل خلفية Material الرمادية الافتراضية - يُطبَّق عبر app:popupTheme على
-         أي Toolbar يحتاج قائمة إضافية متناسقة مع هوية التطبيق. -->
-    <style name="ThemeOverlay.ClinicalMaster.PopupMenu" parent="">
-        <item name="android:popupBackground">@drawable/bg_popup_menu</item>
-        <item name="android:itemBackground">@android:color/transparent</item>
-        <item name="colorControlHighlight">@color/glass_border_soft</item>
+    <style name="AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/accent</item>
+        <item name="colorPrimaryDark">@color/bg</item>
+        <item name="colorAccent">@color/accent</item>
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:statusBarColor">@color/bg</item>
+        <item name="android:navigationBarColor">@color/bg</item>
+        <item name="android:windowLightStatusBar">@bool/light_bars</item>
         <item name="android:textColorPrimary">@color/text_primary</item>
         <item name="android:textColorSecondary">@color/text_secondary</item>
-        <item name="actionMenuTextColor">@color/text_primary</item>
-        <item name="android:dropDownVerticalOffset">6dp</item>
+        <item name="android:textColorHint">@color/text_hint</item>
+        <item name="alertDialogTheme">@style/AppDialog</item>
     </style>
 
-    <!-- عنوان قسم داخل شاشة الإعدادات (أو أي شاشة تحتاج تقسيم بصري لمجموعات
-         من الخيارات) - لون مميز، خط عريض، محاذاة لليمين للعربي. -->
-    <style name="SectionHeader">
-        <item name="android:layout_width">match_parent</item>
-        <item name="android:layout_height">wrap_content</item>
-        <item name="android:layout_marginBottom">10dp</item>
-        <item name="android:gravity">end</item>
-        <item name="android:textColor">@color/primary_cyan_dark</item>
-        <item name="android:textDirection">rtl</item>
-        <item name="android:textSize">12.5sp</item>
-        <item name="android:textStyle">bold</item>
-        <item name="android:letterSpacing">0.03</item>
+    <style name="AppDialog" parent="Theme.AppCompat.DayNight.Dialog.Alert">
+        <item name="colorAccent">@color/accent</item>
+        <item name="android:windowBackground">@drawable/bg_dialog</item>
+        <item name="android:textColorPrimary">@color/text_primary</item>
+        <item name="android:textColorSecondary">@color/text_secondary</item>
     </style>
 
-    <!-- شريحة اقتراح بحث سريع (أمثلة حقيقية من قاعدة البيانات) -->
-    <style name="SuggestionChip">
-        <item name="android:layout_width">wrap_content</item>
-        <item name="android:layout_height">wrap_content</item>
-        <item name="android:layout_marginHorizontal">4dp</item>
-        <item name="android:background">@drawable/bg_glass_chip</item>
-        <item name="android:minHeight">40dp</item>
-        <item name="android:gravity">center_vertical</item>
-        <item name="android:clickable">true</item>
-        <item name="android:focusable">true</item>
-        <item name="android:paddingHorizontal">14dp</item>
-        <item name="android:paddingVertical">9dp</item>
-        <item name="android:textColor">@color/text_secondary</item>
-        <item name="android:textSize">12sp</item>
+    <style name="IconButton">
+        <item name="android:layout_width">44dp</item>
+        <item name="android:layout_height">44dp</item>
+        <item name="android:background">@drawable/bg_icon_btn</item>
+        <item name="android:tint">@color/text_primary</item>
+        <item name="android:scaleType">center</item>
     </style>
 
-    <!-- صف إعدادات موحّد (شاشة الإعدادات) - سطر واحد كامل العرض، ارتفاع
-         مريح للمس، ومحاذاة لليمين بنفس روح صفوف قوائم Claude/iOS. نفس
-         عنصر Button القديم بالضبط (بدون أي تغيير في نوع العنصر) عشان
-         يفضل الكود في SettingsActivity.java شغّال بدون أي تعديل. -->
-    <style name="SettingsRow" parent="Widget.Material3.Button.TextButton">
-        <item name="android:layout_width">match_parent</item>
-        <item name="android:layout_height">wrap_content</item>
-        <item name="android:layout_margin">2dp</item>
-        <item name="android:minHeight">56dp</item>
-        <item name="android:gravity">end|center_vertical</item>
-        <item name="android:paddingHorizontal">14dp</item>
-        <item name="android:paddingVertical">15dp</item>
+    <style name="BtnPrimary" parent="Widget.AppCompat.Button">
+        <item name="android:background">@drawable/btn_primary</item>
+        <item name="android:textColor">@color/on_accent</item>
         <item name="android:textAllCaps">false</item>
-        <item name="android:textColor">@color/text_primary</item>
-        <item name="android:textDirection">rtl</item>
-        <item name="android:textSize">13.5sp</item>
-    </style>
-
-    <!-- زر ثانوي عام (بطاقة بيضاء بحد رفيع) يُستخدم في شاشات التفاصيل والإعدادات -->
-    <style name="GlassButton">
-        <item name="android:layout_width">match_parent</item>
-        <item name="android:layout_height">wrap_content</item>
-        <item name="android:background">@drawable/bg_glass_card_pressed</item>
-        <item name="android:minHeight">48dp</item>
-        <item name="android:paddingVertical">13dp</item>
-        <item name="android:gravity">center</item>
-        <item name="android:textAllCaps">false</item>
-        <item name="android:clickable">true</item>
-        <item name="android:focusable">true</item>
-        <item name="android:textColor">@color/text_primary</item>
-        <item name="android:textSize">13.5sp</item>
-    </style>
-
-    <!-- زر رئيسي (CTA) موحّد لكل التطبيق: تعبئة طوبية مسطحة، حواف مدوّرة
-         باعتدال (لا كبسولة) بنفس روح أزرار Claude — يُستخدم لأي إجراء
-         أساسي (حفظ، إرسال، إضافة). -->
-    <style name="PrimaryButton" parent="Widget.Material3.Button">
-        <item name="android:layout_width">match_parent</item>
-        <item name="android:layout_height">52dp</item>
-        <item name="android:background">@drawable/bg_button_primary</item>
-        <item name="backgroundTint">@null</item>
-        <item name="android:textAllCaps">false</item>
-        <item name="android:textColor">@color/white</item>
         <item name="android:textSize">15sp</item>
         <item name="android:textStyle">bold</item>
-        <item name="android:letterSpacing">0.01</item>
-        <item name="elevation">0dp</item>
-        <item name="cornerRadius">26dp</item>
+        <item name="android:minHeight">52dp</item>
+        <item name="android:stateListAnimator">@null</item>
     </style>
 
-
-    <style name="ScreenTitle">
-        <item name="android:fontFamily">serif</item>
+    <style name="BtnSecondary" parent="Widget.AppCompat.Button">
+        <item name="android:background">@drawable/btn_secondary</item>
         <item name="android:textColor">@color/text_primary</item>
-        <item name="android:textSize">22sp</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textSize">15sp</item>
         <item name="android:textStyle">bold</item>
-        <item name="android:textDirection">rtl</item>
+        <item name="android:minHeight">52dp</item>
+        <item name="android:stateListAnimator">@null</item>
     </style>
 
-    <style name="ScreenSubtitle">
-        <item name="android:textColor">@color/text_secondary</item>
-        <item name="android:textSize">12.5sp</item>
-        <item name="android:textDirection">rtl</item>
-        <item name="android:lineSpacingExtra">2dp</item>
+    <style name="Theme.App.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/bg</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/anim_spark</item>
+        <item name="windowSplashScreenAnimationDuration">900</item>
+        <item name="postSplashScreenTheme">@style/AppTheme</item>
     </style>
-
-    <style name="ClaudeCard">
-        <item name="android:background">@drawable/bg_glass_card</item>
-        <item name="android:padding">16dp</item>
-    </style>
-
 </resources>

@@ -1,110 +1,40 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.VIBRATE" />
-    <!-- مؤثرات صفاء الصوت وتعزيزه (Equalizer / LoudnessEnhancer) في مشغّل القراءة -->
-    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
-
-    <!-- Android 11+: مطلوب حتى يرى التطبيق محركات النطق (TextToSpeech) المثبّتة للقراءة الصوتية في قارئ PDF -->
-    <queries>
-        <intent>
-            <action android:name="android.intent.action.TTS_SERVICE" />
-        </intent>
-    </queries>
 
     <application
-        android:name=".ClinicalMasterApp"
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.ClinicalMaster">
+        android:theme="@style/AppTheme">
 
         <activity
-            android:name=".SplashActivity"
+            android:name=".LoginActivity"
             android:exported="true"
-            android:theme="@style/Theme.ClinicalMaster.Splash">
+            android:theme="@style/Theme.App.Starting">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
-        <!-- configChanges: شاشة البحث الرئيسي فيها "اسأل Phizyo AI" السريع، وممكن
-             يكون في طلب ذكاء اصطناعي طويل شغّال (بما فيه جولات استكمال تلقائي
-             متعددة قد تاخد دقايق). لو الجهاز اتلف (rotation) من غير configChanges،
-             أندرويد بيهدم الشاشة ويعيد إنشاءها من الصفر، وonDestroy بينفذ
-             executor.shutdownNow() اللي بيقاطع نداء الشبكة الجاري فورًا - فيوصل
-             للمستخدم رد ناقص أو من غير رد خالص رغم إن كل منطق منع القطع
-             (AiOrchestrator.sendWithAutoContinue) كان شغال صح. -->
-        <activity
-            android:name=".MainActivity"
-            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize"
-            android:exported="false"
-            android:label="@string/app_name"
-            android:windowSoftInputMode="adjustResize" />
-
-        <activity android:name=".CaseDetailActivity" android:exported="false" />
-        <activity android:name=".AddEditCaseActivity" android:exported="false" />
-        <activity android:name=".MyCasesActivity" android:exported="false" />
-        <activity android:name=".FavoritesActivity" android:exported="false" />
-        <activity android:name=".EncyclopediaActivity" android:exported="false" />
-        <activity android:name=".UserGuideActivity" android:exported="false" />
-        <activity android:name=".AnatomyActivity" android:exported="false" />
-        <activity android:name=".PatientsActivity" android:exported="false" />
-        <activity android:name=".AddEditPatientActivity" android:exported="false" />
-        <activity android:name=".PatientDetailActivity" android:exported="false" />
-        <activity android:name=".TreatmentProgramsActivity" android:exported="false" />
-        <activity android:name=".AddEditTreatmentProgramActivity" android:exported="false" />
-        <activity android:name=".TreatmentProgramDetailActivity" android:exported="false" />
-        <activity android:name=".SettingsActivity" android:exported="false" />
-        <activity android:name=".VoiceEngineSettingsActivity" android:exported="false" />
-        <activity android:name=".PrivacyPolicyActivity" android:exported="false" />
-        <!-- configChanges: نفس سبب MainActivity أعلاه بالظبط - شاشة المحادثة الكاملة
-             هي المكان الأكتر عرضة للمشكلة (ردود إكلينيكية طويلة بجولات استكمال
-             متعددة ممكن تاخد وقت، والمستخدم أقرب لتدوير الجهاز أثناء الانتظار). -->
-        <activity android:name=".AiAssistantActivity" android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize" android:exported="false" android:windowSoftInputMode="adjustResize" />
-        <activity android:name=".CloudStorageActivity" android:exported="false" />
-        <activity android:name=".CrashActivity" android:exported="false" />
-
-        <!-- قارئ PDF: يُفتح من الملفات السحابية / زر "قارئ PDF" / أو كخيار "فتح باستخدام" لأي ملف PDF -->
-        <activity
-            android:name=".PdfViewerActivity"
-            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize"
-            android:exported="true"
-            android:label="قارئ PDF">
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:scheme="content" />
-                <data android:mimeType="application/pdf" />
-            </intent-filter>
-        </activity>
-
-        <!-- مشاركة ملف APK المنزَّل مع مُثبّت النظام (تحديث التطبيق من GitHub) -->
-        <provider
-            android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.updates"
-            android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/update_file_paths" />
-        </provider>
-
-        <!-- تنبيه الصباح بمرضى جلسات اليوم: المنبّه اليومي + إعادة الجدولة بعد إعادة التشغيل/التحديث -->
-        <receiver android:name=".SessionReminderReceiver" android:exported="false">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
-                <action android:name="android.intent.action.TIME_SET" />
-                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
-            </intent-filter>
-        </receiver>
-
+        <activity android:name=".ReposActivity" android:exported="false" />
+        <activity android:name=".BrowserActivity" android:exported="false" android:configChanges="orientation|screenSize|keyboardHidden" />
+        <activity android:name=".RepoHomeActivity" android:exported="false" android:configChanges="orientation|screenSize|keyboardHidden" />
+        <activity android:name=".ActionsActivity" android:exported="false" android:configChanges="orientation|screenSize|keyboardHidden" />
+        <activity android:name=".RunDetailActivity" android:exported="false" android:configChanges="orientation|screenSize|keyboardHidden" />
+        <activity android:name=".LogActivity" android:exported="false" android:configChanges="orientation|screenSize|keyboardHidden" />
+        <activity android:name=".WorkflowsActivity" android:exported="false" android:configChanges="orientation|screenSize|keyboardHidden" />
+        <activity android:name=".ActionsDataActivity" android:exported="false" android:configChanges="orientation|screenSize|keyboardHidden" />
+        <activity android:name=".ReleasesActivity" android:exported="false" android:configChanges="orientation|screenSize|keyboardHidden" />
+        <activity android:name=".ReleaseDetailActivity" android:exported="false" android:configChanges="orientation|screenSize|keyboardHidden" />
+        <activity android:name=".CommitsActivity" android:exported="false" android:configChanges="orientation|screenSize|keyboardHidden" />
+        <activity android:name=".IssuesActivity" android:exported="false" android:configChanges="orientation|screenSize|keyboardHidden" />
+        <activity android:name=".IssueDetailActivity" android:exported="false" android:configChanges="orientation|screenSize|keyboardHidden" />
+        <activity android:name=".BranchesActivity" android:exported="false" android:configChanges="orientation|screenSize|keyboardHidden" />
+        <activity android:name=".RepoSettingsActivity" android:exported="false" android:configChanges="orientation|screenSize|keyboardHidden" />
+        <activity android:name=".InsightsActivity" android:exported="false" android:configChanges="orientation|screenSize|keyboardHidden" />
+        <activity android:name=".EditorActivity" android:exported="false" android:configChanges="orientation|screenSize|keyboardHidden" android:windowSoftInputMode="adjustResize" />
     </application>
 </manifest>
