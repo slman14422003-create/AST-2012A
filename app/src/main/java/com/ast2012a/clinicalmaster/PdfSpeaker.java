@@ -87,7 +87,8 @@ final class PdfSpeaker {
 
     private static final String PREFS = "pdf_tts";
     private static final String KEY_RATE = "rate";
-    private static final String KEY_ENGINE = "engine"; // cloud | device
+    private static final String KEY_ENGINE = "engine"; // cloud | local | device
+    private static final String KEY_LOCAL_VOICE = "lvoice"; // معرّف صوت المحرك المحلي (فارغ = الافتراضي)
     private static final String KEY_PROFILE = "profile";   // 0 طبيعي، 1 واضح (افتراضي)، 2 دراسة
     private static final String KEY_PITCH = "pitch_idx";
     private static final String KEY_MIXED = "mixed_voices";
@@ -129,6 +130,7 @@ final class PdfSpeaker {
     private static final int POLL_MS = 40;
     /** تأخير الصوت الفعلي عن موضع التشغيل (مخزن المخرج/البلوتوث): نؤخّر التظليل بمقداره حتى لا يسبق الكلمة. */
     private static final int CLOUD_LAG_MS = 190;
+    private static final int LOCAL_LAG_MS = 60;   // WAV بلا تأخير فك MP3: التوقيت أدق
     private static final int DEVICE_LAG_MS = 140;
 
     /** أصوات الأونلاين: {اللغة, اسم الصوت, الوصف}. الأول لكل لغة هو الافتراضي. */
@@ -531,7 +533,7 @@ final class PdfSpeaker {
                 } catch (Throwable t) {
                     return 0f;
                 }
-                pos -= (int) (CLOUD_LAG_MS * Math.max(0.5f, rate));
+                pos -= (int) ((isLocalEngine() ? LOCAL_LAG_MS : CLOUD_LAG_MS) * Math.max(0.5f, rate));
                 if (pos < 0) return 0f;
                 float f = pos / (float) AudioEnvelope.WINDOW_MS;
                 int i = (int) f;
@@ -1140,6 +1142,8 @@ final class PdfSpeaker {
             return;
         }
         releasePreview();
+        final boolean local = isLocalEngine();
+        final LocalSpeechEngine.Voice lv = local ? localVoice() : null;
         final String voice = cloudVoiceFor("ar");
         final SpeechPrep.Spoken spoken = SpeechPrep.prepare(EdgeTtsClient.sanitize(sample), "ar", "en", false);
         final EdgeTtsClient.Style style = HumanProsody.shape(sample, "ar", false, cloudStyle());
@@ -1148,14 +1152,14 @@ final class PdfSpeaker {
             synthPool.execute(() -> {
                 EdgeTtsClient.Result r = null;
                 try {
-                    r = EdgeTtsClient.synthesize(spoken.text, voice, style);
+                    r = local ? synthLocal(spoken.text, lv, style) : EdgeTtsClient.synthesize(spoken.text, voice, style);
                 } catch (Throwable ignored) {
                 }
                 final EdgeTtsClient.Result rr = r;
                 main.post(() -> {
                     if (gen != previewGen) return;
                     if (rr == null || rr.audio == null || rr.audio.length < 200) {
-                        cb.onFailed("تعذّر تجهيز التجربة (تأكد من الإنترنت).");
+                        cb.onFailed(local ? "تعذّر تجهيز التجربة." : "تعذّر تجهيز التجربة (تأكد من الإنترنت).");
                         return;
                     }
                     if (startPreview(rr.audio)) cb.onPrepared(spoken.text);
@@ -1177,7 +1181,7 @@ final class PdfSpeaker {
         try {
             if (!cacheDir.exists()) //noinspection ResultOfMethodCallIgnored
                 cacheDir.mkdirs();
-            File f = File.createTempFile("prev_", ".mp3", cacheDir);
+            File f = File.createTempFile("prev_", audioExt(data), cacheDir);
             try (FileOutputStream out = new FileOutputStream(f)) {
                 out.write(data);
             }
@@ -1273,13 +1277,37 @@ final class PdfSpeaker {
 
     // ------------------------------------------------------------------ اختيار المحرك والأصوات
 
-    /** true = صوت عصبي أونلاين (الافتراضي)، false = صوت الجهاز. */
+    /** وضع المحرك: cloud (عصبي أونلاين - الافتراضي) | local (المحرك المحلي المبني من الصفر) | device (صوت الجهاز). */
+    String getEngineMode() {
+        String e = prefs.getString(KEY_ENGINE, "cloud");
+        return "local".equals(e) || "device".equals(e) ? e : "cloud";
+    }
+
+    boolean isLocalEngine() {
+        return "local".equals(getEngineMode());
+    }
+
+    /**
+     * true = القراءة تمرّ عبر مسار التجهيز المسبق + MediaPlayer (العصبي الأونلاين والمحرك المحلي كلاهما)،
+     * false = صوت الجهاز (TextToSpeech).
+     */
     boolean isCloudEngine() {
-        return "cloud".equals(prefs.getString(KEY_ENGINE, "cloud"));
+        return !"device".equals(getEngineMode());
     }
 
     void setCloudEngine(boolean cloud) {
-        prefs.edit().putString(KEY_ENGINE, cloud ? "cloud" : "device").apply();
+        setEngineMode(cloud ? "cloud" : "device");
+    }
+
+    void setEngineMode(String mode) {
+        if (!"local".equals(mode) && !"device".equals(mode)) mode = "cloud";
+        prefs.edit().putString(KEY_ENGINE, mode).apply();
+        if ("cloud".equals(mode)) {
+            try {
+                EdgeTtsClient.warmUp();
+            } catch (Throwable ignored) {
+            }
+        }
         cloudBroken = false;
         cloudActive = false;
         badCloudVoices.clear();
@@ -1289,6 +1317,46 @@ final class PdfSpeaker {
         cloudVoiceSwitches = 0;
         resetCloud();
         if (state != State.IDLE) restartFromCurrentPoint();
+    }
+
+    /** أصوات المحرك المحلي (تعمل بلا إنترنت). */
+    List<VoiceOption> listLocalVoices() {
+        List<VoiceOption> out = new ArrayList<>();
+        for (LocalSpeechEngine.Voice v : LocalSpeechEngine.VOICES) out.add(new VoiceOption(v.id, v.label));
+        return out;
+    }
+
+    /** null = الصوت الافتراضي للمحرك المحلي. */
+    String getPreferredLocalVoice() {
+        return prefs.getString(KEY_LOCAL_VOICE, null);
+    }
+
+    void setPreferredLocalVoice(String id) {
+        SharedPreferences.Editor e = prefs.edit();
+        if (id == null) e.remove(KEY_LOCAL_VOICE);
+        else e.putString(KEY_LOCAL_VOICE, id);
+        e.apply();
+        cloudBroken = false;
+        cloudActive = false;
+        resetCloud();
+        if (state != State.IDLE) restartFromCurrentPoint();
+    }
+
+    private LocalSpeechEngine.Voice localVoice() {
+        return LocalSpeechEngine.voiceById(prefs.getString(KEY_LOCAL_VOICE, null));
+    }
+
+    /** تركيب جملة بالمحرك المحلي بصيغة نتيجة المسار العصبي (WAV بدل MP3) - لا يرمي استثناءات. */
+    private static EdgeTtsClient.Result synthLocal(String text, LocalSpeechEngine.Voice v, EdgeTtsClient.Style style) {
+        LocalSpeechEngine.Out o = LocalSpeechEngine.synthesize(text, v, style.arRatePct, style.pitchHz,
+                style.sentencePauseMs, style.commaPauseMs);
+        if (o == null) return new EdgeTtsClient.Result(new byte[0], new int[0], new int[0]);
+        return new EdgeTtsClient.Result(o.wav, o.wordMs, o.wordChar, o.durationMs);
+    }
+
+    /** امتداد ملف الصوت المؤقت بحسب محتواه (المحرك المحلي ينتج WAV، والعصبي MP3). */
+    private static String audioExt(byte[] d) {
+        return d != null && d.length > 12 && d[0] == 'R' && d[1] == 'I' && d[2] == 'F' && d[3] == 'F' ? ".wav" : ".mp3";
     }
 
     List<VoiceOption> listCloudVoices(String lang) {
@@ -1334,6 +1402,7 @@ final class PdfSpeaker {
     }
 
     private String cloudVoiceFor(String lang) {
+        if (isLocalEngine()) return "local-" + localVoice().id; // صوت واحد لكل اللغات (المحرك يتولى الكتابات اللاتينية)
         String v = pickCloudVoice(lang);
         if (v != null) return v;
         for (String[] cv : CLOUD_VOICES) {
@@ -1937,7 +2006,9 @@ final class PdfSpeaker {
         final String voice = cloudVoiceFor(c.lang);
         final String key = cloudKey(voice, pt.pageIndex, idx);
         if (cloudReady.containsKey(key) || cloudPending.contains(key)) return key;
-        final boolean mix = isMixedVoices();
+        final boolean local = isLocalEngine();
+        final LocalSpeechEngine.Voice lv = local ? localVoice() : null;
+        final boolean mix = !local && isMixedVoices();
         final SpeechPrep.Spoken spoken = SpeechPrep.prepare(
                 EdgeTtsClient.sanitize(pt.text.substring(c.start, c.end)), c.lang, pt.latin, mix, c.cont);
         final String sent = spoken.text;
@@ -1961,6 +2032,8 @@ final class PdfSpeaker {
                 try {
                     if (sent.trim().isEmpty()) { // مقطع كله رموز: لا يوجد ما يُنطق - نتخطاه بدون اتصال
                         r = new EdgeTtsClient.Result(new byte[0], new int[0], new int[0]);
+                    } else if (local) {
+                        r = synthLocal(sent, lv, style); // محلي: بلا شبكة
                     } else {
                         r = runs != null ? EdgeTtsClient.synthesizeRuns(sent, runs, voice, style)
                                 : EdgeTtsClient.synthesize(sent, voice, style);
@@ -1971,7 +2044,7 @@ final class PdfSpeaker {
                 final EdgeTtsClient.Result rr = r;
                 final Throwable ee = err;
                 // تعلّم إيقاع الصوت العصبي الحقيقي (للأصوات أحادية اللغة فقط؛ المختلطة تتداخل فيها الأصوات)
-                if (runs == null && rr != null && rr.audio != null && rr.audio.length >= 200 && rr.durationMs > 0
+                if (!local && runs == null && rr != null && rr.audio != null && rr.audio.length >= 200 && rr.durationMs > 0
                         && isVoiceLearning()) {
                     LocalVoiceModel.learnNeural(c.lang, sent.length(), rr.durationMs,
                             voice.startsWith("ar-") ? style.arRatePct : 0);
@@ -2000,6 +2073,11 @@ final class PdfSpeaker {
         if (a == null) {
             if (!waiting) return; // فشل تجهيز مسبق: سنعيد الطلب عند الحاجة
             if (currentText == null) return;
+            if (isLocalEngine()) { // المحرك المحلي لا يعتمد على الشبكة: نرجع لصوت الجهاز مباشرة بلا تشخيص شبكة
+                awaitingKey = null;
+                fallbackToDevice("تعذّر المحرك المحلي لهذا المقطع، تم التحويل لصوت الجهاز تلقائيًا.");
+                return;
+            }
             final String why = EdgeTtsClient.lastError == null || EdgeTtsClient.lastError.isEmpty()
                     ? "" : " (" + EdgeTtsClient.lastError + ")";
             // مشكلة شبكة أو رفض الاتصال نفسه (403/503...) -> تبديل الصوت لا يفيد: صوت الجهاز فورًا
@@ -2073,7 +2151,7 @@ final class PdfSpeaker {
         try {
             if (!cacheDir.exists()) //noinspection ResultOfMethodCallIgnored
                 cacheDir.mkdirs();
-            File f = File.createTempFile("tts_", ".mp3", cacheDir);
+            File f = File.createTempFile("tts_", audioExt(a.data), cacheDir);
             try (FileOutputStream out = new FileOutputStream(f)) {
                 out.write(a.data);
             }
@@ -2205,7 +2283,7 @@ final class PdfSpeaker {
         } catch (Throwable e) {
             return;
         }
-        pos -= (int) (CLOUD_LAG_MS * Math.max(0.5f, rate)); // زمن الوسائط لا الزمن الحقيقي
+        pos -= (int) ((isLocalEngine() ? LOCAL_LAG_MS : CLOUD_LAG_MS) * Math.max(0.5f, rate)); // زمن الوسائط لا الزمن الحقيقي
         PdfSpeechText.Chunk c = t.chunks.get(currentChunk);
         final boolean mapped = a.spoken != null && a.spoken.text.length() > 0;
         int len = Math.max(1, mapped ? a.spoken.text.length() : c.end - c.start);
@@ -2251,7 +2329,7 @@ final class PdfSpeaker {
         try {
             if (!cacheDir.exists()) //noinspection ResultOfMethodCallIgnored
                 cacheDir.mkdirs();
-            File f = File.createTempFile("tts_", ".mp3", cacheDir);
+            File f = File.createTempFile("tts_", audioExt(a.data), cacheDir);
             try (FileOutputStream out = new FileOutputStream(f)) {
                 out.write(a.data);
             }

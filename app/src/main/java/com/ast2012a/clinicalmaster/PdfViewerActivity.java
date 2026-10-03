@@ -1724,29 +1724,44 @@ public class PdfViewerActivity extends AppCompatActivity {
      *  (عنوان + وصف + قيمة/مفتاح) بدل قائمة نصية طويلة، ويُحدَّث في مكانه بدون إغلاق. */
     private void buildVoiceSettingsContent(LinearLayout root, Runnable refresh) {
         root.removeAllViews();
-        final boolean cloud = speaker.isCloudEngine();
+        final String mode = speaker.getEngineMode();
+        final boolean isCloudMode = "cloud".equals(mode);
+        final boolean isLocalMode = "local".equals(mode);
 
-        // ---- المحرك والأصوات
+        // ---- المحرك والأصوات (النقر على المحرك يدوّر: عصبي أونلاين ← محلي بلا إنترنت ← صوت الجهاز)
         LinearLayout g1 = voiceGroup(root, "المحرك والأصوات");
         addVoiceRow(g1, "محرك القراءة",
-                cloud ? "صوت عصبي أونلاين مجاني" : "صوت الجهاز يعمل بدون إنترنت",
-                cloud ? "عصبي" : "الجهاز", false, () -> {
-                    speaker.setCloudEngine(!cloud);
-                    Toast.makeText(this, cloud ? "تم التحويل لصوت الجهاز." : "تم التحويل للصوت العصبي الأونلاين.",
+                isCloudMode ? "صوت عصبي أونلاين مجاني"
+                        : isLocalMode ? "محرك محلي مبني من الصفر، يعمل بلا إنترنت وبلا حدود"
+                        : "صوت الجهاز يعمل بدون إنترنت",
+                isCloudMode ? "عصبي" : isLocalMode ? "محلي" : "الجهاز", false, () -> {
+                    final String next = isCloudMode ? "local" : isLocalMode ? "device" : "cloud";
+                    speaker.setEngineMode(next);
+                    Toast.makeText(this, "local".equals(next) ? "تم التحويل للمحرك المحلي (بلا إنترنت)."
+                                    : "device".equals(next) ? "تم التحويل لصوت الجهاز."
+                                    : "تم التحويل للصوت العصبي الأونلاين.",
                             Toast.LENGTH_SHORT).show();
                     refresh.run();
                 });
-        for (int i = 0; i < TTS_LANG_LABELS.length; i++) {
-            final int idx = i;
-            addVoiceRow(g1, "صوت " + TTS_LANG_LABELS[i], null, null, true, () -> {
+        if (isLocalMode) {
+            // المحرك المحلي له أصوات خاصة به تخدم كل اللغات
+            addVoiceRow(g1, "صوت المحرك المحلي", null, null, true, () -> {
                 if (voiceDialog != null) voiceDialog.dismiss();
-                showVoicePicker(idx);
+                showVoicePicker(0);
             });
+        } else {
+            for (int i = 0; i < TTS_LANG_LABELS.length; i++) {
+                final int idx = i;
+                addVoiceRow(g1, "صوت " + TTS_LANG_LABELS[i], null, null, true, () -> {
+                    if (voiceDialog != null) voiceDialog.dismiss();
+                    showVoicePicker(idx);
+                });
+            }
         }
 
         // ---- التحكم بالصوت المحلي (محرك الجهاز - يعمل بدون إنترنت)
-        LinearLayout gLocal = voiceGroup(root, "الصوت المحلي (بدون إنترنت)");
-        addVoiceRow(gLocal, "محرك النطق المحلي", "المحرك الذي يقرأ به الجهاز عند عدم استخدام العصبي",
+        LinearLayout gLocal = voiceGroup(root, "صوت الجهاز (بدون إنترنت)");
+        addVoiceRow(gLocal, "محرك نطق الجهاز", "المحرك الذي يقرأ به الجهاز عند اختيار صوت الجهاز أو عند الرجوع التلقائي",
                 localEngineLabel(), true, () -> {
                     if (voiceDialog != null) voiceDialog.dismiss();
                     showDeviceEnginePicker();
@@ -2012,10 +2027,10 @@ public class PdfViewerActivity extends AppCompatActivity {
             if (engines.get(i).name.equals(saved)) checked = i + 1;
         }
         voiceDialog = new ClaudeDialog(this)
-                .setTitle("محرك النطق المحلي")
+                .setTitle("محرك نطق الجهاز")
                 .setSingleChoiceItems(labels, checked, (d, which) -> {
                     speaker.setDeviceEngine(which == 0 ? null : engines.get(which - 1).name);
-                    Toast.makeText(this, "تم تغيير محرك النطق المحلي", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, "تم تغيير محرك نطق الجهاز", Toast.LENGTH_SHORT).show();
                     if (voiceDialog != null) voiceDialog.dismiss();
                 })
                 .show();
@@ -2023,6 +2038,24 @@ public class PdfViewerActivity extends AppCompatActivity {
 
     private void showVoicePicker(int langIdx) {
         final String lang = TTS_LANG_CODES[langIdx];
+        if (speaker.isLocalEngine()) {
+            final List<PdfSpeaker.VoiceOption> localOpts = speaker.listLocalVoices();
+            String[] localLabels = new String[localOpts.size()];
+            int localChecked = 0;
+            String localSaved = speaker.getPreferredLocalVoice();
+            for (int i = 0; i < localOpts.size(); i++) {
+                localLabels[i] = localOpts.get(i).label;
+                if (localOpts.get(i).name.equals(localSaved)) localChecked = i;
+            }
+            voiceDialog = new ClaudeDialog(this)
+                    .setTitle("صوت المحرك المحلي")
+                    .setSingleChoiceItems(localLabels, localChecked, (d, which) -> {
+                        speaker.setPreferredLocalVoice(localOpts.get(which).name);
+                        Toast.makeText(this, "تم تغيير الصوت - سيُطبَّق فورًا على القراءة", Toast.LENGTH_SHORT).show();
+                    })
+                    .show();
+            return;
+        }
         if (speaker.isCloudEngine()) {
             // أصوات عصبية أونلاين (مجانية) - قائمة ثابتة لكل لغة
             final List<PdfSpeaker.VoiceOption> cloudOpts = speaker.listCloudVoices(lang);

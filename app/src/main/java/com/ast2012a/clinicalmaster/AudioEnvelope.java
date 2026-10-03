@@ -30,6 +30,7 @@ final class AudioEnvelope {
     /** يرجّع الغلاف أو null لو تعذّر الفك (يُستعمل حينها تحريك تقديري للموجة). */
     static float[] fromEncoded(final byte[] data) {
         if (data == null || data.length < 200) return null;
+        if (isWav(data)) return fromWav(data); // صوت المحرك المحلي: PCM جاهز بلا حاجة لفك الترميز
         MediaExtractor ex = new MediaExtractor();
         MediaCodec codec = null;
         try {
@@ -150,6 +151,44 @@ final class AudioEnvelope {
                 ex.release();
             } catch (Throwable ignored) {
             }
+        }
+    }
+
+    private static boolean isWav(byte[] d) {
+        return d.length > 44 && d[0] == 'R' && d[1] == 'I' && d[2] == 'F' && d[3] == 'F'
+                && d[8] == 'W' && d[9] == 'A' && d[10] == 'V' && d[11] == 'E';
+    }
+
+    /** غلاف الصوت من WAV أحادي 16 بت (يُنتجه LocalSpeechEngine). null لو الصيغة غير مدعومة. */
+    private static float[] fromWav(byte[] d) {
+        try {
+            int channels = (d[22] & 0xFF) | ((d[23] & 0xFF) << 8);
+            int sampleRate = (d[24] & 0xFF) | ((d[25] & 0xFF) << 8) | ((d[26] & 0xFF) << 16) | ((d[27] & 0xFF) << 24);
+            int bits = (d[34] & 0xFF) | ((d[35] & 0xFF) << 8);
+            if (channels < 1 || bits != 16 || sampleRate < 4000) return null;
+            int frameBytes = 2 * channels;
+            int total = (d.length - 44) / frameBytes;
+            int win = Math.max(1, sampleRate * WINDOW_MS / 1000);
+            int count = total / win;
+            if (count < 2) return null;
+            float[] rms = new float[count];
+            for (int w = 0; w < count; w++) {
+                double sumSq = 0;
+                for (int i = 0; i < win; i++) {
+                    int o = 44 + (w * win + i) * frameBytes;
+                    float s = 0f;
+                    for (int c = 0; c < channels; c++) {
+                        int q = o + c * 2;
+                        s += (short) ((d[q] & 0xFF) | (d[q + 1] << 8));
+                    }
+                    s /= channels;
+                    sumSq += (double) s * s;
+                }
+                rms[w] = (float) (Math.sqrt(sumSq / win) / 32768.0);
+            }
+            return normalize(rms);
+        } catch (Throwable t) {
+            return null;
         }
     }
 
