@@ -245,6 +245,13 @@ final class SpeechPrep {
                     // أي خطأ: تبقى الكلمات كما جُهّزت
                 }
             }
+            if (ar) {
+                relaxTanween(sps, toks);
+                if (taaMode != ArabicPhonetics.TAA_AUTO) stripDictTaaCase(sps, toks);
+                for (int q = 0; q < sps.length; q++) {
+                    if (sps[q] != null && !sps[q].isEmpty()) sps[q] = ArabicPhonetics.cleanWords(sps[q]);
+                }
+            }
             if (ar && (taaMode != ArabicPhonetics.TAA_AUTO || noIrab)) shapeEndingsAll(sps, toks);
             // تدقيق: أواخر الكلمات الانفجارية (ك ق ط ب د ت ج ض) تُطلَق بسكون كي لا يبتلعها المحرك
             if (ar) {
@@ -456,6 +463,83 @@ final class SpeechPrep {
             String shaped = ArabicPhonetics.shapeEndings(closes ? sp + "\u060C" : sp, nextArabic, tm, ni);
             if (closes && shaped.endsWith("\u060C")) shaped = shaped.substring(0, shaped.length() - 1);
             sps[t] = shaped;
+        }
+    }
+
+    /**
+     * تنوين أضافه القاموس لكلمة لم يكن في نصّها تنوين، وبعدها مباشرة كلمة معرّفة بـ ال (مُتَلَازِمَةٌ الْأَلَم):
+     * النطق الصحيح للمضاف أو المتبوع بمعرّف حركة قصيرة (مُتَلَازِمَةُ الْأَلَم) لا نونًا زائدة. تنوين الفتح (ظروف وأحوال) يبقى.
+     * عند الوقف (علامة ترقيم) لا نلمس شيئًا: الوقف يتكفّل به pausal.
+     */
+    private static void relaxTanween(String[] sps, List<String> toks) {
+        for (int t = 0; t + 1 < sps.length; t++) {
+            String sp = sps[t];
+            if (sp == null || sp.isEmpty()) continue;
+            char last = sp.charAt(sp.length() - 1);
+            if (last != ArabicPhonetics.DAMMATAN && last != ArabicPhonetics.KASRATAN) continue;
+            String orig = toks.get(t);
+            boolean origTanween = false;
+            for (int k = 0; k < orig.length(); k++) {
+                char c = orig.charAt(k);
+                if (c >= '\u064B' && c <= '\u064D') {
+                    origTanween = true;
+                    break;
+                }
+            }
+            if (origTanween || endsWithStop(orig)) continue;
+            String nx = null;
+            for (int u = t + 1; u < sps.length; u++) {
+                if (sps[u] != null && !sps[u].isEmpty()) {
+                    nx = sps[u];
+                    break;
+                }
+            }
+            if (nx == null || !ArabicPhonetics.isArabicLetter(nx.charAt(0))) continue;
+            StringBuilder plain = new StringBuilder();
+            for (int k = 0; k < nx.length(); k++) {
+                char c = nx.charAt(k);
+                if (ArabicPhonetics.isArabicLetter(c)) plain.append(c);
+                else if (!ArabicPhonetics.isMark(c)) break;
+            }
+            String pn = plain.toString();
+            boolean definite = pn.startsWith("\u0627\u0644") || pn.startsWith("\u0644\u0644")
+                    || (pn.length() > 4 && "\u0648\u0641\u0628\u0643\u0644".indexOf(pn.charAt(0)) >= 0
+                    && pn.startsWith("\u0627\u0644", 1));
+            if (!definite) continue;
+            sps[t] = sp.substring(0, sp.length() - 1)
+                    + (last == ArabicPhonetics.DAMMATAN ? ArabicPhonetics.DAMMA : ArabicPhonetics.KASRA);
+        }
+    }
+
+    /**
+     * كلمة بلا أي تشكيل في الملف أخذت من القاموس ة بحركة إعراب عشوائية (الْخُطَّةِ، الزَّاوِيَةِ) بينما باقي الجملة بأسلوب التاء/الهاء:
+     * نُسقط الحركة فتدخل الكلمة في ضبط ـَتْ (وصل) / ـَهْ (وقف) مثل بقية الكلمات، بدل إعراب لا يعرف القاموس صحته في هذا الموضع.
+     * الكلمة المشكولة في الملف نفسه لا تُمسّ.
+     */
+    private static void stripDictTaaCase(String[] sps, List<String> toks) {
+        for (int t = 0; t < sps.length; t++) {
+            String sp = sps[t];
+            if (sp == null || sp.length() < 3) continue;
+            int n = sp.length();
+            char v = sp.charAt(n - 1);
+            if ((v != ArabicPhonetics.FATHA && v != ArabicPhonetics.DAMMA && v != ArabicPhonetics.KASRA)
+                    || sp.charAt(n - 2) != ArabicPhonetics.TAA_MARBUTA) {
+                continue;
+            }
+            boolean marked = false;
+            String orig = toks.get(t);
+            for (int k = 0; k < orig.length(); k++) {
+                if (ArabicPhonetics.isMark(orig.charAt(k))) {
+                    marked = true;
+                    break;
+                }
+            }
+            if (marked) continue;
+            // بعد حرف جرّ ملتصق (لِإِعَادَةِ، بِمُحَاذَاةِ) الجرّ مؤكَّد فنُبقي الكسرة كما جاءت من القاموس
+            String bare = bareOf(clean(orig));
+            int pi = (bare.length() > 4 && (bare.charAt(0) == '\u0648' || bare.charAt(0) == '\u0641')) ? 1 : 0;
+            if (bare.length() > pi + 3 && "\u0628\u0643\u0644".indexOf(bare.charAt(pi)) >= 0 && v == ArabicPhonetics.KASRA) continue;
+            sps[t] = sp.substring(0, n - 1);
         }
     }
 
@@ -1174,6 +1258,7 @@ final class SpeechPrep {
                 if (taaFix) w = ArabicPhonetics.fixTaaTypo(w); // الحركه -> الحركة (لتُنطق تاءً لا هاءً)
                 w = diacritize(w);
                 w = ArabicPhonetics.fixJamaa(w); // تجمعوا: واو الجماعة بلا نطق الألف بعدها
+                w = ArabicPhonetics.cleanWords(w); // لا حركة على ألف المدّ، ولا تنوين على المعرّف بـ ال
                 if (assist && pausal && k == parts.length - 1) w = ArabicPhonetics.pausal(w);
             } else if (spellAcronyms && englishContext(lang)) {
                 w = acronym(w);

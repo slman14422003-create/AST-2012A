@@ -140,6 +140,7 @@ final class WordVerifier {
     static boolean wellFormed(String shaped) {
         if (shaped == null || shaped.isEmpty()) return false;
         if (ArabicPhonetics.isMark(shaped.charAt(0))) return false;
+        if (ArabicPhonetics.hasMarkOnMadd(shaped)) return false; // ألف المدّ لا تأخذ حركة
         boolean shadda = false;
         boolean vowel = false;
         for (int i = 0; i < shaped.length(); i++) {
@@ -191,7 +192,8 @@ final class WordVerifier {
             while (j < shaped.length() && (ArabicPhonetics.isMark(shaped.charAt(j)) || shaped.charAt(j) == '\u0640')) j++;
             if (j >= shaped.length()) return false;
             char d = shaped.charAt(j++);
-            if ((c == '\u0623' || c == '\u0625' || c == '\u0622') && d == ALEF) return false;
+            // مقعد الهمزة يبقى كما كُتب: أ لا تصير إ (الأمامي -> الإمامي) ولا آ تصير أ (تآكل -> تأكل) ولا همزة تصير ألفًا عارية
+            if ((c == '\u0623' || c == '\u0625' || c == '\u0622') && d != c) return false;
         }
         return true;
     }
@@ -207,7 +209,7 @@ final class WordVerifier {
     }
 
     private static boolean accept(String plain, String shaped) {
-        return shaped != null && wellFormed(shaped) && sameLetters(plain, shaped);
+        return shaped != null && wellFormed(shaped) && sameLetters(plain, shaped) && keepsHamza(plain, shaped);
     }
 
     // ------------------------------------------------------------------ البحث عن جذع
@@ -270,6 +272,7 @@ final class WordVerifier {
         if (j < 2) return null;
         char l1 = b.charAt(j - 1);
         if (isLongVowelLetter(l1) && !shadda && !allowBareLongVowel) return null;
+        if (l1 == ALEF && !shadda) return b.substring(0, j); // قَنَا + تَيْنِ: ألف المدّ بلا فتحة (كانت تخرج قَنَاَتَيْنِ)
         return b.substring(0, j) + (shadda ? String.valueOf(SHADDA) : "") + FATHA;
     }
 

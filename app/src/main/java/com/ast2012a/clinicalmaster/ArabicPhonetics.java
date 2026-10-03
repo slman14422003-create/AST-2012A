@@ -318,6 +318,113 @@ final class ArabicPhonetics {
         return orderMarks(sb.toString());
     }
 
+    // ------------------------------------------------------------------ 1c) تنظيف نهائي للكلمة المشكولة
+
+    private static boolean isPrefixLetter(char c) {
+        return c == '\u0648' || c == '\u0641' || c == '\u0628' || c == '\u0643' || c == '\u0644';
+    }
+
+    /** كل ما قبل الفهرس i حروف سوابق (و ف ب ك ل) بعلاماتها فقط، أي أن الألف عند i ألف وصل بعد سابقة (وَاِلْتِهَاب). */
+    private static boolean onlyPrefixBefore(String s, int i) {
+        int letters = 0;
+        for (int k = 0; k < i; k++) {
+            char c = s.charAt(k);
+            if (isMark(c)) continue;
+            if (!isPrefixLetter(c)) return false;
+            letters++;
+        }
+        return letters <= 2;
+    }
+
+    /**
+     * ألف المدّ (بعد حرف مفتوح) لا تأخذ حركة ولا سكونًا: "قَنَاَتَيْنِ" خطأ تشكيل يجعل المحرك ينطق الألف همزة أو يقصّر المدّ.
+     * ألف الوصل بعد سابقة (وَاِلْتِهَاب، بِاِنْقِبَاض) مستثناة.
+     */
+    static boolean hasMarkOnMadd(String s) {
+        if (s == null) return false;
+        for (int i = 1; i + 1 < s.length(); i++) {
+            if (s.charAt(i) != '\u0627') continue;
+            char nx = s.charAt(i + 1);
+            if (nx != FATHA && nx != DAMMA && nx != KASRA && nx != SUKUN) continue;
+            if (s.charAt(i - 1) != FATHA) continue;
+            if (onlyPrefixBefore(s, i)) continue;
+            return true;
+        }
+        return false;
+    }
+
+    /** يحذف الحركة/السكون الشاذّ عن ألف المدّ (انظر {@link #hasMarkOnMadd}). */
+    static String cleanMadd(String s) {
+        if (s == null || !hasMarkOnMadd(s)) return s;
+        StringBuilder sb = new StringBuilder(s.length());
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (i >= 2 && s.charAt(i - 1) == '\u0627' && (c == FATHA || c == DAMMA || c == KASRA || c == SUKUN)
+                    && s.charAt(i - 2) == FATHA && !onlyPrefixBefore(s, i - 1)) {
+                continue;
+            }
+            sb.append(c);
+        }
+        return sb.toString();
+    }
+
+    /** الكلمة (بلا تشكيل) معرّفة بـ ال أو لل بعد سابقة اختيارية؟ (ما عدا جذوع اِلْتِهَاب... التي ألفها وصل لا أداة تعريف.) */
+    private static boolean isDefinitePlain(String p) {
+        if (p == null || p.length() < 4) return false;
+        if ((p.charAt(0) == '\u0648' || p.charAt(0) == '\u0641') && p.length() > 4) p = p.substring(1);
+        if (p.length() >= 5 && (p.charAt(0) == '\u0628' || p.charAt(0) == '\u0643' || p.charAt(0) == '\u0644')
+                && p.startsWith("\u0627\u0644", 1)) {
+            p = p.substring(1);
+        }
+        if (p.startsWith("\u0644\u0644") && p.length() >= 4) return true;
+        return p.startsWith("\u0627\u0644") && !isIlForm(p);
+    }
+
+    /** المعرّف بـ ال لا يُنوَّن أبدًا (الْفَقَرِيَّةٌ): نردّ التنوين إلى حركته القصيرة. */
+    static String fixDefiniteTanween(String w) {
+        if (w == null || w.length() < 4) return w;
+        if (w.indexOf(DAMMATAN) < 0 && w.indexOf(KASRATAN) < 0 && w.indexOf(FATHATAN) < 0) return w;
+        if (!isPureArabicWord(w) || !isDefinitePlain(stripMarks(w))) return w;
+        StringBuilder sb = new StringBuilder(w.length());
+        for (int i = 0; i < w.length(); i++) {
+            char c = w.charAt(i);
+            if (c == DAMMATAN) sb.append(DAMMA);
+            else if (c == KASRATAN) sb.append(KASRA);
+            else if (c == FATHATAN) sb.append(FATHA);
+            else sb.append(c);
+        }
+        return sb.toString();
+    }
+
+    /** تنظيف نهائي لسلسلة منطوقة (كلمة أو أكثر): كل كلمة عربية صرفة تمرّ على إصلاح المدّ وتنوين المعرّف. */
+    static String cleanWords(String sp) {
+        if (sp == null || sp.isEmpty() || !hasArabic(sp)) return sp;
+        String[] parts = sp.split(" ", -1);
+        boolean changed = false;
+        for (int i = 0; i < parts.length; i++) {
+            String part = parts[i];
+            int a = 0;
+            int b = part.length();
+            while (a < b && !isArabicLetter(part.charAt(a))) a++;
+            while (b > a && !isArabicLetter(part.charAt(b - 1)) && !isMark(part.charAt(b - 1))) b--;
+            if (a >= b) continue;
+            String word = part.substring(a, b);
+            if (!isPureArabicWord(word)) continue;
+            String w2 = fixDefiniteTanween(cleanMadd(word));
+            if (!w2.equals(word)) {
+                parts[i] = part.substring(0, a) + w2 + part.substring(b);
+                changed = true;
+            }
+        }
+        if (!changed) return sp;
+        StringBuilder sb = new StringBuilder(sp.length());
+        for (int i = 0; i < parts.length; i++) {
+            if (i > 0) sb.append(' ');
+            sb.append(parts[i]);
+        }
+        return sb.toString();
+    }
+
     // ------------------------------------------------------------------ 2) الوقف
 
     /** كلمة مشكولة قبل علامة وقف: تُحذف حركة الإعراب الأخيرة والتنوين كما في القراءة الفصيحة. */
@@ -501,6 +608,11 @@ final class ArabicPhonetics {
                 "تبعيد=تَبْعِيد", "دوران=دَوَرَان", "مشي=مَشْي", "وقوف=وُقُوف", "جلوس=جُلُوس",
                 "استلقاء=اِسْتِلْقَاء", "وضعية=وَضْعِيَّة", "وضعيات=وَضْعِيَّات", "تحمل=تَحَمُّل",
                 "ثبات=ثَبَات", "تناسق=تَنَاسُق");
+        // وحدات قياس ومصطلحات الكهروعلاج (أسماء معرَّبة: القاموس العام كان يقرؤها كأفعال: فولت -> فَوَلَّتْ)
+        lx("فولت=فُولْت", "أمبير=أَمْبِير", "هرتز=هِرْتْز", "ميكرو=مِيكْرُو", "ميلي=مِيلِي", "ملي=مِلِّي", "كيلو=كِيلُو",
+                "أوم=أُوم", "واط=وَاط", "كولوم=كُولُوم", "فولتية=فُولْتِيَّة", "نبضة=نَبْضَة", "نبضات=نَبَضَات",
+                "نبضي=نَبْضِي", "نبضية=نَبْضِيَّة", "قناة=قَنَاة", "قنوات=قَنَوَات", "موجة=مَوْجَة", "موجات=مَوْجَات",
+                "قطب=قُطْب", "أقطاب=أَقْطَاب", "ثانية=ثَانِيَة", "دقيقة=دَقِيقَة", "ساعة=سَاعَة", "ثواني=ثَوَانِي");
         // أجهزة وأدوات ومصطلحات عامة
         lx("جهاز=جِهَاز", "أجهزة=أَجْهِزَة", "تيار=تَيَّار", "تردد=تَرَدُّد", "شدة=شِدَّة", "مدة=مُدَّة",
                 "جلسة=جَلْسَة", "جلسات=جَلَسَات", "مرحلة=مَرْحَلَة", "مراحل=مَرَاحِل", "درجة=دَرَجَة",
@@ -785,11 +897,36 @@ final class ArabicPhonetics {
                 int q = p - 1;
                 while (q >= 0 && isMark(w.charAt(q))) q--;
                 boolean afterAlif = q >= 0 && w.charAt(q) == '\u0627';
-                if (!afterAlif && plainLen(w) >= 5) sb.append(SHADDA);
+                if (!afterAlif && plainLen(w) >= 5 && !singleYaWord(w)) sb.append(SHADDA);
             }
             if (!hasVowel) sb.append(FATHA);
         }
         return sb.append(waqf ? HAA : TAA).append(SUKUN).toString();
+    }
+
+    /**
+     * كلمات تنتهي بـ ـية وياؤها واحدة غير مشدّدة (ثَانِيَة، تَغْذِيَة، أَدْوِيَة) فلا تأخذ شدّة النسبة (علاجِيَّة).
+     * كانت كل كلمة بلا تشكيل تنتهي بـ ـية من 5 أحرف فأكثر تُشدَّد فتُنطق "ثانيَّتْ" و"تغذيَّتْ".
+     */
+    private static final java.util.Set<String> SINGLE_YA = new java.util.HashSet<>(Arrays.asList((
+            "ثانية ناحية زاوية عالية كافية شافية باقية ناجية راضية ساقية عافية قاضية غاشية هاوية جارية داعية واقية "
+                    + "أدوية أغذية أحذية أبنية أقنية أوعية أمنية أغنية أسقية أردية أندية أنوية أطرية أصدية").split(" ")));
+
+    private static boolean singleYaWord(String w) {
+        String p = stripMarks(w);
+        String[] cands = {p, p.length() > 4 ? p.substring(1) : p, p.length() > 5 ? p.substring(2) : p};
+        for (String c0 : cands) {
+            String c = c0;
+            if (c.startsWith("\u0627\u0644") && c.length() > 4) c = c.substring(2);
+            else if (c.startsWith("\u0644\u0644") && c.length() > 4) c = c.substring(2);
+            if (SINGLE_YA.contains(c)) return true;
+            // تفعية (تَغْذِيَة، تَقْوِيَة، تَسْوِيَة، تَنْمِيَة، تَصْفِيَة): مصدر الفعل المعتلّ على تَفْعِلَة؛ ياؤها واحدة
+            if (c.length() == 5 && c.charAt(0) == '\u062A' && c.charAt(3) == '\u064A' && c.charAt(4) == '\u0629'
+                    && !c.equals("\u062A\u0642\u0646\u064A\u0629")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static int plainLen(String w) {
