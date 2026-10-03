@@ -1,13 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- ============================================================================
-     شاشة الإعدادات — إعادة تصميم بأسلوب تطبيق Claude:
-     * شريط علوي بسيط (سهم رجوع + عنوان في المنتصف)
-     * بطاقة Phizyo AI في الأعلى (مثل بطاقة "Want more Claude?") فيها زر
-       اختبار الاتصال
-     * مجموعات صفوف مدوّرة، كل صف: أيقونة + عنوان + وصف اختياري + سهم/قيمة
-     * حُذفت العناصر غير الضرورية: مشاركة التطبيق، تقييم التطبيق، التواصل،
-       رابط الووركر، بطاقة الشرح الطويلة (صارت صفًا يفتح نافذة).
-     ============================================================================ -->
+<!-- شاشة إعدادات محرك الصوت البشري: نمط جاهز + منزلقات الإيقاع + مفاتيح التفاصيل + التعلّم + تجربة فورية. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
@@ -21,7 +13,7 @@
         android:layout_width="match_parent"
         android:layout_height="60dp"
         app:navigationIcon="@drawable/ic_arrow_back"
-        app:title="الإعدادات" />
+        app:title="محرك الصوت البشري" />
 
     <ScrollView
         android:layout_width="match_parent"
@@ -38,56 +30,11 @@
             android:paddingEnd="16dp"
             android:paddingBottom="28dp">
 
-            <!-- ============== بطاقة Phizyo AI ============== -->
-            <LinearLayout
+            <TextView
+                style="@style/Settings.SectionLabel"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="14dp"
-                android:background="@drawable/bg_card_outline"
-                android:orientation="vertical"
-                android:padding="22dp">
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:fontFamily="serif"
-                    android:text="Phizyo AI"
-                    android:textAlignment="viewStart"
-                    android:textColor="@color/text_primary"
-                    android:textDirection="ltr"
-                    android:textSize="22sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
-                    android:lineSpacingExtra="3dp"
-                    android:text="مساعدك الذكي للعلاج الطبيعي. تأكد أنه متصل ويعمل بشكل صحيح."
-                    android:textAlignment="viewStart"
-                    android:textColor="@color/text_secondary"
-                    android:textDirection="rtl"
-                    android:textSize="15sp" />
-
-                <TextView
-                    android:id="@+id/btn_test_worker"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="18dp"
-                    android:background="@drawable/bg_pill_inverse"
-                    android:clickable="true"
-                    android:clipToOutline="true"
-                    android:focusable="true"
-                    android:foreground="?attr/selectableItemBackground"
-                    android:gravity="center"
-                    android:minHeight="48dp"
-                    android:paddingStart="26dp"
-                    android:paddingEnd="26dp"
-                    android:text="اختبار الاتصال"
-                    android:textColor="@color/bg_deep_1"
-                    android:textDirection="rtl"
-                    android:textSize="16sp" />
-            </LinearLayout>
+                android:text="المحرك" />
 
             <LinearLayout
                 style="@style/Settings.Group"
@@ -95,376 +42,7 @@
                 android:layout_height="wrap_content">
 
                 <LinearLayout
-                    android:id="@+id/btn_ai_instructions"
-                    style="@style/Settings.Row"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content">
-
-                    <ImageView
-                        style="@style/Settings.RowIcon"
-                        android:layout_width="24dp"
-                        android:layout_height="24dp"
-                        android:src="@drawable/ic_sparkle" />
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            style="@style/Settings.RowTitle"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="تعليمات مخصّصة" />
-
-                        <TextView
-                            android:id="@+id/ai_instructions_status"
-                            style="@style/Settings.RowSubtitle"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="غير مضبوطة" />
-                    </LinearLayout>
-
-                    <ImageView
-                        style="@style/Settings.RowChevron"
-                        android:layout_width="20dp"
-                        android:layout_height="20dp" />
-                </LinearLayout>
-
-                <View
-                    style="@style/Settings.Divider"
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp" />
-
-                <LinearLayout
-                    android:id="@+id/btn_ai_how"
-                    style="@style/Settings.Row"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content">
-
-                    <ImageView
-                        style="@style/Settings.RowIcon"
-                        android:layout_width="24dp"
-                        android:layout_height="24dp"
-                        android:src="@drawable/ic_help" />
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            style="@style/Settings.RowTitle"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="كيف يعمل Phizyo AI؟" />
-                    </LinearLayout>
-
-                    <ImageView
-                        style="@style/Settings.RowChevron"
-                        android:layout_width="20dp"
-                        android:layout_height="20dp" />
-                </LinearLayout>
-
-                <View
-                    style="@style/Settings.Divider"
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp" />
-
-                <LinearLayout
-                    android:id="@+id/btn_clear_chat_history"
-                    style="@style/Settings.Row"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content">
-
-                    <ImageView
-                        style="@style/Settings.RowIcon"
-                        android:layout_width="24dp"
-                        android:layout_height="24dp"
-                        android:src="@drawable/ic_trash" />
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            style="@style/Settings.RowTitle"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="مسح سجل المحادثة" />
-                    </LinearLayout>
-                </LinearLayout>
-            </LinearLayout>
-
-            <LinearLayout
-                style="@style/Settings.Group"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content">
-
-                <LinearLayout
-                    android:id="@+id/btn_theme_mode"
-                    style="@style/Settings.Row"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content">
-
-                    <ImageView
-                        style="@style/Settings.RowIcon"
-                        android:layout_width="24dp"
-                        android:layout_height="24dp"
-                        android:src="@drawable/ic_moon" />
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            style="@style/Settings.RowTitle"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="المظهر" />
-
-                        <TextView
-                            android:id="@+id/theme_value"
-                            style="@style/Settings.RowSubtitle"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="حسب الجهاز" />
-                    </LinearLayout>
-
-                    <ImageView
-                        style="@style/Settings.RowChevron"
-                        android:layout_width="20dp"
-                        android:layout_height="20dp" />
-                </LinearLayout>
-
-                <View
-                    style="@style/Settings.Divider"
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp" />
-
-                <LinearLayout
-                    android:id="@+id/btn_notif"
-                    style="@style/Settings.Row"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content">
-
-                    <ImageView
-                        style="@style/Settings.RowIcon"
-                        android:layout_width="24dp"
-                        android:layout_height="24dp"
-                        android:src="@drawable/ic_bell" />
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            style="@style/Settings.RowTitle"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="الإشعارات" />
-
-                        <TextView
-                            android:id="@+id/notif_status"
-                            style="@style/Settings.RowSubtitle"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="غير مفعّلة" />
-                    </LinearLayout>
-
-                    <com.google.android.material.materialswitch.MaterialSwitch
-                        android:id="@+id/switch_notif"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="8dp"
-                        android:clickable="false"
-                        android:focusable="false" />
-                </LinearLayout>
-            </LinearLayout>
-
-            <LinearLayout
-                style="@style/Settings.Group"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content">
-
-                <LinearLayout
-                    android:id="@+id/btn_export"
-                    style="@style/Settings.Row"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content">
-
-                    <ImageView
-                        style="@style/Settings.RowIcon"
-                        android:layout_width="24dp"
-                        android:layout_height="24dp"
-                        android:src="@drawable/ic_download" />
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            style="@style/Settings.RowTitle"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="تصدير نسخة احتياطية" />
-
-                        <TextView
-                            android:id="@+id/export_sub"
-                            style="@style/Settings.RowSubtitle"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="من حالاتي المخصصة" />
-                    </LinearLayout>
-
-                    <ImageView
-                        style="@style/Settings.RowChevron"
-                        android:layout_width="20dp"
-                        android:layout_height="20dp" />
-                </LinearLayout>
-
-                <View
-                    style="@style/Settings.Divider"
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp" />
-
-                <LinearLayout
-                    android:id="@+id/btn_clear_all"
-                    style="@style/Settings.Row"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content">
-
-                    <ImageView
-                        style="@style/Settings.RowIcon"
-                        android:layout_width="24dp"
-                        android:layout_height="24dp"
-                        android:src="@drawable/ic_trash"
-                        android:tint="@color/accent_red" />
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            style="@style/Settings.RowTitle"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="مسح كل الحالات المخصصة"
-                            android:textColor="@color/accent_red" />
-                    </LinearLayout>
-                </LinearLayout>
-
-                <View
-                    style="@style/Settings.Divider"
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp" />
-
-                <!-- إدارة تعديلات المستخدم على "الحالات الثابتة" (المدمجة من دليل
-                     الجهاز الرسمي) - يفتح قائمة الحالات المعدَّلة مع خيار استعادة
-                     كل واحدة على حدة أو استعادة الكل دفعة واحدة. -->
-                <LinearLayout
-                    android:id="@+id/btn_manage_builtin_cases"
-                    style="@style/Settings.Row"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content">
-
-                    <ImageView
-                        style="@style/Settings.RowIcon"
-                        android:layout_width="24dp"
-                        android:layout_height="24dp"
-                        android:src="@drawable/ic_edit" />
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            style="@style/Settings.RowTitle"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="الحالات الأساسية المعدَّلة" />
-
-                        <TextView
-                            android:id="@+id/builtin_overrides_status"
-                            style="@style/Settings.RowSubtitle"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="لا توجد تعديلات على حالات الجهاز الأساسية" />
-                    </LinearLayout>
-
-                    <ImageView
-                        style="@style/Settings.RowChevron"
-                        android:layout_width="20dp"
-                        android:layout_height="20dp" />
-                </LinearLayout>
-
-                <View
-                    style="@style/Settings.Divider"
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp" />
-
-                <!-- مكتبات الكلمات العربية (قاموس النطق): تفعيل/إيقاف كل مكتبة، واستيراد مكتبة من ملف أو رابط،
-                     وتفعيل تنبؤ الذكاء المحلي بالكلمات غير الموجودة. -->
-                <LinearLayout
-                    android:id="@+id/btn_dict_packs"
-                    style="@style/Settings.Row"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content">
-
-                    <ImageView
-                        style="@style/Settings.RowIcon"
-                        android:layout_width="24dp"
-                        android:layout_height="24dp"
-                        android:src="@drawable/ic_book" />
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            style="@style/Settings.RowTitle"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="مكتبات الكلمات (قاموس النطق)" />
-
-                        <TextView
-                            android:id="@+id/dict_packs_status"
-                            style="@style/Settings.RowSubtitle"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="القاموس الأساسي" />
-                    </LinearLayout>
-
-                    <ImageView
-                        style="@style/Settings.RowChevron"
-                        android:layout_width="20dp"
-                        android:layout_height="20dp" />
-                </LinearLayout>
-
-                <View
-                    style="@style/Settings.Divider"
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp" />
-
-                <!-- محرك الصوت البشري: نمط القراءة، منزلقات الإيقاع، التعلّم الذكي، تجربة فورية. -->
-                <LinearLayout
-                    android:id="@+id/btn_voice_engine"
+                    android:id="@+id/row_engine_on"
                     style="@style/Settings.Row"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content">
@@ -485,105 +63,18 @@
                             style="@style/Settings.RowTitle"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="محرك الصوت البشري" />
+                            android:text="تفعيل الإيقاع البشري" />
 
                         <TextView
+                            android:id="@+id/engine_sub"
                             style="@style/Settings.RowSubtitle"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="إيقاع القراءة، التعلّم الذكي، وتدريب النطق" />
-                    </LinearLayout>
-
-                    <ImageView
-                        style="@style/Settings.RowChevron"
-                        android:layout_width="20dp"
-                        android:layout_height="20dp" />
-                </LinearLayout>
-            </LinearLayout>
-
-            <!-- ============== النسخ السحابي (Firebase Firestore) ============== -->
-            <LinearLayout
-                style="@style/Settings.Group"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content">
-
-                <LinearLayout
-                    android:id="@+id/btn_cloud_account"
-                    style="@style/Settings.Row"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content">
-
-                    <ImageView
-                        style="@style/Settings.RowIcon"
-                        android:layout_width="24dp"
-                        android:layout_height="24dp"
-                        android:src="@drawable/ic_shield" />
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            style="@style/Settings.RowTitle"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="حساب النسخ السحابي" />
-
-                        <TextView
-                            android:id="@+id/cloud_account_status"
-                            style="@style/Settings.RowSubtitle"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="" />
-                    </LinearLayout>
-
-                    <ImageView
-                        style="@style/Settings.RowChevron"
-                        android:layout_width="20dp"
-                        android:layout_height="20dp" />
-                </LinearLayout>
-
-                <View
-                    style="@style/Settings.Divider"
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp" />
-
-                <LinearLayout
-                    android:id="@+id/btn_cloud_auto_backup"
-                    style="@style/Settings.Row"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content">
-
-                    <ImageView
-                        style="@style/Settings.RowIcon"
-                        android:layout_width="24dp"
-                        android:layout_height="24dp"
-                        android:src="@drawable/ic_cloud" />
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            style="@style/Settings.RowTitle"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="نسخ احتياطي سحابي للمرضى" />
-
-                        <TextView
-                            android:id="@+id/cloud_status"
-                            style="@style/Settings.RowSubtitle"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="غير مفعّل" />
+                            android:text="يضبط نغمة وسرعة ووقفات كل جملة على حدة" />
                     </LinearLayout>
 
                     <com.google.android.material.materialswitch.MaterialSwitch
-                        android:id="@+id/switch_cloud_auto_backup"
+                        android:id="@+id/switch_engine_on"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="8dp"
@@ -597,7 +88,7 @@
                     android:layout_height="1dp" />
 
                 <LinearLayout
-                    android:id="@+id/btn_cloud_backup_now"
+                    android:id="@+id/row_preset"
                     style="@style/Settings.Row"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content">
@@ -606,8 +97,7 @@
                         style="@style/Settings.RowIcon"
                         android:layout_width="24dp"
                         android:layout_height="24dp"
-                        android:src="@drawable/ic_download"
-                        android:rotation="180" />
+                        android:src="@drawable/ic_sliders" />
 
                     <LinearLayout
                         android:layout_width="0dp"
@@ -619,14 +109,14 @@
                             style="@style/Settings.RowTitle"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="نسخ احتياطي الآن" />
+                            android:text="نمط القراءة" />
 
                         <TextView
-                            android:id="@+id/cloud_backup_sub"
+                            android:id="@+id/preset_value"
                             style="@style/Settings.RowSubtitle"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="لم يتم الرفع بعد" />
+                            android:text="متوازن (إنساني)" />
                     </LinearLayout>
 
                     <ImageView
@@ -635,93 +125,13 @@
                         android:layout_height="20dp" />
                 </LinearLayout>
 
-                <View
-                    style="@style/Settings.Divider"
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp" />
-
-                <LinearLayout
-                    android:id="@+id/btn_cloud_restore"
-                    style="@style/Settings.Row"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content">
-
-                    <ImageView
-                        style="@style/Settings.RowIcon"
-                        android:layout_width="24dp"
-                        android:layout_height="24dp"
-                        android:src="@drawable/ic_download" />
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            style="@style/Settings.RowTitle"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="استعادة من السحابة" />
-
-                        <TextView
-                            android:id="@+id/cloud_restore_sub"
-                            style="@style/Settings.RowSubtitle"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="لم تتم الاستعادة بعد" />
-                    </LinearLayout>
-
-                    <ImageView
-                        style="@style/Settings.RowChevron"
-                        android:layout_width="20dp"
-                        android:layout_height="20dp" />
-                </LinearLayout>
             </LinearLayout>
 
-            <!-- ============== الملفات السحابية (PDF/مستندات عبر Cloudflare Worker) ============== -->
-            <LinearLayout
-                style="@style/Settings.Group"
+            <TextView
+                style="@style/Settings.SectionLabel"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content">
-
-                <LinearLayout
-                    android:id="@+id/btn_cloud_files"
-                    style="@style/Settings.Row"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content">
-
-                    <ImageView
-                        style="@style/Settings.RowIcon"
-                        android:layout_width="24dp"
-                        android:layout_height="24dp"
-                        android:src="@drawable/ic_cloud" />
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            style="@style/Settings.RowTitle"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="الملفات السحابية" />
-
-                        <TextView
-                            style="@style/Settings.RowSubtitle"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="تخزين مجاني لملفات PDF والمستندات (رفع/تعديل/حذف)" />
-                    </LinearLayout>
-
-                    <ImageView
-                        style="@style/Settings.RowChevron"
-                        android:layout_width="20dp"
-                        android:layout_height="20dp" />
-                </LinearLayout>
-            </LinearLayout>
+                android:layout_height="wrap_content"
+                android:text="الإيقاع" />
 
             <LinearLayout
                 style="@style/Settings.Group"
@@ -729,53 +139,40 @@
                 android:layout_height="wrap_content">
 
                 <LinearLayout
-                    android:id="@+id/btn_check_update"
                     style="@style/Settings.Row"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content">
-
-                    <ImageView
-                        style="@style/Settings.RowIcon"
-                        android:layout_width="24dp"
-                        android:layout_height="24dp"
-                        android:src="@drawable/ic_download" />
+                    android:layout_height="wrap_content"
+                    android:clickable="false"
+                    android:focusable="false"
+                    android:orientation="vertical">
 
                     <LinearLayout
-                        android:layout_width="0dp"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
 
                         <TextView
                             style="@style/Settings.RowTitle"
-                            android:layout_width="match_parent"
+                            android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:text="التحقق من التحديثات" />
+                            android:layout_weight="1"
+                            android:text="التنويع الطبيعي بين الجمل" />
 
                         <TextView
-                            android:id="@+id/update_status"
+                            android:id="@+id/natural_value"
                             style="@style/Settings.RowSubtitle"
-                            android:layout_width="match_parent"
+                            android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="" />
-
-                        <com.google.android.material.progressindicator.LinearProgressIndicator
-                            android:id="@+id/update_progress"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="8dp"
-                            android:indeterminate="true"
-                            android:visibility="gone"
-                            app:indicatorColor="@color/primary_cyan"
-                            app:trackColor="@color/primary_soft"
-                            app:trackCornerRadius="3dp"
-                            app:trackThickness="4dp" />
                     </LinearLayout>
 
-                    <ImageView
-                        style="@style/Settings.RowChevron"
-                        android:layout_width="20dp"
-                        android:layout_height="20dp" />
+                    <SeekBar
+                        android:id="@+id/seek_natural"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:max="100" />
                 </LinearLayout>
 
                 <View
@@ -784,7 +181,275 @@
                     android:layout_height="1dp" />
 
                 <LinearLayout
-                    android:id="@+id/btn_about"
+                    style="@style/Settings.Row"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:clickable="false"
+                    android:focusable="false"
+                    android:orientation="vertical">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            style="@style/Settings.RowTitle"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="التعبير (نغمة السؤال والعناوين)" />
+
+                        <TextView
+                            android:id="@+id/express_value"
+                            style="@style/Settings.RowSubtitle"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="" />
+                    </LinearLayout>
+
+                    <SeekBar
+                        android:id="@+id/seek_express"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:max="100" />
+                </LinearLayout>
+
+                <View
+                    style="@style/Settings.Divider"
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp" />
+
+                <LinearLayout
+                    style="@style/Settings.Row"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:clickable="false"
+                    android:focusable="false"
+                    android:orientation="vertical">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            style="@style/Settings.RowTitle"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="طول الوقفات" />
+
+                        <TextView
+                            android:id="@+id/pause_value"
+                            style="@style/Settings.RowSubtitle"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="" />
+                    </LinearLayout>
+
+                    <SeekBar
+                        android:id="@+id/seek_pause"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:max="150" />
+                </LinearLayout>
+
+                <View
+                    style="@style/Settings.Divider"
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp" />
+
+                <LinearLayout
+                    style="@style/Settings.Row"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:clickable="false"
+                    android:focusable="false"
+                    android:orientation="vertical">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            style="@style/Settings.RowTitle"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="إزاحة السرعة" />
+
+                        <TextView
+                            android:id="@+id/rate_value"
+                            style="@style/Settings.RowSubtitle"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="" />
+                    </LinearLayout>
+
+                    <SeekBar
+                        android:id="@+id/seek_rate"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:max="60" />
+                </LinearLayout>
+
+                <View
+                    style="@style/Settings.Divider"
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp" />
+
+                <LinearLayout
+                    style="@style/Settings.Row"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:clickable="false"
+                    android:focusable="false"
+                    android:orientation="vertical">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            style="@style/Settings.RowTitle"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="إزاحة طبقة الصوت" />
+
+                        <TextView
+                            android:id="@+id/pitch_value"
+                            style="@style/Settings.RowSubtitle"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="" />
+                    </LinearLayout>
+
+                    <SeekBar
+                        android:id="@+id/seek_pitch"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:max="40" />
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <TextView
+                style="@style/Settings.SectionLabel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="تفاصيل الأداء" />
+
+            <LinearLayout
+                style="@style/Settings.Group"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+
+                <LinearLayout
+                    android:id="@+id/row_question"
+                    style="@style/Settings.Row"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                    <ImageView
+                        style="@style/Settings.RowIcon"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_pulse" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/Settings.RowTitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="نغمة السؤال والتعجب" />
+
+                        <TextView
+                            android:id="@+id/q_sub"
+                            style="@style/Settings.RowSubtitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="ترفع الصوت عند ؟ و !" />
+                    </LinearLayout>
+
+                    <com.google.android.material.materialswitch.MaterialSwitch
+                        android:id="@+id/switch_question"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:clickable="false"
+                        android:focusable="false" />
+                </LinearLayout>
+
+                <View
+                    style="@style/Settings.Divider"
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp" />
+
+                <LinearLayout
+                    android:id="@+id/row_heading"
+                    style="@style/Settings.Row"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                    <ImageView
+                        style="@style/Settings.RowIcon"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_pin" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/Settings.RowTitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="أسلوب العناوين" />
+
+                        <TextView
+                            android:id="@+id/h_sub"
+                            style="@style/Settings.RowSubtitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="العبارات القصيرة بلا نقطة تُقرأ أبطأ وأهدأ مع وقفة أطول" />
+                    </LinearLayout>
+
+                    <com.google.android.material.materialswitch.MaterialSwitch
+                        android:id="@+id/switch_heading"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:clickable="false"
+                        android:focusable="false" />
+                </LinearLayout>
+
+                <View
+                    style="@style/Settings.Divider"
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp" />
+
+                <LinearLayout
+                    android:id="@+id/row_paren"
                     style="@style/Settings.Row"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content">
@@ -805,10 +470,199 @@
                             style="@style/Settings.RowTitle"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="عن التطبيق" />
+                            android:text="أسلوب ما بين الأقواس" />
 
                         <TextView
-                            android:id="@+id/settings_version_label"
+                            android:id="@+id/p_sub"
+                            style="@style/Settings.RowSubtitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="تُقرأ بنبرة أخفض وأسرع قليلًا" />
+                    </LinearLayout>
+
+                    <com.google.android.material.materialswitch.MaterialSwitch
+                        android:id="@+id/switch_paren"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:clickable="false"
+                        android:focusable="false" />
+                </LinearLayout>
+
+                <View
+                    style="@style/Settings.Divider"
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp" />
+
+                <LinearLayout
+                    android:id="@+id/row_breath"
+                    style="@style/Settings.Row"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                    <ImageView
+                        style="@style/Settings.RowIcon"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_wifi" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/Settings.RowTitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="وقفات التقاط النفَس" />
+
+                        <TextView
+                            android:id="@+id/b_sub"
+                            style="@style/Settings.RowSubtitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="وقفة قصيرة طبيعية بعد الجمل والفواصل" />
+                    </LinearLayout>
+
+                    <com.google.android.material.materialswitch.MaterialSwitch
+                        android:id="@+id/switch_breath"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:clickable="false"
+                        android:focusable="false" />
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <TextView
+                style="@style/Settings.SectionLabel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="التعلّم الذكي" />
+
+            <LinearLayout
+                style="@style/Settings.Group"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+
+                <LinearLayout
+                    android:id="@+id/row_learn"
+                    style="@style/Settings.Row"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                    <ImageView
+                        style="@style/Settings.RowIcon"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_zap" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/Settings.RowTitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="التعلّم من طريقة استماعك" />
+
+                        <TextView
+                            android:id="@+id/learn_stats"
+                            style="@style/Settings.RowSubtitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="" />
+                    </LinearLayout>
+
+                    <com.google.android.material.materialswitch.MaterialSwitch
+                        android:id="@+id/switch_learn"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:clickable="false"
+                        android:focusable="false" />
+                </LinearLayout>
+
+                <View
+                    style="@style/Settings.Divider"
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp" />
+
+                <LinearLayout
+                    android:id="@+id/row_ai_tutor"
+                    style="@style/Settings.Row"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                    <ImageView
+                        style="@style/Settings.RowIcon"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_sparkle" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/Settings.RowTitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="تدريب النطق بالذكاء الاصطناعي" />
+
+                        <TextView
+                            android:id="@+id/ai_tutor_status"
+                            style="@style/Settings.RowSubtitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="يرسل كلمات مفردة فقط (بدون جمل) ويعرض اقتراحاته لتوافق عليها" />
+                    </LinearLayout>
+
+                    <ImageView
+                        style="@style/Settings.RowChevron"
+                        android:layout_width="20dp"
+                        android:layout_height="20dp" />
+                </LinearLayout>
+
+                <View
+                    style="@style/Settings.Divider"
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp" />
+
+                <LinearLayout
+                    android:id="@+id/row_dicts"
+                    style="@style/Settings.Row"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                    <ImageView
+                        style="@style/Settings.RowIcon"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_book" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/Settings.RowTitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="القواميس المدمجة ومكتبات الكلمات" />
+
+                        <TextView
+                            android:id="@+id/dict_status"
                             style="@style/Settings.RowSubtitle"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
@@ -827,7 +681,7 @@
                     android:layout_height="1dp" />
 
                 <LinearLayout
-                    android:id="@+id/btn_privacy_policy"
+                    android:id="@+id/row_reset_learning"
                     style="@style/Settings.Row"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content">
@@ -836,7 +690,7 @@
                         style="@style/Settings.RowIcon"
                         android:layout_width="24dp"
                         android:layout_height="24dp"
-                        android:src="@drawable/ic_lock" />
+                        android:src="@drawable/ic_refresh" />
 
                     <LinearLayout
                         android:layout_width="0dp"
@@ -848,7 +702,14 @@
                             style="@style/Settings.RowTitle"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="سياسة الخصوصية" />
+                            android:text="مسح تعلّم السلوك" />
+
+                        <TextView
+                            android:id="@+id/reset_sub"
+                            style="@style/Settings.RowSubtitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="يصفّر الإحصاءات والكلمات المشتبه بها فقط" />
                     </LinearLayout>
 
                     <ImageView
@@ -856,6 +717,50 @@
                         android:layout_width="20dp"
                         android:layout_height="20dp" />
                 </LinearLayout>
+
+            </LinearLayout>
+
+            <TextView
+                style="@style/Settings.SectionLabel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="تجربة الصوت" />
+
+            <LinearLayout
+                style="@style/Settings.Group"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:padding="16dp">
+
+                <EditText
+                    android:id="@+id/sample_input"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_card_outline"
+                    android:gravity="top|start"
+                    android:hint="اكتب جملة لتجربتها"
+                    android:inputType="textMultiLine"
+                    android:minLines="3"
+                    android:padding="14dp"
+                    android:textAlignment="viewStart"
+                    android:textColor="@color/text_primary"
+                    android:textDirection="rtl"
+                    android:textSize="15sp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_test"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="تجربة الصوت" />
+
+                <TextView
+                    android:id="@+id/test_status"
+                    style="@style/Settings.RowSubtitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="" />
             </LinearLayout>
 
         </LinearLayout>
