@@ -62,6 +62,7 @@
         <activity android:name=".AddEditTreatmentProgramActivity" android:exported="false" />
         <activity android:name=".TreatmentProgramDetailActivity" android:exported="false" />
         <activity android:name=".SettingsActivity" android:exported="false" />
+        <activity android:name=".VoiceEngineSettingsActivity" android:exported="false" />
         <activity android:name=".PrivacyPolicyActivity" android:exported="false" />
         <!-- configChanges: نفس سبب MainActivity أعلاه بالظبط - شاشة المحادثة الكاملة
              هي المكان الأكتر عرضة للمشكلة (ردود إكلينيكية طويلة بجولات استكمال
