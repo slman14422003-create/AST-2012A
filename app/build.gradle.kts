@@ -109,4 +109,12 @@ dependencies {
     // التعرّف الضوئي على الحروف (Tesseract) لقراءة ملفات PDF الممسوحة ضوئيًا/المصوَّرة صوتيًا
     // (عربي + إنجليزي) - نموذج اللغة يُنزَّل مرة واحدة عند أول استخدام (PdfOcr).
     implementation("cz.adaptech.tesseract4android:tesseract4android:4.7.0")
+
+    // الصوت العصبي المحلي (نموذج Piper العربي يعمل على الجهاز بلا إنترنت) - NeuralVoiceManager.
+    // النموذج نفسه لا يدخل الـ APK: يُنزَّل مرة واحدة عند اختيار المحرك.
+    // ملاحظة: لو تعذّر على Gradle إيجاد هذا الإصدار، اختر أحدث إصدار منشور لـ
+    // com.k2fsa.sherpa.onnx:sherpa-onnx-android على Maven Central (الواجهة المستخدمة قديمة ومستقرة).
+    implementation("com.k2fsa.sherpa.onnx:sherpa-onnx-android:1.13.2")
+    // فكّ أرشيف النموذج (tar.bz2) أثناء التنزيل. الإصدار 1.21 بلا اعتماديات إضافية ويعمل على minSdk 24.
+    implementation("org.apache.commons:commons-compress:1.21")
 }

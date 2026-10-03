@@ -1726,26 +1726,31 @@ public class PdfViewerActivity extends AppCompatActivity {
         root.removeAllViews();
         final String mode = speaker.getEngineMode();
         final boolean isCloudMode = "cloud".equals(mode);
+        final boolean isNeuralMode = "neural".equals(mode);
         final boolean isLocalMode = "local".equals(mode);
 
-        // ---- المحرك والأصوات (النقر على المحرك يدوّر: عصبي أونلاين ← محلي بلا إنترنت ← صوت الجهاز)
+        // ---- المحرك والأصوات (النقر على المحرك يفتح قائمة الاختيار)
         LinearLayout g1 = voiceGroup(root, "المحرك والأصوات");
         addVoiceRow(g1, "محرك القراءة",
                 isCloudMode ? "صوت عصبي أونلاين مجاني"
-                        : isLocalMode ? "محرك محلي مبني من الصفر، يعمل بلا إنترنت وبلا حدود"
+                        : isNeuralMode ? "نموذج عصبي يعمل على الجهاز بلا إنترنت (تنزيل مرة واحدة)"
+                        : isLocalMode ? "محرك صيغي مبني من الصفر، فوري وبلا إنترنت"
                         : "صوت الجهاز يعمل بدون إنترنت",
-                isCloudMode ? "عصبي" : isLocalMode ? "محلي" : "الجهاز", false, () -> {
-                    final String next = isCloudMode ? "local" : isLocalMode ? "device" : "cloud";
-                    speaker.setEngineMode(next);
-                    Toast.makeText(this, "local".equals(next) ? "تم التحويل للمحرك المحلي (بلا إنترنت)."
-                                    : "device".equals(next) ? "تم التحويل لصوت الجهاز."
-                                    : "تم التحويل للصوت العصبي الأونلاين.",
-                            Toast.LENGTH_SHORT).show();
-                    refresh.run();
+                isCloudMode ? "أونلاين" : isNeuralMode ? "عصبي محلي" : isLocalMode ? "صيغي" : "الجهاز", true, () -> {
+                    if (voiceDialog != null) voiceDialog.dismiss();
+                    showEnginePicker();
                 });
-        if (isLocalMode) {
-            // المحرك المحلي له أصوات خاصة به تخدم كل اللغات
-            addVoiceRow(g1, "صوت المحرك المحلي", null, null, true, () -> {
+        if (isNeuralMode) {
+            NeuralVoiceManager.Model nm = NeuralVoiceManager.selected(this);
+            String st = NeuralVoiceManager.isBroken() ? "تعذّر تشغيله (يُستخدم الصيغي)"
+                    : NeuralVoiceManager.isInstalled(this, nm) ? "جاهز" : "غير منزَّل";
+            addVoiceRow(g1, "النموذج العصبي المحلي", nm.label + " · " + st, null, true, () -> {
+                if (voiceDialog != null) voiceDialog.dismiss();
+                showNeuralModelPicker();
+            });
+        } else if (isLocalMode) {
+            // المحرك الصيغي له أصوات خاصة به تخدم كل اللغات
+            addVoiceRow(g1, "صوت المحرك الصيغي", null, null, true, () -> {
                 if (voiceDialog != null) voiceDialog.dismiss();
                 showVoicePicker(0);
             });
@@ -2034,6 +2039,123 @@ public class PdfViewerActivity extends AppCompatActivity {
                     if (voiceDialog != null) voiceDialog.dismiss();
                 })
                 .show();
+    }
+
+    // ------------------------------------------------------------------ اختيار المحرك والنموذج العصبي المحلي
+
+    /** قائمة المحركات الأربعة. اختيار العصبي المحلي قبل تنزيله يبدأ التنزيل (مرة واحدة). */
+    private void showEnginePicker() {
+        final String[] modes = {"cloud", "neural", "local", "device"};
+        final String[] labels = {
+                "عصبي أونلاين (أعلى جودة، يحتاج إنترنت)",
+                "عصبي محلي (بلا إنترنت، تنزيل مرة واحدة)",
+                "صيغي مبني من الصفر (فوري، صوته آلي)",
+                "صوت الجهاز"
+        };
+        int checked = 0;
+        String cur = speaker.getEngineMode();
+        for (int i = 0; i < modes.length; i++) if (modes[i].equals(cur)) checked = i;
+        voiceDialog = new ClaudeDialog(this)
+                .setTitle("محرك القراءة")
+                .setSingleChoiceItems(labels, checked, (d, which) -> {
+                    final String m = modes[which];
+                    if ("neural".equals(m) && !NeuralVoiceManager.isInstalled(this, NeuralVoiceManager.selected(this))) {
+                        d.dismiss();
+                        showNeuralDownload(NeuralVoiceManager.selected(this));
+                        return;
+                    }
+                    speaker.setEngineMode(m);
+                    Toast.makeText(this, "تم تغيير محرك القراءة", Toast.LENGTH_SHORT).show();
+                    d.dismiss();
+                })
+                .show();
+    }
+
+    /** اختيار نموذج عصبي محلي (المنزَّل يُفعَّل فورًا، وغير المنزَّل يُنزَّل أولًا) مع إمكانية حذف المنزَّل. */
+    private void showNeuralModelPicker() {
+        final NeuralVoiceManager.Model[] ms = NeuralVoiceManager.MODELS;
+        final String[] labels = new String[ms.length];
+        int checked = 0;
+        NeuralVoiceManager.Model sel = NeuralVoiceManager.selected(this);
+        for (int i = 0; i < ms.length; i++) {
+            labels[i] = ms[i].label + (NeuralVoiceManager.isInstalled(this, ms[i]) ? "  ✓ منزَّل" : "  (يُنزَّل عند الاختيار)");
+            if (ms[i].id.equals(sel.id)) checked = i;
+        }
+        voiceDialog = new ClaudeDialog(this)
+                .setTitle("النموذج العصبي المحلي")
+                .setSingleChoiceItems(labels, checked, (d, which) -> {
+                    NeuralVoiceManager.Model m = ms[which];
+                    d.dismiss();
+                    if (NeuralVoiceManager.isInstalled(this, m)) {
+                        NeuralVoiceManager.select(this, m);
+                        speaker.setEngineMode("neural");
+                        Toast.makeText(this, "تم تغيير النموذج", Toast.LENGTH_SHORT).show();
+                    } else {
+                        showNeuralDownload(m);
+                    }
+                })
+                .setNeutralButton("حذف المنزَّل", (d, w) -> {
+                    for (NeuralVoiceManager.Model m : ms) NeuralVoiceManager.delete(this, m);
+                    speaker.setEngineMode("local");
+                    Toast.makeText(this, "حُذفت النماذج، تم التحويل للمحرك الصيغي.", Toast.LENGTH_SHORT).show();
+                })
+                .show();
+    }
+
+    /** مربع تنزيل النموذج: شريط تقدّم + إلغاء. عند النجاح يُفعَّل المحرك العصبي المحلي تلقائيًا. */
+    private void showNeuralDownload(final NeuralVoiceManager.Model m) {
+        final LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        int pad = (int) (20 * getResources().getDisplayMetrics().density);
+        box.setPadding(pad, pad / 2, pad, pad / 2);
+        final TextView status = new TextView(this);
+        status.setText("يُنزَّل النموذج مرة واحدة ثم يعمل بلا إنترنت. يُفضَّل الاتصال بشبكة واي فاي (الحجم كبير).");
+        status.setTextSize(14f);
+        box.addView(status);
+        final android.widget.ProgressBar bar = new android.widget.ProgressBar(this, null,
+                android.R.attr.progressBarStyleHorizontal);
+        bar.setIndeterminate(true);
+        bar.setMax(1000);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = pad / 2;
+        box.addView(bar, lp);
+
+        final android.app.Dialog dlg = new ClaudeDialog(this)
+                .setTitle("تنزيل " + m.label)
+                .setView(box)
+                .setNegativeButton("إلغاء", (d, w) -> NeuralVoiceManager.cancelDownload())
+                .create();
+        dlg.setCancelable(false);
+        dlg.setCanceledOnTouchOutside(false);
+        dlg.show();
+
+        NeuralVoiceManager.download(this, m, new NeuralVoiceManager.Progress() {
+            @Override
+            public void onProgress(long done, long total) {
+                String mb = String.format(java.util.Locale.US, "%.1f", done / 1048576.0);
+                if (total > 0) {
+                    bar.setIndeterminate(false);
+                    bar.setProgress((int) Math.min(1000, done * 1000L / total));
+                    status.setText("تم تنزيل " + mb + " م.ب من " + String.format(java.util.Locale.US, "%.1f", total / 1048576.0) + " م.ب");
+                } else {
+                    status.setText("تم تنزيل " + mb + " م.ب");
+                }
+            }
+
+            @Override
+            public void onDone() {
+                if (!isFinishing()) dlg.dismiss();
+                speaker.setEngineMode("neural");
+                Toast.makeText(PdfViewerActivity.this, "اكتمل التنزيل، المحرك العصبي المحلي مفعَّل.", Toast.LENGTH_LONG).show();
+            }
+
+            @Override
+            public void onError(String message) {
+                if (!isFinishing()) dlg.dismiss();
+                Toast.makeText(PdfViewerActivity.this, message, Toast.LENGTH_LONG).show();
+            }
+        });
     }
 
     private void showVoicePicker(int langIdx) {

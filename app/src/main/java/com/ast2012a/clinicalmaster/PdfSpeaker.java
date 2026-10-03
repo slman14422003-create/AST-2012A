@@ -87,7 +87,7 @@ final class PdfSpeaker {
 
     private static final String PREFS = "pdf_tts";
     private static final String KEY_RATE = "rate";
-    private static final String KEY_ENGINE = "engine"; // cloud | local | device
+    private static final String KEY_ENGINE = "engine"; // cloud | neural | local | device
     private static final String KEY_LOCAL_VOICE = "lvoice"; // معرّف صوت المحرك المحلي (فارغ = الافتراضي)
     private static final String KEY_PROFILE = "profile";   // 0 طبيعي، 1 واضح (افتراضي)، 2 دراسة
     private static final String KEY_PITCH = "pitch_idx";
@@ -281,7 +281,9 @@ final class PdfSpeaker {
         this.prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         this.audio = (AudioManager) app.getSystemService(Context.AUDIO_SERVICE);
         try {
-            if ("cloud".equals(prefs.getString(KEY_ENGINE, "cloud"))) EdgeTtsClient.warmUp(); // اتصال دافئ قبل أول جملة
+            String eng0 = prefs.getString(KEY_ENGINE, "cloud");
+            if ("cloud".equals(eng0)) EdgeTtsClient.warmUp(); // اتصال دافئ قبل أول جملة
+            else if ("neural".equals(eng0)) NeuralVoiceManager.warmUpAsync(context); // تحميل النموذج العصبي المحلي مسبقًا
         } catch (Throwable ignored) {
         }
         this.rate = Math.max(0.5f, Math.min(2.5f, prefs.getFloat(KEY_RATE, 1.0f)));
@@ -533,7 +535,7 @@ final class PdfSpeaker {
                 } catch (Throwable t) {
                     return 0f;
                 }
-                pos -= (int) ((isLocalEngine() ? LOCAL_LAG_MS : CLOUD_LAG_MS) * Math.max(0.5f, rate));
+                pos -= (int) ((isOfflineEngine() ? LOCAL_LAG_MS : CLOUD_LAG_MS) * Math.max(0.5f, rate));
                 if (pos < 0) return 0f;
                 float f = pos / (float) AudioEnvelope.WINDOW_MS;
                 int i = (int) f;
@@ -1142,8 +1144,7 @@ final class PdfSpeaker {
             return;
         }
         releasePreview();
-        final boolean local = isLocalEngine();
-        final LocalSpeechEngine.Voice lv = local ? localVoice() : null;
+        final boolean local = isOfflineEngine();
         final String voice = cloudVoiceFor("ar");
         final SpeechPrep.Spoken spoken = SpeechPrep.prepare(EdgeTtsClient.sanitize(sample), "ar", "en", false);
         final EdgeTtsClient.Style style = HumanProsody.shape(sample, "ar", false, cloudStyle());
@@ -1152,7 +1153,7 @@ final class PdfSpeaker {
             synthPool.execute(() -> {
                 EdgeTtsClient.Result r = null;
                 try {
-                    r = local ? synthLocal(spoken.text, lv, style) : EdgeTtsClient.synthesize(spoken.text, voice, style);
+                    r = local ? synthOffline(spoken.text, "ar", style) : EdgeTtsClient.synthesize(spoken.text, voice, style);
                 } catch (Throwable ignored) {
                 }
                 final EdgeTtsClient.Result rr = r;
@@ -1280,11 +1281,22 @@ final class PdfSpeaker {
     /** وضع المحرك: cloud (عصبي أونلاين - الافتراضي) | local (المحرك المحلي المبني من الصفر) | device (صوت الجهاز). */
     String getEngineMode() {
         String e = prefs.getString(KEY_ENGINE, "cloud");
-        return "local".equals(e) || "device".equals(e) ? e : "cloud";
+        return "neural".equals(e) || "local".equals(e) || "device".equals(e) ? e : "cloud";
     }
 
+    /** المحرك الصيغي المبني من الصفر. */
     boolean isLocalEngine() {
         return "local".equals(getEngineMode());
+    }
+
+    /** النموذج العصبي المحلي (Piper عبر sherpa-onnx) - يحتاج تنزيل النموذج مرة واحدة. */
+    boolean isNeuralEngine() {
+        return "neural".equals(getEngineMode());
+    }
+
+    /** أي محرك بلا إنترنت يعمل داخل التطبيق (صيغي أو عصبي محلي). */
+    boolean isOfflineEngine() {
+        return isLocalEngine() || isNeuralEngine();
     }
 
     /**
@@ -1300,13 +1312,15 @@ final class PdfSpeaker {
     }
 
     void setEngineMode(String mode) {
-        if (!"local".equals(mode) && !"device".equals(mode)) mode = "cloud";
+        if (!"local".equals(mode) && !"device".equals(mode) && !"neural".equals(mode)) mode = "cloud";
         prefs.edit().putString(KEY_ENGINE, mode).apply();
         if ("cloud".equals(mode)) {
             try {
                 EdgeTtsClient.warmUp();
             } catch (Throwable ignored) {
             }
+        } else if ("neural".equals(mode)) {
+            NeuralVoiceManager.warmUpAsync(app); // تحميل النموذج في الخلفية قبل أول جملة
         }
         cloudBroken = false;
         cloudActive = false;
@@ -1352,6 +1366,21 @@ final class PdfSpeaker {
                 style.sentencePauseMs, style.commaPauseMs);
         if (o == null) return new EdgeTtsClient.Result(new byte[0], new int[0], new int[0]);
         return new EdgeTtsClient.Result(o.wav, o.wordMs, o.wordChar, o.durationMs);
+    }
+
+    /**
+     * تركيب جملة بلا إنترنت: النموذج العصبي المحلي للعربية لو كان منزَّلًا وسليمًا، وإلا (أو لغة أخرى أو عطل)
+     * المحرك الصيغي - فلا تتوقف القراءة أبدًا. لا يرمي استثناءات.
+     */
+    private EdgeTtsClient.Result synthOffline(String text, String lang, EdgeTtsClient.Style style) {
+        if (isNeuralEngine() && "ar".equals(lang) && NeuralVoiceManager.isReady(app)) {
+            try {
+                EdgeTtsClient.Result r = NeuralVoiceManager.synthesize(app, text, style);
+                if (r != null && r.audio != null && r.audio.length >= 200) return r;
+            } catch (Throwable ignored) {
+            }
+        }
+        return synthLocal(text, localVoice(), style);
     }
 
     /** امتداد ملف الصوت المؤقت بحسب محتواه (المحرك المحلي ينتج WAV، والعصبي MP3). */
@@ -1402,6 +1431,7 @@ final class PdfSpeaker {
     }
 
     private String cloudVoiceFor(String lang) {
+        if (isNeuralEngine()) return "neural-" + NeuralVoiceManager.selected(app).id + (NeuralVoiceManager.isReady(app) ? "" : "-x");
         if (isLocalEngine()) return "local-" + localVoice().id; // صوت واحد لكل اللغات (المحرك يتولى الكتابات اللاتينية)
         String v = pickCloudVoice(lang);
         if (v != null) return v;
@@ -2006,9 +2036,8 @@ final class PdfSpeaker {
         final String voice = cloudVoiceFor(c.lang);
         final String key = cloudKey(voice, pt.pageIndex, idx);
         if (cloudReady.containsKey(key) || cloudPending.contains(key)) return key;
-        final boolean local = isLocalEngine();
-        final LocalSpeechEngine.Voice lv = local ? localVoice() : null;
-        final boolean mix = !local && isMixedVoices();
+        final boolean offline = isOfflineEngine();
+        final boolean mix = !offline && isMixedVoices();
         final SpeechPrep.Spoken spoken = SpeechPrep.prepare(
                 EdgeTtsClient.sanitize(pt.text.substring(c.start, c.end)), c.lang, pt.latin, mix, c.cont);
         final String sent = spoken.text;
@@ -2032,8 +2061,8 @@ final class PdfSpeaker {
                 try {
                     if (sent.trim().isEmpty()) { // مقطع كله رموز: لا يوجد ما يُنطق - نتخطاه بدون اتصال
                         r = new EdgeTtsClient.Result(new byte[0], new int[0], new int[0]);
-                    } else if (local) {
-                        r = synthLocal(sent, lv, style); // محلي: بلا شبكة
+                    } else if (offline) {
+                        r = synthOffline(sent, c.lang, style); // بلا شبكة (عصبي محلي أو صيغي)
                     } else {
                         r = runs != null ? EdgeTtsClient.synthesizeRuns(sent, runs, voice, style)
                                 : EdgeTtsClient.synthesize(sent, voice, style);
@@ -2044,7 +2073,7 @@ final class PdfSpeaker {
                 final EdgeTtsClient.Result rr = r;
                 final Throwable ee = err;
                 // تعلّم إيقاع الصوت العصبي الحقيقي (للأصوات أحادية اللغة فقط؛ المختلطة تتداخل فيها الأصوات)
-                if (!local && runs == null && rr != null && rr.audio != null && rr.audio.length >= 200 && rr.durationMs > 0
+                if (!offline && runs == null && rr != null && rr.audio != null && rr.audio.length >= 200 && rr.durationMs > 0
                         && isVoiceLearning()) {
                     LocalVoiceModel.learnNeural(c.lang, sent.length(), rr.durationMs,
                             voice.startsWith("ar-") ? style.arRatePct : 0);
@@ -2073,7 +2102,7 @@ final class PdfSpeaker {
         if (a == null) {
             if (!waiting) return; // فشل تجهيز مسبق: سنعيد الطلب عند الحاجة
             if (currentText == null) return;
-            if (isLocalEngine()) { // المحرك المحلي لا يعتمد على الشبكة: نرجع لصوت الجهاز مباشرة بلا تشخيص شبكة
+            if (isOfflineEngine()) { // المحرك المحلي لا يعتمد على الشبكة: نرجع لصوت الجهاز مباشرة بلا تشخيص شبكة
                 awaitingKey = null;
                 fallbackToDevice("تعذّر المحرك المحلي لهذا المقطع، تم التحويل لصوت الجهاز تلقائيًا.");
                 return;
@@ -2283,7 +2312,7 @@ final class PdfSpeaker {
         } catch (Throwable e) {
             return;
         }
-        pos -= (int) ((isLocalEngine() ? LOCAL_LAG_MS : CLOUD_LAG_MS) * Math.max(0.5f, rate)); // زمن الوسائط لا الزمن الحقيقي
+        pos -= (int) ((isOfflineEngine() ? LOCAL_LAG_MS : CLOUD_LAG_MS) * Math.max(0.5f, rate)); // زمن الوسائط لا الزمن الحقيقي
         PdfSpeechText.Chunk c = t.chunks.get(currentChunk);
         final boolean mapped = a.spoken != null && a.spoken.text.length() > 0;
         int len = Math.max(1, mapped ? a.spoken.text.length() : c.end - c.start);

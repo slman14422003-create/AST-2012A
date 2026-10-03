@@ -25,3 +25,14 @@
 -dontwarn org.openjsse.**
 
 # Firebase/Firestore: قواعدها تأتي مع المكتبات نفسها (consumer rules)
+
+# sherpa-onnx (الصوت العصبي المحلي): مكتبة JNI تقرأ حقول كلاسات الإعداد وتبني النتائج بأسمائها،
+# فأي إعادة تسمية من R8 تكسر التشغيل (UnsatisfiedLinkError / NoSuchFieldError)
+-keep class com.k2fsa.sherpa.onnx.** { *; }
+-dontwarn com.k2fsa.sherpa.onnx.**
+
+# commons-compress: كلاسات اختيارية (ضغط/تشفير) غير مستخدمة هنا
+-dontwarn org.apache.commons.compress.**
+-dontwarn org.tukaani.xz.**
+-dontwarn com.github.luben.zstd.**
+-dontwarn org.brotli.dec.**
